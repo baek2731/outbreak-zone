@@ -307,12 +307,13 @@ window.addEventListener('keydown', e => { KEYS[e.code]=true;  e.preventDefault()
 window.addEventListener('keyup',   e => { KEYS[e.code]=false; });
 
 function getInputDir() {
-  let dx=0, dy=0;
-  if (KEYS['KeyW']||KEYS['ArrowUp'])    dy=-1;
-  if (KEYS['KeyS']||KEYS['ArrowDown'])  dy= 1;
-  if (KEYS['KeyA']||KEYS['ArrowLeft'])  dx=-1;
-  if (KEYS['KeyD']||KEYS['ArrowRight']) dx= 1;
-  return {dx, dy};
+  // 4방향만 허용 — 우선순위: 상 > 하 > 좌 > 우
+  // 대각선 입력 시 세로 방향 우선
+  if (KEYS['KeyW']||KEYS['ArrowUp'])    return {dx:0,  dy:-1};
+  if (KEYS['KeyS']||KEYS['ArrowDown'])  return {dx:0,  dy: 1};
+  if (KEYS['KeyA']||KEYS['ArrowLeft'])  return {dx:-1, dy: 0};
+  if (KEYS['KeyD']||KEYS['ArrowRight']) return {dx: 1, dy: 0};
+  return {dx:0, dy:0};
 }
 
 function tryMove(dx, dy) {
