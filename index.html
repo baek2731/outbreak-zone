@@ -432,27 +432,23 @@ function _buildMap(W, H, force = false) {
     if (Math.random() * 100 < CONFIG.mine.density) { set(x, y, T.MINE); mineCount++; }
   }
 
-  // 아이템 배치 — 서로 최소 거리 보장하며 분산 배치
+  // 아이템 배치 — 스폰 거리 기준 구간 분할, 각 구간에서 1개씩
   const itemCandidates = floorTiles.filter(([x, y]) => !safeSet.has(`${x},${y}`) && get(x, y) === T.FLOOR);
   const needed = Math.min(CONFIG.escape.itemCount, itemCandidates.length);
-  const minDist = Math.max(3, Math.floor(Math.min(W, H) / (needed + 1)));
+  // 각 후보의 스폰 거리 계산
+  const withDist = itemCandidates.map(([x, y]) => ({ x, y, d: Math.hypot(x - 1, y - 1) }));
+  withDist.sort((a, b) => a.d - b.d);
+  // 거리 순 정렬 후 needed개 구간으로 균등 분할, 각 구간에서 랜덤 1개
   const placed = [];
-  // 후보를 스폰에서 먼 순 정렬 후 거리 조건 만족하는 것만 선택
-  itemCandidates.sort((a, b) => Math.hypot(b[0]-1,b[1]-1) - Math.hypot(a[0]-1,a[1]-1));
-  for (const [x, y] of itemCandidates) {
-    if (placed.length >= needed) break;
-    const tooClose = placed.some(([px, py]) => Math.hypot(x - px, y - py) < minDist);
-    if (tooClose) continue;
-    placed.push([x, y]);
-    set(x, y, T.ITEM);
-  }
-  // 거리 조건 못 채운 경우 나머지 랜덤 보충
-  if (placed.length < needed) {
-    const remaining = itemCandidates.filter(([x,y]) => get(x,y) === T.FLOOR);
-    for (const [x, y] of remaining) {
-      if (placed.length >= needed) break;
-      placed.push([x, y]); set(x, y, T.ITEM);
-    }
+  const zoneSize = Math.floor(withDist.length / needed);
+  for (let i = 0; i < needed; i++) {
+    const zoneStart = i * zoneSize;
+    const zoneEnd   = i === needed - 1 ? withDist.length : (i + 1) * zoneSize;
+    const zone      = withDist.slice(zoneStart, zoneEnd).filter(({ x, y }) => get(x, y) === T.FLOOR);
+    if (zone.length === 0) continue;
+    const pick = zone[Math.floor(Math.random() * zone.length)];
+    placed.push([pick.x, pick.y]);
+    set(pick.x, pick.y, T.ITEM);
   }
 
   // 출구 배치 — 스폰(1,1)에서 최대한 먼 바닥 타일 1개
