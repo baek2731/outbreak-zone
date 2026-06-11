@@ -519,6 +519,7 @@ const player = {
   moving:false, facing:'down',
   hp:3, maxHp:3, dead:false,
   itemsFound: 0,
+  damageCooldown: 0,
 };
 
 const sonar = {
@@ -566,7 +567,7 @@ function init() {
     targetX: CONFIG.map.tileSize, targetY: CONFIG.map.tileSize,
     moving: false, facing: 'down',
     hp: CONFIG.player.maxHp, maxHp: CONFIG.player.maxHp,
-    dead: false, itemsFound: 0,
+    dead: false, itemsFound: 0, damageCooldown: 0,
   });
 
   Object.assign(sonar, {
@@ -869,59 +870,83 @@ function spawnZombies() {
       tx, ty,
       px: tx * ts, py: ty * ts,
       state: 'CHASE',       // Step 4에서 PATROL/SEARCH 추가 예정
-      damageCooldown: 0,
     });
   }
 }
 
 function updateZombies(dt) {
   if (player.dead) return;
-  const ts  = CONFIG.map.tileSize;
-  const spd = (ts / CONFIG.player.moveDelay) * CONFIG.zombie.speed * dt;
-  const { tiles, width, height } = MAP;
+  const ts   = CONFIG.map.tileSize;
+  const spd  = (ts / CONFIG.player.moveDelay) * CONFIG.zombie.speed * dt;
+  const { tiles, width } = MAP;
+  const pcx  = player.px + ts / 2;
+  const pcy  = player.py + ts / 2;
+  const aggroRange = CONFIG.zombie.hearRange * ts * 2.5; // 인식 거리
+  const sepRadius  = ts * 0.9;                           // 분리벡터 반경
+  const sepStrength = spd * 1.2;                         // 분리 강도
+
+  // 플레이어 피해 쿨타임 업데이트
+  if (player.damageCooldown > 0) player.damageCooldown -= dt;
 
   for (const z of zombies) {
-    if (z.damageCooldown > 0) z.damageCooldown -= dt;
+    const zcx = z.px + ts / 2;
+    const zcy = z.py + ts / 2;
+    const distToPlayer = Math.hypot(pcx - zcx, pcy - zcy);
 
-    // CHASE: 플레이어 픽셀 위치로 직진
-    const tdx = (player.px + ts / 2) - (z.px + ts / 2);
-    const tdy = (player.py + ts / 2) - (z.py + ts / 2);
-    const dist = Math.hypot(tdx, tdy);
-    if (dist < 0.5) continue;
+    // ── STATE 전환: 인식 범위 안이면 CHASE, 밖이면 IDLE ──
+    if (distToPlayer <= aggroRange) z.state = 'CHASE';
+    else                            z.state = 'IDLE';
 
-    const nx = tdx / dist * spd;
-    const ny = tdy / dist * spd;
+    let mvx = 0, mvy = 0;
 
-    // 벽 충돌 슬라이딩 — X/Y 축 독립 처리
-    const newPx = z.px + nx;
-    const newPy = z.py + ny;
+    if (z.state === 'CHASE') {
+      if (distToPlayer > 0.5) {
+        mvx = (pcx - zcx) / distToPlayer * spd;
+        mvy = (pcy - zcy) / distToPlayer * spd;
+      }
+    }
+    // IDLE: mvx/mvy = 0 → 제자리
+
+    // ── 분리 벡터 — 다른 좀비와 겹침 방지 ──
+    for (const other of zombies) {
+      if (other === z) continue;
+      const odx = zcx - (other.px + ts / 2);
+      const ody = zcy - (other.py + ts / 2);
+      const od  = Math.hypot(odx, ody);
+      if (od < sepRadius && od > 0) {
+        const force = (sepRadius - od) / sepRadius * sepStrength;
+        mvx += (odx / od) * force;
+        mvy += (ody / od) * force;
+      }
+    }
+
+    // ── 벽 슬라이딩 이동 ──
     const margin = ts * 0.15;
-
-    // X 이동 가능 여부: 이동 후 네 모서리 모두 WALL이 아니어야 함
-    const canX = !isWallAt(newPx + margin,     z.py + margin,     width, ts, tiles)
-              && !isWallAt(newPx + ts - margin, z.py + margin,     width, ts, tiles)
-              && !isWallAt(newPx + margin,      z.py + ts - margin, width, ts, tiles)
-              && !isWallAt(newPx + ts - margin, z.py + ts - margin, width, ts, tiles);
-    // Y 이동 가능 여부
-    const canY = !isWallAt(z.px + margin,      newPy + margin,     width, ts, tiles)
-              && !isWallAt(z.px + ts - margin,  newPy + margin,     width, ts, tiles)
-              && !isWallAt(z.px + margin,       newPy + ts - margin, width, ts, tiles)
-              && !isWallAt(z.px + ts - margin,  newPy + ts - margin, width, ts, tiles);
-
-    if (canX) z.px = newPx;
-    if (canY) z.py = newPy;
+    if (mvx !== 0) {
+      const newPx = z.px + mvx;
+      const canX  = !isWallAt(newPx + margin,      z.py + margin,      width, ts, tiles)
+                 && !isWallAt(newPx + ts - margin,  z.py + margin,      width, ts, tiles)
+                 && !isWallAt(newPx + margin,       z.py + ts - margin, width, ts, tiles)
+                 && !isWallAt(newPx + ts - margin,  z.py + ts - margin, width, ts, tiles);
+      if (canX) z.px = newPx;
+    }
+    if (mvy !== 0) {
+      const newPy = z.py + mvy;
+      const canY  = !isWallAt(z.px + margin,       newPy + margin,      width, ts, tiles)
+                 && !isWallAt(z.px + ts - margin,   newPy + margin,      width, ts, tiles)
+                 && !isWallAt(z.px + margin,        newPy + ts - margin, width, ts, tiles)
+                 && !isWallAt(z.px + ts - margin,   newPy + ts - margin, width, ts, tiles);
+      if (canY) z.py = newPy;
+    }
 
     // 타일 좌표 동기화
     z.tx = Math.round(z.px / ts);
     z.ty = Math.round(z.py / ts);
 
-    // 접촉 피해
-    const contactDist = Math.hypot(
-      (z.px + ts / 2) - (player.px + ts / 2),
-      (z.py + ts / 2) - (player.py + ts / 2)
-    );
-    if (contactDist < ts * 0.6 && z.damageCooldown <= 0) {
-      z.damageCooldown = CONFIG.zombie.damageCool;
+    // ── 접촉 피해 — 플레이어 쿨타임으로 통합 ──
+    const contactDist = Math.hypot((z.px + ts / 2) - pcx, (z.py + ts / 2) - pcy);
+    if (contactDist < ts * 0.6 && player.damageCooldown <= 0) {
+      player.damageCooldown = CONFIG.zombie.damageCool;
       if (!devInvincible) {
         player.hp--;
         triggerFlash('red');
