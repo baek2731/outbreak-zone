@@ -171,6 +171,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       <button class="dev-btn" id="d-invincible">🛡 무적 모드 OFF</button>
       <button class="dev-btn" id="d-revealall">👁 전체 밝히기 OFF</button>
       <button class="dev-btn" id="d-killzombies">☠ 좀비 전체 제거</button>
+      <button class="dev-btn" id="d-zombiefov">👁 좀비 시야 표시 OFF</button>
 
       <div class="dev-info">
         FPS: <span id="di-fps">0</span><br>
@@ -228,6 +229,19 @@ function drawZombie(z, ts) {
   const cx = z.px + ts / 2;
   const cy = z.py + ts / 2;
   const r  = ts * 0.30;
+
+  // DEV 시야 원 표시
+  if (devZombieFov) {
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    ctx.beginPath(); ctx.arc(cx, cy, CONFIG.zombie.fovRange * ts, 0, Math.PI * 2);
+    ctx.fillStyle = z.state === 'CHASE' ? '#ff3333' : '#888888'; ctx.fill();
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = z.state === 'CHASE' ? '#ff6666' : '#444444'; ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // 후광
   ctx.save();
   ctx.globalAlpha = 0.10; ctx.beginPath(); ctx.arc(cx, cy, r * 1.8, 0, Math.PI * 2);
@@ -235,7 +249,7 @@ function drawZombie(z, ts) {
   ctx.globalAlpha = 1;
   // 몸통
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = '#cc2222'; ctx.fill();
+  ctx.fillStyle = z.state === 'CHASE' ? '#cc2222' : '#662222'; ctx.fill();
   // 방향 도트 (플레이어 방향)
   const adx = player.px - z.px, ady = player.py - z.py;
   const ang = Math.atan2(ady, adx);
@@ -520,6 +534,7 @@ const player = {
   hp:3, maxHp:3, dead:false,
   itemsFound: 0,
   damageCooldown: 0,
+  noiseRadius: 0,      // 행동 소음 반경 (타일 단위) — 매 프레임 감소
 };
 
 const sonar = {
@@ -534,6 +549,7 @@ let camX = 0, camY = 0, moveTimer = 0;
 let devRevealMines = false;
 let devInvincible  = false;
 let devRevealAll   = false;
+let devZombieFov   = false;
 let zombies = [];
 const stats = { minesHit: 0, startTime: 0 };
 
@@ -567,7 +583,7 @@ function init() {
     targetX: CONFIG.map.tileSize, targetY: CONFIG.map.tileSize,
     moving: false, facing: 'down',
     hp: CONFIG.player.maxHp, maxHp: CONFIG.player.maxHp,
-    dead: false, itemsFound: 0, damageCooldown: 0,
+    dead: false, itemsFound: 0, damageCooldown: 0, noiseRadius: 0,
   });
 
   Object.assign(sonar, {
@@ -712,6 +728,7 @@ function onStep(tx, ty) {
     player.hp--;
     if (devInvincible) player.hp = Math.max(1, player.hp);
     stats.minesHit++;
+    player.noiseRadius = 8; // 지뢰 폭발 — 큰 소음
     triggerFlash('red');
     if (!devInvincible && player.hp <= 0) showGameOver();
     return;
@@ -781,6 +798,9 @@ function fireSonar(isPrecise) {
 
   if (isPrecise) { sonar.chargingPrecise = false; sonar.chargeTimePrecise = 0; sonar.precise--; }
   else           { sonar.charging = false; sonar.chargeTime = 0; }
+
+  // 소나 발동 소음 — 반경만큼 좀비 인식 유발
+  player.noiseRadius = radius * 1.5;
 
   sonar.pulseWx  = player.px + ts / 2;
   sonar.pulseWy  = player.py + ts / 2;
@@ -852,90 +872,115 @@ function updateSonar(dt) {
 function spawnZombies() {
   zombies = [];
   const { tiles, width, height } = MAP;
-  const ts = CONFIG.map.tileSize;
+  const ts    = CONFIG.map.tileSize;
   const count = CONFIG.zombie.count;
   const minD  = CONFIG.zombie.spawnDist;
-  // 바닥 타일 중 스폰 거리 이상, 아이템/출구 아닌 곳 후보
+
+  // 후보: 바닥 타일, 스폰 거리 이상
   const candidates = [];
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-    const t = tiles[y * width + x];
-    if (t !== T.FLOOR) continue;
+    if (tiles[y * width + x] !== T.FLOOR) continue;
     if (Math.hypot(x - 1, y - 1) < minD) continue;
-    candidates.push([x, y]);
+    candidates.push({ x, y, d: Math.hypot(x - 1, y - 1) });
   }
-  shuffle(candidates);
+  // 거리 순 정렬 후 count개 구간으로 분산 배치
+  candidates.sort((a, b) => a.d - b.d);
+  const zoneSize = Math.floor(candidates.length / Math.max(count, 1));
   for (let i = 0; i < Math.min(count, candidates.length); i++) {
-    const [tx, ty] = candidates[i];
+    const zStart = i * zoneSize;
+    const zEnd   = i === count - 1 ? candidates.length : (i + 1) * zoneSize;
+    const zone   = candidates.slice(zStart, zEnd);
+    const pick   = zone[Math.floor(Math.random() * zone.length)];
     zombies.push({
-      tx, ty,
-      px: tx * ts, py: ty * ts,
-      state: 'CHASE',       // Step 4에서 PATROL/SEARCH 추가 예정
+      tx: pick.x, ty: pick.y,
+      px: pick.x * ts, py: pick.y * ts,
+      state: 'IDLE',         // 기본 대기 상태
+      wanderAngle: Math.random() * Math.PI * 2, // 분리 시 흩어질 방향
     });
   }
 }
 
 function updateZombies(dt) {
   if (player.dead) return;
-  const ts   = CONFIG.map.tileSize;
-  const spd  = (ts / CONFIG.player.moveDelay) * CONFIG.zombie.speed * dt;
+  const ts  = CONFIG.map.tileSize;
+  const spd = (ts / CONFIG.player.moveDelay) * CONFIG.zombie.speed * dt;
   const { tiles, width } = MAP;
-  const pcx  = player.px + ts / 2;
-  const pcy  = player.py + ts / 2;
-  const aggroRange = CONFIG.zombie.hearRange * ts * 2.5; // 인식 거리
-  const sepRadius  = ts * 0.9;                           // 분리벡터 반경
-  const sepStrength = spd * 1.2;                         // 분리 강도
+  const pcx = player.px + ts / 2;
+  const pcy = player.py + ts / 2;
+
+  // 플레이어 noiseRadius 감소
+  if (player.noiseRadius > 0) player.noiseRadius = Math.max(0, player.noiseRadius - dt * 3);
 
   // 플레이어 피해 쿨타임 업데이트
   if (player.damageCooldown > 0) player.damageCooldown -= dt;
+
+  const sightTiles   = CONFIG.zombie.fovRange;   // 시야 거리 (타일)
+  const noiseTiles   = player.noiseRadius;        // 소음 인식 거리 (타일)
+  const margin       = ts * 0.15;
+  const sepRadius    = ts * 1.1;                  // 분리 반경
+  const sepStrength  = spd * 1.6;                 // 분리 강도
 
   for (const z of zombies) {
     const zcx = z.px + ts / 2;
     const zcy = z.py + ts / 2;
     const distToPlayer = Math.hypot(pcx - zcx, pcy - zcy);
+    const distTiles    = distToPlayer / ts;
 
-    // ── STATE 전환: 인식 범위 안이면 CHASE, 밖이면 IDLE ──
-    if (distToPlayer <= aggroRange) z.state = 'CHASE';
-    else                            z.state = 'IDLE';
+    // ── 인식 판정 ──
+    // 1) 시야: 2타일 이내 + LOS 통과
+    const inSight = distTiles <= sightTiles
+                 && hasLOS(z.tx, z.ty, player.tx, player.ty);
+    // 2) 소음: noiseRadius 이내
+    const inNoise = noiseTiles > 0 && distTiles <= noiseTiles;
+
+    if (inSight || inNoise) z.state = 'CHASE';
+    else if (z.state === 'CHASE' && !inSight && !inNoise) z.state = 'IDLE';
 
     let mvx = 0, mvy = 0;
 
-    if (z.state === 'CHASE') {
-      if (distToPlayer > 0.5) {
-        mvx = (pcx - zcx) / distToPlayer * spd;
-        mvy = (pcy - zcy) / distToPlayer * spd;
-      }
+    if (z.state === 'CHASE' && distToPlayer > 0.5) {
+      mvx = (pcx - zcx) / distToPlayer * spd;
+      mvy = (pcy - zcy) / distToPlayer * spd;
     }
-    // IDLE: mvx/mvy = 0 → 제자리
+    // IDLE: 제자리 (Step 4에서 PATROL 추가)
 
-    // ── 분리 벡터 — 다른 좀비와 겹침 방지 ──
+    // ── 분리 벡터 — 겹치면 wanderAngle 방향으로 흩어짐 ──
+    let overlapping = false;
+    let sepX = 0, sepY = 0;
     for (const other of zombies) {
       if (other === z) continue;
       const odx = zcx - (other.px + ts / 2);
       const ody = zcy - (other.py + ts / 2);
       const od  = Math.hypot(odx, ody);
       if (od < sepRadius && od > 0) {
+        overlapping = true;
         const force = (sepRadius - od) / sepRadius * sepStrength;
-        mvx += (odx / od) * force;
-        mvy += (ody / od) * force;
+        sepX += (odx / od) * force;
+        sepY += (ody / od) * force;
       }
+    }
+    if (overlapping) {
+      // 밀어내기 + wanderAngle 방향 혼합으로 자연스럽게 흩어짐
+      z.wanderAngle += (Math.random() - 0.5) * 0.5;
+      mvx += sepX + Math.cos(z.wanderAngle) * spd * 0.4;
+      mvy += sepY + Math.sin(z.wanderAngle) * spd * 0.4;
     }
 
     // ── 벽 슬라이딩 이동 ──
-    const margin = ts * 0.15;
     if (mvx !== 0) {
       const newPx = z.px + mvx;
-      const canX  = !isWallAt(newPx + margin,      z.py + margin,      width, ts, tiles)
-                 && !isWallAt(newPx + ts - margin,  z.py + margin,      width, ts, tiles)
-                 && !isWallAt(newPx + margin,       z.py + ts - margin, width, ts, tiles)
-                 && !isWallAt(newPx + ts - margin,  z.py + ts - margin, width, ts, tiles);
+      const canX  = !isWallAt(newPx + margin,     z.py + margin,      width, ts, tiles)
+                 && !isWallAt(newPx + ts - margin, z.py + margin,      width, ts, tiles)
+                 && !isWallAt(newPx + margin,      z.py + ts - margin, width, ts, tiles)
+                 && !isWallAt(newPx + ts - margin, z.py + ts - margin, width, ts, tiles);
       if (canX) z.px = newPx;
     }
     if (mvy !== 0) {
       const newPy = z.py + mvy;
-      const canY  = !isWallAt(z.px + margin,       newPy + margin,      width, ts, tiles)
-                 && !isWallAt(z.px + ts - margin,   newPy + margin,      width, ts, tiles)
-                 && !isWallAt(z.px + margin,        newPy + ts - margin, width, ts, tiles)
-                 && !isWallAt(z.px + ts - margin,   newPy + ts - margin, width, ts, tiles);
+      const canY  = !isWallAt(z.px + margin,      newPy + margin,      width, ts, tiles)
+                 && !isWallAt(z.px + ts - margin,  newPy + margin,      width, ts, tiles)
+                 && !isWallAt(z.px + margin,       newPy + ts - margin, width, ts, tiles)
+                 && !isWallAt(z.px + ts - margin,  newPy + ts - margin, width, ts, tiles);
       if (canY) z.py = newPy;
     }
 
@@ -943,7 +988,7 @@ function updateZombies(dt) {
     z.tx = Math.round(z.px / ts);
     z.ty = Math.round(z.py / ts);
 
-    // ── 접촉 피해 — 플레이어 쿨타임으로 통합 ──
+    // ── 접촉 피해 ──
     const contactDist = Math.hypot((z.px + ts / 2) - pcx, (z.py + ts / 2) - pcy);
     if (contactDist < ts * 0.6 && player.damageCooldown <= 0) {
       player.damageCooldown = CONFIG.zombie.damageCool;
@@ -1166,6 +1211,10 @@ document.getElementById('d-revealall').addEventListener('click', () => {
   if (devRevealAll) { VISITED.fill(1); VISIBLE.fill(1); }
 });
 document.getElementById('d-killzombies').addEventListener('click', () => { zombies = []; });
+document.getElementById('d-zombiefov').addEventListener('click', () => {
+  devZombieFov = !devZombieFov;
+  document.getElementById('d-zombiefov').textContent = '👁 좀비 시야 표시 ' + (devZombieFov ? 'ON' : 'OFF');
+});
 document.getElementById('go-btn').addEventListener('click', () => init());
 document.getElementById('esc-btn').addEventListener('click', () => init());
 
