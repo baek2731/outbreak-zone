@@ -538,6 +538,7 @@ const player = {
   itemsFound: 0,
   damageCooldown: 0,
   noiseRadius: 0,      // 행동 소음 반경 (타일 단위) — 매 프레임 감소
+  noiseX: 0, noiseY: 0, // 소음 발원지 월드 좌표 (px). radius>0 동안만 유효 (스탭4-1)
 };
 
 const sonar = {
@@ -587,6 +588,7 @@ function init() {
     moving: false, facing: 'down',
     hp: CONFIG.player.maxHp, maxHp: CONFIG.player.maxHp,
     dead: false, itemsFound: 0, damageCooldown: 0, noiseRadius: 0,
+    noiseX: 0, noiseY: 0,
   });
 
   Object.assign(sonar, {
@@ -732,6 +734,8 @@ function onStep(tx, ty) {
     if (devInvincible) player.hp = Math.max(1, player.hp);
     stats.minesHit++;
     player.noiseRadius = 5;
+    player.noiseX = player.px + CONFIG.map.tileSize / 2;  // 발원지 = 플레이어 (스탭4-1)
+    player.noiseY = player.py + CONFIG.map.tileSize / 2;
     triggerFlash('red');
     if (!devInvincible && player.hp <= 0) showGameOver();
     return;
@@ -804,6 +808,8 @@ function fireSonar(isPrecise) {
 
   // 소나 발동 소음 — 반경만큼 좀비 인식 유발
   player.noiseRadius = radius * 0.8;
+  player.noiseX = player.px + ts / 2;   // 발원지 = 소나 발사점 (스탭4-1, 낚시 기반)
+  player.noiseY = player.py + ts / 2;
 
   sonar.pulseWx  = player.px + ts / 2;
   sonar.pulseWy  = player.py + ts / 2;
