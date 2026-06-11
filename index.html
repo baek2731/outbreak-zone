@@ -657,7 +657,18 @@ function updateSonar(dt) {
         }
       }
     }
-    if (sonar.pulseR >= sonar.pulseMaxR) sonar.firing = false;
+    if (sonar.pulseR >= sonar.pulseMaxR) {
+      sonar.firing = false;
+      // firing 완료 후 pulseR 고정 유지 (렌더에서 alpha로 페이드)
+    }
+  }
+  // firing 완료 후 pulseR 서서히 증가해 사라지는 효과
+  if (!sonar.firing && sonar.pulseR > 0 && sonar.pulseMaxR > 0) {
+    sonar.pulseR += CONFIG.sonar.pulseSpeed * dt * 0.5;
+    if (sonar.pulseR > sonar.pulseMaxR * 1.5) {
+      sonar.pulseR = 0;
+      sonar.pulseMaxR = 0;
+    }
   }
 
   // 숫자 페이드아웃
@@ -853,55 +864,49 @@ function render() {
 
 // 소나 차징 게이지 (플레이어 위에 표시)
 // 교체 시: 차징 애니메이션 스프라이트로 변경
+// ※ render() 안 ctx.save()/translate() 블록 내에서 호출됨
+//   → 좌표는 월드 좌표 그대로 사용 (camX 빼지 않음)
 function drawSonarCharging(ts) {
   if (!sonar.charging) return;
   const cx = player.px + ts/2;
   const cy = player.py + ts/2;
   const ratio = Math.min(sonar.chargeTime / CONFIG.sonar.maxCharge, 1);
+  const col = ratio > 0.8 ? '#ffaa00' : '#00ff88';
 
-  // 게이지 바 (플레이어 위)
+  // 게이지 바 (플레이어 위) — 월드 좌표
   const bw=36, bh=5;
-  const bx = cx - bw/2, by = cy - ts*0.7;
+  const bx = cx - bw/2, by = cy - ts*0.75;
   ctx.fillStyle='#222';
   ctx.fillRect(bx, by, bw, bh);
-  const col = ratio > 0.8 ? '#ffaa00' : '#00ff88';
   ctx.fillStyle=col;
   ctx.fillRect(bx, by, bw*ratio, bh);
-  ctx.strokeStyle='#444';
+  ctx.strokeStyle='#555';
   ctx.lineWidth=0.5;
   ctx.strokeRect(bx, by, bw, bh);
-
-  // 차징 원형 범위 표시
-  const maxR = CONFIG.sonar.maxRadius * ts;
-  ctx.save();
-  ctx.globalAlpha = 0.08 + ratio*0.07;
-  ctx.beginPath();
-  ctx.arc(cx, cy, maxR * ratio, 0, Math.PI*2);
-  ctx.strokeStyle = col;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-  ctx.restore();
+  // 차징 중에는 원형 표시 없음 (파장과 혼동 방지)
 }
 
 // 소나 파장 애니메이션
 // 교체 시: 파장 이펙트 스프라이트/셰이더로 변경
+// ※ render() 안 ctx.save()/translate() 블록 내에서 호출됨
+//   → 월드 좌표 그대로 사용 (camX 빼지 않음)
 function drawSonarPulse() {
-  if (!sonar.firing && sonar.pulseR <= 0) return;
-  const sx = sonar.pulseWx - camX;
-  const sy = sonar.pulseWy - camY;
+  if (sonar.pulseR <= 0 || sonar.pulseMaxR <= 0) return;
+  // 발원지는 월드 좌표 (translate 적용됐으므로 camX 빼지 않음)
+  const wx = sonar.pulseWx;
+  const wy = sonar.pulseWy;
   const r  = sonar.pulseR;
-  if (r <= 0) return;
+  const progress = Math.min(r / sonar.pulseMaxR, 1);
+  const alpha = Math.max(0, 0.5 * (1 - progress));
 
   ctx.save();
-  // 파장 원
-  ctx.globalAlpha = Math.max(0, 0.35 * (1 - r / sonar.pulseMaxR));
   ctx.beginPath();
-  ctx.arc(sx, sy, r, 0, Math.PI*2);
+  ctx.arc(wx, wy, r, 0, Math.PI*2);
   ctx.strokeStyle = '#00ff88';
-  ctx.lineWidth   = 2;
+  ctx.lineWidth   = 2.5;
+  ctx.globalAlpha = alpha;
   ctx.stroke();
-  // 내부 채움
-  ctx.globalAlpha = Math.max(0, 0.04 * (1 - r / sonar.pulseMaxR));
+  ctx.globalAlpha = alpha * 0.12;
   ctx.fillStyle   = '#00ff88';
   ctx.fill();
   ctx.restore();
@@ -947,15 +952,17 @@ function drawSonarNumbers() {
 
 // 소나 잔상
 // 교체 시: 잔상 파티클 스프라이트로 변경
+// ※ render() 안 ctx.save()/translate() 블록 내에서 호출됨
+//   → 월드 좌표 그대로 사용 (camX 빼지 않음)
 function drawSonarGhosts() {
   const ts = CONFIG.map.tileSize;
   for (const g of sonar.ghosts) {
-    const sx = g.tx*ts - camX;
-    const sy = g.ty*ts - camY;
+    const wx = g.tx * ts;
+    const wy = g.ty * ts;
     ctx.save();
-    ctx.globalAlpha = g.alpha * 0.4;
+    ctx.globalAlpha = g.alpha;
     ctx.fillStyle   = '#00ff88';
-    ctx.fillRect(sx+4, sy+4, ts-8, ts-8);
+    ctx.fillRect(wx+4, wy+4, ts-8, ts-8);
     ctx.restore();
   }
 }
