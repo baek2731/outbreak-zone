@@ -361,18 +361,10 @@ window.addEventListener('keyup', e => {
   KEYS[e.code] = false;
 });
 
-// 매 프레임 호출 — 이전 프레임 키 상태와 비교해 엣지 감지
+// 매 프레임 호출 — F/G 소나키만 엣지 감지 담당
+// 방향키는 handleInput에서 별도 처리
 function processKeys() {
-  // 방향키: 처음 눌린 순간 이동
-  const dir = getHeldDir();
-  if (dir) {
-    updateFacing(dir.dx, dir.dy);
-    if (!PREV_KEYS[dirToCode(dir)] && !player.moving && moveTimer<=0 && !player.dead) {
-      tryMove(dir.dx, dir.dy);
-    }
-  }
-
-  // F키: 눌린 순간 차징 시작, 뗀 순간 발동
+  // F키: 눌린 순간 차징, 뗀 순간 발동
   if (KEYS['KeyF'] && !PREV_KEYS['KeyF'] && !sonar.charging && !player.dead) {
     sonar.charging=true; sonar.chargeTime=0;
   }
@@ -380,7 +372,7 @@ function processKeys() {
     fireSonar(false);
   }
 
-  // G키: 눌린 순간 차징 시작, 뗀 순간 발동
+  // G키: 눌린 순간 차징, 뗀 순간 발동
   if (KEYS['KeyG'] && !PREV_KEYS['KeyG'] && !sonar.chargingPrecise && sonar.precise>0 && !player.dead) {
     sonar.chargingPrecise=true; sonar.chargeTimePrecise=0;
   }
@@ -388,15 +380,7 @@ function processKeys() {
     fireSonar(true);
   }
 
-  // 이전 프레임 상태 저장
   Object.assign(PREV_KEYS, KEYS);
-}
-
-function dirToCode(dir) {
-  if (dir.dy===-1) return 'KeyW';
-  if (dir.dy=== 1) return 'KeyS';
-  if (dir.dx===-1) return 'KeyA';
-  return 'KeyD';
 }
 
 function codeToDir(code) {
@@ -439,18 +423,30 @@ function tryMove(dx,dy) {
 
 function handleInput(dt) {
   moveTimer=Math.max(0,moveTimer-dt);
-  processKeys(); // 키 엣지 감지 + 첫 입력 이동
-  // 꾹 누를 때 반복 이동
-  if (!player.moving&&moveTimer<=0&&!player.dead) {
-    const dir=getHeldDir();
-    if (dir) { updateFacing(dir.dx,dir.dy); tryMove(dir.dx,dir.dy); }
-  }
+  processKeys(); // 소나 F/G키 엣지 감지
+  if (player.moving||moveTimer>0||player.dead) return;
+  const dir=getHeldDir();
+  if (dir) { updateFacing(dir.dx,dir.dy); tryMove(dir.dx,dir.dy); }
 }
 
 // ── 타일 효과 ────────────────────────────────────────────────────
 function onStep(tx,ty) {
   if (MAP.tiles[ty*MAP.width+tx]!==T.MINE) return;
   MAP.tiles[ty*MAP.width+tx]=T.FLOOR;
+  // 주변 타일 numbers 재계산 (밟은 지뢰가 소나에 걸리지 않도록)
+  const {tiles,numbers,width,height}=MAP;
+  for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++) {
+    const nx=tx+dx, ny=ty+dy;
+    if (nx<0||nx>=width||ny<0||ny>=height) continue;
+    if (tiles[ny*width+nx]===T.WALL) continue;
+    let cnt=0;
+    for (let dy2=-1;dy2<=1;dy2++) for (let dx2=-1;dx2<=1;dx2++) {
+      if (dx2===0&&dy2===0) continue;
+      const mx=nx+dx2, my=ny+dy2;
+      if (mx>=0&&mx<width&&my>=0&&my<height&&tiles[my*width+mx]===T.MINE) cnt++;
+    }
+    numbers[ny*width+nx]=cnt;
+  }
   player.hp--;
   stats.minesHit++;
   const fl=document.getElementById('flash');
