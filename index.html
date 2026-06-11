@@ -1125,12 +1125,27 @@ function zombieDecideNextTile(z, c) {
     }
 
     if (z.wpTx !== null) return [z.wpTx, z.wpTy];
-    return null; // 경로 없음(같은 타일 또는 막힘)
+
+    // 경로 없음 = 같은 타일이거나 인접. 플레이어/목표 방향 인접 타일로 직접 이동
+    const ddx = goalTx - curTx, ddy = goalTy - curTy;
+    if (ddx !== 0 || ddy !== 0) {
+      // 가장 가까운 축 우선
+      const candidates = [];
+      if (ddx !== 0) candidates.push([curTx + Math.sign(ddx), curTy]);
+      if (ddy !== 0) candidates.push([curTx, curTy + Math.sign(ddy)]);
+      for (const [nx, ny] of candidates) {
+        if (nx >= 0 && ny >= 0 && nx < MAP.width && ny < MAP.height
+            && MAP.tiles[ny * MAP.width + nx] !== T.WALL) {
+          return [nx, ny];
+        }
+      }
+    }
+    return null;
 
   } else {
-    // WANDER: 랜덤 배회 — 일정 간격으로 방향 전환
+    // WANDER: 랜덤 배회
     z.wanderTimer -= c.dt;
-    if (z.wanderTimer <= 0) {
+    if (z.wanderTimer <= 0 || z.wpTx === null) {
       const dirs = shuffle([...DIR4]);
       for (const [dx, dy] of dirs) {
         const nx = curTx + dx, ny = curTy + dy;
