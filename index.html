@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>OUTBREAK ZONE — Step 1</title>
+<title>OUTBREAK ZONE — Step 2-A</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
 body {
@@ -46,6 +46,37 @@ canvas#canvas { display:block; }
 }
 canvas#minimap { display:block; image-rendering:pixelated; }
 
+
+/* 플래시 오버레이 */
+#flash {
+  position:absolute; inset:0;
+  pointer-events:none; opacity:0;
+  background:rgba(255,50,50,0.45);
+  transition:opacity 0.08s;
+}
+
+/* 게임오버 */
+#gameover {
+  display:none; position:absolute; inset:0;
+  background:rgba(0,0,0,0.88);
+  flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; z-index:20;
+}
+#gameover.show { display:flex; }
+#go-title {
+  font-family:monospace; font-size:1.4rem; font-weight:bold;
+  color:#ff3333; letter-spacing:0.25em;
+  text-shadow:0 0 20px #ff3333;
+}
+#go-stats { font-size:0.7rem; color:#888; text-align:center; line-height:1.9; }
+#go-stats span { color:#ff8888; }
+#go-btn {
+  background:none; border:1px solid #ff3333; color:#ff3333;
+  font-family:monospace; font-size:0.65rem;
+  padding:8px 24px; cursor:pointer; border-radius:2px;
+  letter-spacing:0.15em; margin-top:4px;
+}
+#go-btn:hover { background:rgba(255,50,50,0.1); }
 
 /* DEV 패널 */
 #dev-panel {
@@ -99,6 +130,20 @@ canvas#minimap { display:block; image-rendering:pixelated; }
     <canvas id="canvas"></canvas>
 
     <!-- 미니맵 기본 -->
+    <!-- 피격 플래시 -->
+    <div id="flash"></div>
+
+    <!-- 게임오버 -->
+    <div id="gameover">
+      <div id="go-title">☣ OUTBREAK</div>
+      <div id="go-stats">
+        생존 구역: <span id="go-rooms">0</span>개<br>
+        밟은 지뢰: <span id="go-mines">0</span>개<br>
+        생존 시간: <span id="go-time">0초</span>
+      </div>
+      <button id="go-btn">RETRY</button>
+    </div>
+
     <div id="minimap-wrap">
       <canvas id="minimap"></canvas>
     </div>
@@ -146,11 +191,27 @@ canvas#minimap { display:block; image-rendering:pixelated; }
         <span class="dev-val" id="d-cam-v">0.12</span>
       </div>
 
+      <div class="dev-section">MINE (Step 2-A)</div>
+      <div class="dev-row">
+        <label>지뢰 밀도 (A3)</label>
+        <input type="range" id="d-mine" min="5" max="35" step="5" value="15">
+        <span class="dev-val" id="d-mine-v">15%</span>
+      </div>
+      <div class="dev-row">
+        <label>시작 HP</label>
+        <input type="range" id="d-hp" min="1" max="5" step="1" value="3">
+        <span class="dev-val" id="d-hp-v">3</span>
+      </div>
+
       <button class="dev-btn" id="d-regen">🔄 맵 재생성</button>
+      <button class="dev-btn" id="d-reveal-mines">💣 지뢰 표시 OFF</button>
+      <button class="dev-btn" id="d-fullhp">❤ HP 전부 회복</button>
 
       <div class="dev-info">
         FPS: <span id="di-fps">0</span><br>
         타일: <span id="di-tile">FLOOR</span><br>
+        지뢰 수: <span id="di-mines">0</span>개<br>
+        HP: <span id="di-hp">3/3</span><br>
         막다른길: <span id="di-dead">0</span>개<br>
         맵: <span id="di-mapsize">0×0</span><br>
         경과: <span id="di-time">0s</span>
@@ -162,18 +223,18 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 <script src="config.js"></script>
 <script>
 // ================================================================
-//  index.html — OUTBREAK ZONE Step 1
-//  수정사항:
-//  ① facing — 이동 불가여도 방향 즉시 업데이트
-//  ② loopPaths 6개 + 막다른 길 비율 체크 (재생성)
-//  ③ moveDelay 0.25초 확정
-//  ④ M키 미니맵 토글 (80px ↔ 200px 오버레이)
-//  ⑤ 미니맵 정보 = 시야 정보와 일치
-//     (방문한 곳만 표시, 나중에 소나/레이더 정보 연동)
+//  index.html — OUTBREAK ZONE Step 2-A
+//  Step 1 봉인 완료
+//  추가:
+//  ① 지뢰 타일 배치 (밀도 설정 가능)
+//  ② 지뢰 밟으면 HP -1 + 플래시 효과
+//  ③ HP 하트 실제 연동
+//  ④ 게임오버 화면 (HP 0)
+//  ⑤ 막다른 길 끝 보장 공간 (아이템 예약)
 // ================================================================
 
 // ── 타일 상수 ────────────────────────────────────────────────────
-const T = { WALL:0, FLOOR:1 };
+const T = { WALL:0, FLOOR:1, MINE:2 };
 
 // ── 맵 생성 ──────────────────────────────────────────────────────
 function generateMap() {
@@ -244,7 +305,53 @@ function _buildMap(W, H, force = false) {
   // 막다른 길 비율 초과 시 재시도 (force=true면 통과)
   if (!force && deadEndRatio > CONFIG.map.deadEndMax) return null;
 
-  return { tiles, width:W, height:H, floorCount, deadEndCount, deadEndRatio };
+  // 지뢰 배치
+  // 스폰 주변 안전 반경 확보 (3×3)
+  const safeSet = new Set();
+  for (let dy=-2; dy<=2; dy++)
+    for (let dx=-2; dx<=2; dx++)
+      safeSet.add(`${1+dx},${1+dy}`);
+
+  // 막다른 길 위치 수집 (나중에 아이템 배치용)
+  const deadEnds = [];
+  for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
+    if (get(x,y) !== T.FLOOR) continue;
+    if (safeSet.has(`${x},${y}`)) continue;
+    let neighbors = 0;
+    for (const [ddx,ddy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+      const nnx=x+ddx, nny=y+ddy;
+      if (nnx>=0&&nnx<W&&nny>=0&&nny<H&&get(nnx,nny)===T.FLOOR) neighbors++;
+    }
+    if (neighbors === 1) deadEnds.push([x,y]);
+  }
+
+  // 지뢰 배치 (FLOOR 타일 중 안전 구역 제외)
+  let mineCount = 0;
+  for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
+    if (get(x,y) !== T.FLOOR) continue;
+    if (safeSet.has(`${x},${y}`)) continue;
+    if (Math.random() * 100 < CONFIG.mine.density) {
+      set(x, y, T.MINE);
+      mineCount++;
+    }
+  }
+
+  // 지뢰 숫자 계산 (FLOOR/MINE 타일에 주변 지뢰 수 저장)
+  const numbers = new Uint8Array(W * H);
+  for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
+    if (get(x,y) === T.WALL) continue;
+    let cnt = 0;
+    for (let dy=-1; dy<=1; dy++) for (let dx=-1; dx<=1; dx++) {
+      if (dx===0&&dy===0) continue;
+      const nx=x+dx, ny=y+dy;
+      if (nx>=0&&nx<W&&ny>=0&&ny<H&&get(nx,ny)===T.MINE) cnt++;
+    }
+    numbers[idx(x,y)] = cnt;
+  }
+
+  return { tiles, numbers, width:W, height:H,
+           floorCount, deadEndCount, deadEndRatio,
+           mineCount, deadEnds };
 }
 
 function shuffle(arr) {
@@ -267,10 +374,16 @@ let player = {
   targetX:0, targetY:0,
   moving:false,
   facing:'down',
+  hp:3, maxHp:3,
+  dead:false,
 };
+
+// 런 통계
+let stats = { minesHit:0, startTime:0 };
 
 let camX=0, camY=0;
 let moveTimer=0;
+let devRevealMines = false; // DEV: 지뢰 표시
 
 // ── 캔버스 ───────────────────────────────────────────────────────
 const canvas    = document.getElementById('canvas');
@@ -301,6 +414,11 @@ function init() {
   player.targetY = player.py;
   player.moving  = false;
   player.facing  = 'down';
+  player.hp      = CONFIG.player.maxHp;
+  player.maxHp   = CONFIG.player.maxHp;
+  player.dead    = false;
+  stats = { minesHit:0, startTime:Date.now() };
+  document.getElementById('gameover').classList.remove('show');
 
   revealAround(1, 1, CONFIG.player.visionRad);
 
@@ -387,6 +505,7 @@ function getInputDir() {
 }
 
 function tryMove(dx, dy) {
+  if (player.dead) return false;
   const nx=player.tx+dx, ny=player.ty+dy;
   if (nx<0||nx>=MAP.width||ny<0||ny>=MAP.height) return false;
   if (MAP.tiles[ny*MAP.width+nx]===T.WALL) return false;
@@ -397,7 +516,35 @@ function tryMove(dx, dy) {
   player.moving=true;
   moveTimer=CONFIG.player.moveDelay;
   revealAround(nx, ny, CONFIG.player.visionRad);
+  onStep(nx, ny); // 타일 효과
   return true;
+}
+
+// ── 타일 효과 ─────────────────────────────────────────────────────
+function onStep(tx, ty) {
+  const t = MAP.tiles[ty * MAP.width + tx];
+  if (t === T.MINE) {
+    MAP.tiles[ty * MAP.width + tx] = T.FLOOR; // 지뢰 제거 (폭발)
+    player.hp--;
+    stats.minesHit++;
+    // 피격 플래시
+    const fl = document.getElementById('flash');
+    fl.style.opacity = '1';
+    setTimeout(() => fl.style.opacity = '0', 150);
+    // HP 0 → 게임오버
+    if (player.hp <= 0) {
+      player.dead = true;
+      triggerGameOver();
+    }
+  }
+}
+
+function triggerGameOver() {
+  const elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
+  document.getElementById('go-mines').textContent = stats.minesHit;
+  document.getElementById('go-time').textContent  = elapsed + '초';
+  document.getElementById('go-rooms').textContent = '1'; // Step 3에서 업데이트
+  document.getElementById('gameover').classList.add('show');
 }
 
 function handleInput(dt) {
@@ -497,6 +644,23 @@ function render() {
           ctx.fillStyle='#0f0f0f';
           ctx.fillRect(sx,sy,ts,ts);
         }
+
+      // 지뢰 — 시야 안에서만 표시 (소나 없이는 X 표시 안 함)
+      // Step 2-B에서 소나 스캔 시 숫자 표시 추가
+      // 개발자 모드에서만 표시 (DEV 패널 열려있을 때)
+      if (tile === T.MINE && vis2 && devRevealMines) {
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = 'rgba(255,50,50,0.15)';
+        ctx.fillRect(sx,sy,ts,ts);
+        ctx.strokeStyle = '#ff3333';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx+8,sy+8); ctx.lineTo(sx+ts-8,sy+ts-8);
+        ctx.moveTo(sx+ts-8,sy+8); ctx.lineTo(sx+8,sy+ts-8);
+        ctx.stroke();
+        ctx.restore();
+      }
       }
     }
   }
@@ -585,10 +749,11 @@ function updateHUD() {
     `${player.tx}, ${player.ty}`;
   document.getElementById('hud-explored').textContent =
     `${Math.floor(visitedCount/MAP.floorCount*100)}%`;
-  // HP 하트 표시 (Step 2에서 실제 HP 연동)
-  const maxHp = 3;
+  // HP 하트 실제 연동
+  const hp    = Math.max(0, player.hp);
+  const maxHp = player.maxHp;
   document.getElementById('hud-hp').textContent =
-    '❤'.repeat(maxHp) + '🖤'.repeat(0);
+    '❤'.repeat(hp) + '🖤'.repeat(Math.max(0, maxHp - hp));
 }
 
 // ── DEV 정보 ─────────────────────────────────────────────────────
@@ -600,6 +765,8 @@ function updateDevInfo() {
   document.getElementById('di-dead').textContent    =
     `${MAP.deadEndCount} (${Math.floor(MAP.deadEndRatio*100)}%)`;
   document.getElementById('di-mapsize').textContent = `${MAP.width}×${MAP.height}`;
+  document.getElementById('di-mines').textContent  = MAP.mineCount;
+  document.getElementById('di-hp').textContent     = `${player.hp}/${player.maxHp}`;
   document.getElementById('di-time').textContent    = Math.floor((Date.now()-startTime)/1000)+'s';
 }
 
@@ -617,6 +784,8 @@ const sliders = [
   ['d-delay',    () => { CONFIG.player.moveDelay  = parseFloat(document.getElementById('d-delay').value); }],
   ['d-vision',   () => { CONFIG.player.visionRad  = parseInt(document.getElementById('d-vision').value); }],
   ['d-cam',      () => { CONFIG.camera.smooth      = parseFloat(document.getElementById('d-cam').value); }],
+  ['d-mine',     () => { CONFIG.mine.density    = parseInt(document.getElementById('d-mine').value); document.getElementById('d-mine-v').textContent = document.getElementById('d-mine').value + '%'; }],
+  ['d-hp',       () => { CONFIG.player.maxHp   = parseInt(document.getElementById('d-hp').value); }],
 ];
 sliders.forEach(([id, fn]) => {
   const el  = document.getElementById(id);
@@ -626,6 +795,16 @@ sliders.forEach(([id, fn]) => {
 
 document.getElementById('d-regen').addEventListener('click', () => {
   init(); startTime=Date.now();
+});
+document.getElementById('d-reveal-mines').addEventListener('click', () => {
+  devRevealMines = !devRevealMines;
+  document.getElementById('d-reveal-mines').textContent =
+    '💣 지뢰 표시 ' + (devRevealMines ? 'ON' : 'OFF');
+});
+document.getElementById('d-fullhp').addEventListener('click', () => {
+  player.hp = player.maxHp;
+  player.dead = false;
+  document.getElementById('gameover').classList.remove('show');
 });
 
 // ── 메인 루프 ────────────────────────────────────────────────────
@@ -651,6 +830,12 @@ function loop(ts) {
 
   requestAnimationFrame(loop);
 }
+
+// ── 게임오버 RETRY ───────────────────────────────────────────────
+document.getElementById('go-btn').addEventListener('click', () => {
+  init();
+  startTime = Date.now();
+});
 
 // ── 시작 ─────────────────────────────────────────────────────────
 resize();
