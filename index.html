@@ -81,7 +81,8 @@ canvas#minimap { display:block; image-rendering:pixelated; }
   <div id="hud">
     <div class="hud-item"><div class="hud-label">POS</div><div class="hud-val" id="hud-pos">1,1</div></div>
     <div class="hud-item"><div class="hud-label">HP</div><div class="hud-val" id="hud-hp">❤❤❤</div></div>
-    <div class="hud-item"><div class="hud-label">SONAR</div><div class="hud-val" id="hud-precise">📡 2</div></div>
+    <div class="hud-item"><div class="hud-label">기본소나[F]</div><div class="hud-val" id="hud-basic">READY</div></div>
+    <div class="hud-item"><div class="hud-label">정밀소나[G]</div><div class="hud-val" id="hud-precise">📡 2</div></div>
     <div class="hud-item"><div class="hud-label">EXPLORED</div><div class="hud-val" id="hud-explored">0%</div></div>
   </div>
   <button id="dev-toggle">⚙ DEV</button>
@@ -252,21 +253,24 @@ const player = { tx:1,ty:1,px:0,py:0,targetX:0,targetY:0,moving:false,facing:'do
 // 모든 draw 함수는 ctx.translate(-camX,-camY) 적용 상태에서 호출
 // → 월드 좌표 그대로 사용 (camX 빼지 않음)
 const sonar = {
-  // 차징
-  charging:   false,
-  chargeTime: 0,
+  // 기본 소나 차징 (F키)
+  charging:        false,
+  chargeTime:      0,
+  // 정밀 소나 차징 (G키)
+  chargingPrecise: false,
+  chargeTimePrecise: 0,
   // 파장
-  firing:     false,
-  pulseR:     0,
-  pulseMaxR:  0,
-  pulseWx:    0,
-  pulseWy:    0,
-  // 기본 소나 결과: 위험도 핑 { tx, ty, danger(1~3), alpha, timer }
-  pings:      [],
+  firing:    false,
+  pulseR:    0,
+  pulseMaxR: 0,
+  pulseWx:   0,
+  pulseWy:   0,
+  // 기본 소나 결과: 위험도 핑 { tx, ty, danger, alpha, timer }
+  pings:        [],
   // 정밀 소나 결과: 지뢰 X 표시 { tx, ty, alpha, timer }
   preciseMarks: [],
   // 정밀 소나 잔여 횟수
-  precise:    2,
+  precise: 2,
 };
 
 let camX=0, camY=0, moveTimer=0;
@@ -304,6 +308,7 @@ function init() {
 
   Object.assign(sonar, {
     charging:false, chargeTime:0,
+    chargingPrecise:false, chargeTimePrecise:0,
     firing:false, pulseR:0, pulseMaxR:0,
     pings:[], preciseMarks:[],
     precise: CONFIG.sonar.preciseCount,
@@ -348,12 +353,22 @@ function hasLOS(x0,y0,x1,y1) {
 const KEYS = {};
 
 window.addEventListener('keydown', e => {
+  // 반복 이벤트 즉시 차단 (렉 방지)
+  if (e.repeat) { e.preventDefault(); return; }
   e.preventDefault();
 
-  // F키: KEYS 배열과 완전 분리, e.repeat로 반복 차단
+  // F키: 기본 소나 (KEYS 배열과 완전 분리)
   if (e.code==='KeyF') {
-    if (!e.repeat && !sonar.charging && !player.dead) {
+    if (!sonar.charging && !player.dead) {
       sonar.charging=true; sonar.chargeTime=0;
+    }
+    return;
+  }
+
+  // G키: 정밀 소나 (잔여 횟수 소모)
+  if (e.code==='KeyG') {
+    if (!sonar.chargingPrecise && sonar.precise>0 && !player.dead) {
+      sonar.chargingPrecise=true; sonar.chargeTimePrecise=0;
     }
     return;
   }
@@ -367,10 +382,8 @@ window.addEventListener('keydown', e => {
 });
 
 window.addEventListener('keyup', e => {
-  if (e.code==='KeyF') {
-    if (sonar.charging) fireSonar();
-    return;
-  }
+  if (e.code==='KeyF') { if (sonar.charging) fireSonar(false); return; }
+  if (e.code==='KeyG') { if (sonar.chargingPrecise) fireSonar(true); return; }
   KEYS[e.code]=false;
 });
 
@@ -437,27 +450,27 @@ function onStep(tx,ty) {
 }
 
 // ── 소나 ─────────────────────────────────────────────────────────
-function fireSonar() {
+function fireSonar(isPrecise) {
   const cfg=CONFIG.sonar;
-  const ratio=Math.min(sonar.chargeTime,cfg.maxCharge)/cfg.maxCharge;
+  // 차징 시간 결정 (기본/정밀 분리)
+  const chargeTime = isPrecise ? sonar.chargeTimePrecise : sonar.chargeTime;
+  const ratio=Math.min(chargeTime,cfg.maxCharge)/cfg.maxCharge;
   const radius=Math.round(cfg.minRadius+(cfg.maxRadius-cfg.minRadius)*ratio);
   const ts=CONFIG.map.tileSize;
 
-  sonar.charging=false; sonar.chargeTime=0;
+  // 상태 초기화
+  if (isPrecise) { sonar.chargingPrecise=false; sonar.chargeTimePrecise=0; sonar.precise--; }
+  else           { sonar.charging=false; sonar.chargeTime=0; }
+
   sonar.pulseWx=player.px+ts/2;
   sonar.pulseWy=player.py+ts/2;
   sonar.pulseR=0;
   sonar.pulseMaxR=radius*ts;
   sonar.firing=true;
 
-  // 스캔 대상 수집
-  // 기본 소나: 지뢰 인접 타일에 위험도 핑
-  // 정밀 소나: 지뢰 타일 자체에 X 표시
   const {tiles,numbers,width,height}=MAP;
-  const isPrecise = sonar.precise > 0;
-  if (isPrecise) sonar.precise--;
-
   const newPings=[], newMarks=[];
+
   for (let dy=-radius;dy<=radius;dy++) for (let dx=-radius;dx<=radius;dx++) {
     if (dx===0&&dy===0) continue;
     const nx=player.tx+dx, ny=player.ty+dy;
@@ -467,13 +480,17 @@ function fireSonar() {
     if (tile===T.WALL) continue;
     const dist=Math.hypot(dx,dy)*ts;
 
-    if (isPrecise && tile===T.MINE) {
-      // 정밀: 지뢰 위치에 X 표시
-      newMarks.push({tx:nx,ty:ny,dist,lit:false,alpha:0,timer:cfg.pingDuration*1.5});
-    } else if (!isPrecise && tile!==T.MINE) {
-      // 기본: 지뢰 인접 타일에 위험도 핑 (인접 지뢰 수 기반)
-      const danger=numbers[ny*width+nx];
-      if (danger>0) newPings.push({tx:nx,ty:ny,dist,danger,lit:false,alpha:0,timer:cfg.pingDuration});
+    if (isPrecise) {
+      // 정밀: 지뢰 타일 자체에 X 표시
+      if (tile===T.MINE) {
+        newMarks.push({tx:nx,ty:ny,dist,lit:false,alpha:0,timer:cfg.pingDuration*1.5});
+      }
+    } else {
+      // 기본: 지뢰 인접 바닥 타일에 위험도 핑
+      if (tile!==T.MINE) {
+        const danger=numbers[ny*width+nx];
+        if (danger>0) newPings.push({tx:nx,ty:ny,dist,danger,lit:false,alpha:0,timer:cfg.pingDuration});
+      }
     }
   }
 
@@ -484,7 +501,8 @@ function fireSonar() {
 function updateSonar(dt) {
   const cfg=CONFIG.sonar;
 
-  if (sonar.charging) sonar.chargeTime=Math.min(sonar.chargeTime+dt,cfg.maxCharge);
+  if (sonar.charging)        sonar.chargeTime       =Math.min(sonar.chargeTime+dt,       cfg.maxCharge);
+  if (sonar.chargingPrecise) sonar.chargeTimePrecise=Math.min(sonar.chargeTimePrecise+dt,cfg.maxCharge);
 
   // 파장 확산
   if (sonar.firing) {
@@ -613,14 +631,24 @@ function drawPlayer(ts) {
 }
 
 function drawSonarCharging(ts) {
-  if (!sonar.charging) return;
   const cx=player.px+ts/2, cy=player.py+ts/2;
-  const ratio=Math.min(sonar.chargeTime/CONFIG.sonar.maxCharge,1);
-  const col=ratio>0.8?'#ffaa00':'#00ff88';
-  const bw=36,bh=5,bx=cx-bw/2,by=cy-ts*0.75;
-  ctx.fillStyle='#222'; ctx.fillRect(bx,by,bw,bh);
-  ctx.fillStyle=col; ctx.fillRect(bx,by,bw*ratio,bh);
-  ctx.strokeStyle='#555'; ctx.lineWidth=0.5; ctx.strokeRect(bx,by,bw,bh);
+  // 기본 소나 게이지 (초록)
+  if (sonar.charging) {
+    const ratio=Math.min(sonar.chargeTime/CONFIG.sonar.maxCharge,1);
+    const col=ratio>0.8?'#ffaa00':'#00ff88';
+    const bw=36,bh=5,bx=cx-bw/2,by=cy-ts*0.75;
+    ctx.fillStyle='#222'; ctx.fillRect(bx,by,bw,bh);
+    ctx.fillStyle=col;    ctx.fillRect(bx,by,bw*ratio,bh);
+    ctx.strokeStyle='#555'; ctx.lineWidth=0.5; ctx.strokeRect(bx,by,bw,bh);
+  }
+  // 정밀 소나 게이지 (빨강, 기본 게이지 아래)
+  if (sonar.chargingPrecise) {
+    const ratio=Math.min(sonar.chargeTimePrecise/CONFIG.sonar.maxCharge,1);
+    const bw=36,bh=5,bx=cx-bw/2,by=cy-ts*0.75+8;
+    ctx.fillStyle='#222'; ctx.fillRect(bx,by,bw,bh);
+    ctx.fillStyle='#ff4444'; ctx.fillRect(bx,by,bw*ratio,bh);
+    ctx.strokeStyle='#555'; ctx.lineWidth=0.5; ctx.strokeRect(bx,by,bw,bh);
+  }
 }
 
 function drawSonarPulse() {
@@ -696,7 +724,8 @@ function updateHUD() {
   const hp=Math.max(0,player.hp);
   document.getElementById('hud-pos').textContent=''+player.tx+','+player.ty;
   document.getElementById('hud-hp').textContent='❤'.repeat(hp)+'🖤'.repeat(Math.max(0,player.maxHp-hp));
-  document.getElementById('hud-precise').textContent='📡 '+sonar.precise;
+  document.getElementById('hud-basic').textContent  = sonar.charging ? 'CHARGE' : 'READY';
+  document.getElementById('hud-precise').textContent = '📡 '+sonar.precise;
   let visited=0;
   for (let i=0;i<VISITED.length;i++) if(VISITED[i]) visited++;
   document.getElementById('hud-explored').textContent=Math.floor(visited/MAP.floorCount*100)+'%';
