@@ -151,6 +151,11 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 
 const T = { WALL:0, FLOOR:1, MINE:2 };
 
+// 방향 배열 상수 (매 호출마다 생성 방지)
+const DIR4  = [[0,-1],[1,0],[0,1],[-1,0]];
+const DIR8  = [[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]];
+const DMAZE = [[0,-2],[2,0],[0,2],[-2,0]];
+
 // ── 맵 생성 ──────────────────────────────────────────────────────
 function generateMap() {
   let sz = CONFIG.map.size;
@@ -173,7 +178,7 @@ function _buildMap(W, H, force = false) {
   // 미로 생성
   function carve(x, y) {
     set(x, y, T.FLOOR);
-    for (const [dx, dy] of shuffle([[0,-2],[2,0],[0,2],[-2,0]])) {
+    for (const [dx, dy] of shuffle(DMAZE)) {
       const nx=x+dx, ny=y+dy;
       if (nx<=0||nx>=W-1||ny<=0||ny>=H-1) continue;
       if (get(nx,ny) !== T.WALL) continue;
@@ -203,7 +208,7 @@ function _buildMap(W, H, force = false) {
     if (get(x,y)!==T.FLOOR) continue;
     floorCount++;
     let n=0;
-    for (const [dx,dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+    for (const [dx,dy] of DIR4) {
       const nx=x+dx,ny=y+dy;
       if (nx>=0&&nx<W&&ny>=0&&ny<H&&get(nx,ny)===T.FLOOR) n++;
     }
@@ -244,6 +249,7 @@ function shuffle(arr) {
 
 // ── 게임 상태 ────────────────────────────────────────────────────
 let MAP=null, VISITED=null, VISIBLE=null;
+let vignetteGradient=null; // 비네팅 그라디언트 캐시
 
 const player = { tx:1,ty:1,px:0,py:0,targetX:0,targetY:0,moving:false,facing:'down',hp:3,maxHp:3,dead:false };
 
@@ -289,6 +295,10 @@ function resize() {
   W_px=canvas.width=area.clientWidth;
   H_px=canvas.height=area.clientHeight;
   mmCanvas.width=mmCanvas.height=CONFIG.minimap.size;
+  // 비네팅 그라디언트 캐싱 (resize 시에만 재생성)
+  vignetteGradient=ctx.createRadialGradient(W_px/2,H_px/2,H_px*0.18,W_px/2,H_px/2,H_px*0.78);
+  vignetteGradient.addColorStop(0,'rgba(0,0,0,0)');
+  vignetteGradient.addColorStop(1,'rgba(0,0,0,0.72)');
 }
 window.addEventListener('resize', resize);
 
@@ -350,33 +360,46 @@ function hasLOS(x0,y0,x1,y1) {
 }
 
 // ── 입력 ─────────────────────────────────────────────────────────
+// KEYS: 방향키 전용 (F/G는 KEYS에 넣지 않음)
 const KEYS = {};
 
-window.addEventListener('keydown', e => { e.preventDefault(); KEYS[e.code]=true; });
-window.addEventListener('keyup',   e => { KEYS[e.code]=false; });
+const GAME_KEYS = new Set([
+  'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
+  'KeyW','KeyA','KeyS','KeyD','KeyF','KeyG',
+  'Space',
+]);
 
-// F/G키 이전 프레임 상태 (이벤트 아닌 매 프레임 상태 비교)
-let prevF=false, prevG=false;
+window.addEventListener('keydown', e => {
+  if (GAME_KEYS.has(e.code)) e.preventDefault();
 
-function processKeys() {
-  if (player.dead) {
-    sonar.charging=false;
-    sonar.chargingPrecise=false;
-    prevF=false; prevG=false;
+  // F/G키: KEYS 배열 완전 분리, 소나 상태 직접 제어
+  // e.repeat 무시로 홀딩 렉 원천 차단
+  if (e.code==='KeyF') {
+    if (!e.repeat && !sonar.charging && !player.dead) {
+      sonar.charging=true; sonar.chargeTime=0;
+    }
+    return;
+  }
+  if (e.code==='KeyG') {
+    if (!e.repeat && !sonar.chargingPrecise && sonar.precise>0 && !player.dead) {
+      sonar.chargingPrecise=true; sonar.chargeTimePrecise=0;
+    }
     return;
   }
 
-  const f=!!KEYS['KeyF'], g=!!KEYS['KeyG'];
+  KEYS[e.code]=true;
+});
 
-  // F키: 처음 눌린 프레임에 차징 시작, 처음 뗀 프레임에 발동
-  if (f && !prevF && !sonar.charging)       { sonar.charging=true; sonar.chargeTime=0; }
-  if (!f && prevF && sonar.charging)         { fireSonar(false); }
+window.addEventListener('keyup', e => {
+  // F/G키: keyup 시 발동 (KEYS 배열 건드리지 않음)
+  if (e.code==='KeyF') { if (sonar.charging)        fireSonar(false); return; }
+  if (e.code==='KeyG') { if (sonar.chargingPrecise) fireSonar(true);  return; }
+  KEYS[e.code]=false;
+});
 
-  // G키: 처음 눌린 프레임에 차징 시작, 처음 뗀 프레임에 발동
-  if (g && !prevG && !sonar.chargingPrecise && sonar.precise>0) { sonar.chargingPrecise=true; sonar.chargeTimePrecise=0; }
-  if (!g && prevG && sonar.chargingPrecise)  { fireSonar(true); }
-
-  prevF=f; prevG=g;
+function processKeys() {
+  // 게임오버 시 차징 강제 취소
+  if (player.dead) { sonar.charging=false; sonar.chargingPrecise=false; }
 }
 
 function codeToDir(code) {
@@ -614,10 +637,8 @@ function render() {
 
   ctx.restore();
 
-  // 비네팅
-  const vig=ctx.createRadialGradient(W_px/2,H_px/2,H_px*0.18,W_px/2,H_px/2,H_px*0.78);
-  vig.addColorStop(0,'rgba(0,0,0,0)'); vig.addColorStop(1,'rgba(0,0,0,0.72)');
-  ctx.fillStyle=vig; ctx.fillRect(0,0,W_px,H_px);
+  // 비네팅 (캐시된 그라디언트 사용)
+  ctx.fillStyle=vignetteGradient; ctx.fillRect(0,0,W_px,H_px);
 }
 
 // ── RESOURCE LAYER 함수들 ─────────────────────────────────────────
@@ -804,39 +825,6 @@ function loop(ts) {
 }
 
 resize(); init();
-
-// JIT 워밍업 — 무거운 함수를 미리 실행해 JIT 최적화 유도
-// 실제 게임 상태에 영향 없도록 임시 상태로 실행
-(function warmup() {
-  // revealAround LOS 워밍업
-  for (let i=0; i<3; i++) revealAround(1,1,CONFIG.player.visionRad);
-
-  // fireSonar 스캔 루프 워밍업 (실제 발동 없이 루프만)
-  const {tiles,numbers,width,height}=MAP;
-  const radius=CONFIG.sonar.maxRadius;
-  let dummy=0;
-  for (let dy=-radius;dy<=radius;dy++) for (let dx=-radius;dx<=radius;dx++) {
-    if (dx===0&&dy===0) continue;
-    const nx=1+dx, ny=1+dy;
-    if (nx<0||nx>=width||ny<0||ny>=height) continue;
-    if (Math.hypot(dx,dy)>radius+0.5) continue;
-    dummy+=tiles[ny*width+nx]||0;
-    dummy+=numbers[ny*width+nx]||0;
-  }
-
-  // updateSonar 루프 워밍업
-  for (let i=0; i<5; i++) updateSonar(0.016);
-
-  // 상태 원복
-  Object.assign(sonar,{
-    charging:false,chargeTime:0,
-    chargingPrecise:false,chargeTimePrecise:0,
-    firing:false,pulseR:0,pulseMaxR:0,
-    pings:[],preciseMarks:[],
-    precise:CONFIG.sonar.preciseCount,
-  });
-  prevF=false; prevG=false;
-})();
 
 lastTs=performance.now(); requestAnimationFrame(loop);
 </script>
