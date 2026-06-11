@@ -351,36 +351,32 @@ function hasLOS(x0,y0,x1,y1) {
 
 // ── 입력 ─────────────────────────────────────────────────────────
 const KEYS = {};
-const PREV_KEYS = {};
 
-window.addEventListener('keydown', e => {
-  e.preventDefault();
-  KEYS[e.code] = true;
-});
-window.addEventListener('keyup', e => {
-  KEYS[e.code] = false;
-});
+window.addEventListener('keydown', e => { e.preventDefault(); KEYS[e.code]=true; });
+window.addEventListener('keyup',   e => { KEYS[e.code]=false; });
 
-// 매 프레임 호출 — F/G 소나키만 엣지 감지 담당
-// 방향키는 handleInput에서 별도 처리
+// F/G키 이전 프레임 상태 (이벤트 아닌 매 프레임 상태 비교)
+let prevF=false, prevG=false;
+
 function processKeys() {
-  // F키: 눌린 순간 차징, 뗀 순간 발동
-  if (KEYS['KeyF'] && !PREV_KEYS['KeyF'] && !sonar.charging && !player.dead) {
-    sonar.charging=true; sonar.chargeTime=0;
-  }
-  if (!KEYS['KeyF'] && PREV_KEYS['KeyF'] && sonar.charging) {
-    fireSonar(false);
-  }
-
-  // G키: 눌린 순간 차징, 뗀 순간 발동
-  if (KEYS['KeyG'] && !PREV_KEYS['KeyG'] && !sonar.chargingPrecise && sonar.precise>0 && !player.dead) {
-    sonar.chargingPrecise=true; sonar.chargeTimePrecise=0;
-  }
-  if (!KEYS['KeyG'] && PREV_KEYS['KeyG'] && sonar.chargingPrecise) {
-    fireSonar(true);
+  if (player.dead) {
+    sonar.charging=false;
+    sonar.chargingPrecise=false;
+    prevF=false; prevG=false;
+    return;
   }
 
-  Object.assign(PREV_KEYS, KEYS);
+  const f=!!KEYS['KeyF'], g=!!KEYS['KeyG'];
+
+  // F키: 처음 눌린 프레임에 차징 시작, 처음 뗀 프레임에 발동
+  if (f && !prevF && !sonar.charging)       { sonar.charging=true; sonar.chargeTime=0; }
+  if (!f && prevF && sonar.charging)         { fireSonar(false); }
+
+  // G키: 처음 눌린 프레임에 차징 시작, 처음 뗀 프레임에 발동
+  if (g && !prevG && !sonar.chargingPrecise && sonar.precise>0) { sonar.chargingPrecise=true; sonar.chargeTimePrecise=0; }
+  if (!g && prevG && sonar.chargingPrecise)  { fireSonar(true); }
+
+  prevF=f; prevG=g;
 }
 
 function codeToDir(code) {
@@ -629,12 +625,16 @@ function render() {
 
 function drawPlayer(ts) {
   const cx=player.px+ts/2, cy=player.py+ts/2, r=ts*0.34;
-  ctx.save(); ctx.globalAlpha=0.1;
-  ctx.beginPath(); ctx.arc(cx,cy,r*1.6,0,Math.PI*2);
-  ctx.fillStyle='#00ff88'; ctx.fill(); ctx.restore();
+  // 후광 (shadowBlur 대신 반투명 원으로 glow 표현)
+  ctx.save();
+  ctx.globalAlpha=0.12; ctx.beginPath(); ctx.arc(cx,cy,r*1.8,0,Math.PI*2);
+  ctx.fillStyle='#00ff88'; ctx.fill();
+  ctx.globalAlpha=0.06;  ctx.beginPath(); ctx.arc(cx,cy,r*2.4,0,Math.PI*2);
+  ctx.fill(); ctx.restore();
+  // 몸통
   ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
-  ctx.fillStyle='#00ff88'; ctx.shadowBlur=10; ctx.shadowColor='#00ff88';
-  ctx.fill(); ctx.shadowBlur=0;
+  ctx.fillStyle='#00ff88'; ctx.fill();
+  // 방향 도트
   const a={up:-Math.PI/2,down:Math.PI/2,left:Math.PI,right:0}[player.facing]??Math.PI/2;
   ctx.beginPath();
   ctx.arc(cx+Math.cos(a)*r*0.52,cy+Math.sin(a)*r*0.52,r*0.22,0,Math.PI*2);
@@ -684,12 +684,13 @@ function drawSonarPings() {
     const col=dangerColors[danger];
     ctx.save();
     ctx.globalAlpha=p.alpha*0.85;
-    // 타일 중앙에 원형 핑
-    ctx.beginPath();
-    ctx.arc(wx+ts/2, wy+ts/2, ts*0.18, 0, Math.PI*2);
-    ctx.fillStyle=col;
-    ctx.shadowBlur=10; ctx.shadowColor=col;
-    ctx.fill(); ctx.shadowBlur=0;
+    // 타일 중앙에 원형 핑 (shadowBlur 없이 외곽 링으로 강조)
+    const pr=ts*0.18;
+    ctx.beginPath(); ctx.arc(wx+ts/2,wy+ts/2,pr*1.6,0,Math.PI*2);
+    ctx.fillStyle=col; ctx.globalAlpha=p.alpha*0.2; ctx.fill();
+    ctx.globalAlpha=p.alpha*0.85;
+    ctx.beginPath(); ctx.arc(wx+ts/2,wy+ts/2,pr,0,Math.PI*2);
+    ctx.fillStyle=col; ctx.fill();
     ctx.restore();
   }
 }
@@ -802,7 +803,42 @@ function loop(ts) {
   requestAnimationFrame(loop);
 }
 
-resize(); init(); lastTs=performance.now(); requestAnimationFrame(loop);
+resize(); init();
+
+// JIT 워밍업 — 무거운 함수를 미리 실행해 JIT 최적화 유도
+// 실제 게임 상태에 영향 없도록 임시 상태로 실행
+(function warmup() {
+  // revealAround LOS 워밍업
+  for (let i=0; i<3; i++) revealAround(1,1,CONFIG.player.visionRad);
+
+  // fireSonar 스캔 루프 워밍업 (실제 발동 없이 루프만)
+  const {tiles,numbers,width,height}=MAP;
+  const radius=CONFIG.sonar.maxRadius;
+  let dummy=0;
+  for (let dy=-radius;dy<=radius;dy++) for (let dx=-radius;dx<=radius;dx++) {
+    if (dx===0&&dy===0) continue;
+    const nx=1+dx, ny=1+dy;
+    if (nx<0||nx>=width||ny<0||ny>=height) continue;
+    if (Math.hypot(dx,dy)>radius+0.5) continue;
+    dummy+=tiles[ny*width+nx]||0;
+    dummy+=numbers[ny*width+nx]||0;
+  }
+
+  // updateSonar 루프 워밍업
+  for (let i=0; i<5; i++) updateSonar(0.016);
+
+  // 상태 원복
+  Object.assign(sonar,{
+    charging:false,chargeTime:0,
+    chargingPrecise:false,chargeTimePrecise:0,
+    firing:false,pulseR:0,pulseMaxR:0,
+    pings:[],preciseMarks:[],
+    precise:CONFIG.sonar.preciseCount,
+  });
+  prevF=false; prevG=false;
+})();
+
+lastTs=performance.now(); requestAnimationFrame(loop);
 </script>
 </body>
 </html>
