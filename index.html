@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>OUTBREAK ZONE — Step 1</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body {
+  background:#000; color:#ccc;
+  font-family:monospace;
+  height:100vh; overflow:hidden;
+  display:flex; flex-direction:column;
+  user-select:none;
+}
+
+/* 헤더 */
+#header {
+  display:flex; align-items:center;
+  justify-content:space-between;
+  padding:5px 12px;
+  background:#000; border-bottom:1px solid #1a1a1a;
+  flex-shrink:0; font-size:0.65rem; gap:12px;
+}
+#title { color:#ff3333; font-size:0.85rem; letter-spacing:0.2em; flex-shrink:0; }
+#hud   { display:flex; gap:16px; font-size:0.6rem; align-items:center; }
+.hud-item { display:flex; flex-direction:column; align-items:center; gap:1px; }
+.hud-label { color:#444; font-size:0.48rem; letter-spacing:0.1em; text-transform:uppercase; }
+.hud-val   { color:#00ff88; font-size:0.68rem; }
+#dev-toggle {
+  background:none; border:1px solid #333; color:#555;
+  font-family:monospace; font-size:0.52rem;
+  padding:3px 8px; cursor:pointer; border-radius:2px; flex-shrink:0;
+}
+#dev-toggle:hover, #dev-toggle.on { border-color:#ffaa00; color:#ffaa00; }
+
+/* 메인 */
+#main { display:flex; flex:1; overflow:hidden; }
+#game-area { flex:1; position:relative; overflow:hidden; }
+canvas#canvas { display:block; }
+
+/* 미니맵 */
+canvas#minimap {
+  position:absolute; bottom:10px; right:10px;
+  border:1px solid rgba(0,255,136,0.2);
+  image-rendering:pixelated;
+}
+
+/* DEV 패널 */
+#dev-panel {
+  width:0; background:#0d0d0d;
+  border-left:1px solid #1a1a1a;
+  overflow:hidden; flex-shrink:0;
+  transition:width 0.15s;
+}
+#dev-panel.open { width:190px; }
+#dev-inner { padding:10px; min-width:190px; }
+.dev-title { color:#ffaa00; font-size:0.6rem; letter-spacing:0.15em; border-bottom:1px solid #222; padding-bottom:5px; margin-bottom:8px; }
+.dev-section { color:#555; font-size:0.52rem; text-transform:uppercase; letter-spacing:0.1em; margin:7px 0 3px; }
+.dev-row { display:flex; justify-content:space-between; align-items:center; gap:6px; margin:3px 0; }
+.dev-row label { font-size:0.58rem; color:#bbb; flex:1; }
+.dev-row input[type=range] { width:65px; accent-color:#00ff88; cursor:pointer; }
+.dev-val { font-size:0.58rem; color:#00ff88; min-width:28px; text-align:right; }
+.dev-btn {
+  background:none; border:1px solid #333; color:#bbb;
+  font-family:monospace; font-size:0.56rem;
+  padding:3px 6px; cursor:pointer; border-radius:2px;
+  width:100%; margin-top:4px; text-align:left;
+}
+.dev-btn:hover { border-color:#00ff88; color:#00ff88; }
+.dev-info { font-size:0.55rem; color:#444; line-height:1.8; margin-top:8px; border-top:1px solid #1a1a1a; padding-top:6px; }
+.dev-info span { color:#00ff88; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="title">OUTBREAK ZONE</div>
+  <div id="hud">
+    <div class="hud-item">
+      <div class="hud-label">POSITION</div>
+      <div class="hud-val" id="hud-pos">1, 1</div>
+    </div>
+    <div class="hud-item">
+      <div class="hud-label">EXPLORED</div>
+      <div class="hud-val" id="hud-explored">0%</div>
+    </div>
+  </div>
+  <button id="dev-toggle">⚙ DEV</button>
+</div>
+
+<div id="main">
+  <div id="game-area">
+    <canvas id="canvas"></canvas>
+    <canvas id="minimap"></canvas>
+  </div>
+  <div id="dev-panel">
+    <div id="dev-inner">
+      <div class="dev-title">⚙ DEV — STEP 1</div>
+
+      <div class="dev-section">MAP (A)</div>
+      <div class="dev-row">
+        <label>맵 크기 (A1)</label>
+        <input type="range" id="d-size" min="9" max="31" step="2" value="17">
+        <span class="dev-val" id="d-size-v">17</span>
+      </div>
+      <div class="dev-row">
+        <label>루프 경로 (A7)</label>
+        <input type="range" id="d-loops" min="0" max="8" step="1" value="3">
+        <span class="dev-val" id="d-loops-v">3</span>
+      </div>
+
+      <div class="dev-section">PLAYER (B)</div>
+      <div class="dev-row">
+        <label>이동 딜레이 (B1)</label>
+        <input type="range" id="d-delay" min="0.04" max="0.20" step="0.01" value="0.07">
+        <span class="dev-val" id="d-delay-v">0.07</span>
+      </div>
+      <div class="dev-row">
+        <label>시야 반경 (B3)</label>
+        <input type="range" id="d-vision" min="2" max="8" step="1" value="4">
+        <span class="dev-val" id="d-vision-v">4</span>
+      </div>
+
+      <div class="dev-section">CAMERA (C)</div>
+      <div class="dev-row">
+        <label>카메라 부드러움</label>
+        <input type="range" id="d-cam" min="0.05" max="1.0" step="0.05" value="0.12">
+        <span class="dev-val" id="d-cam-v">0.12</span>
+      </div>
+
+      <div class="dev-section">MINIMAP (D)</div>
+      <div class="dev-row">
+        <label>미니맵 크기</label>
+        <input type="range" id="d-mmsize" min="60" max="140" step="10" value="90">
+        <span class="dev-val" id="d-mmsize-v">90</span>
+      </div>
+
+      <button class="dev-btn" id="d-regen">🔄 맵 재생성</button>
+
+      <div class="dev-info">
+        FPS: <span id="di-fps">0</span><br>
+        타일: <span id="di-tile">FLOOR</span><br>
+        맵: <span id="di-mapsize">0×0</span><br>
+        바닥: <span id="di-floors">0</span>개<br>
+        경과: <span id="di-time">0s</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- config.js 먼저 로드 -->
+<script src="config.js"></script>
+
+<script>
+// ================================================================
+//  index.html — OUTBREAK ZONE Step 1
+//  맵 생성 + 플레이어 이동 + 미니맵
+//  검증 완료 후 봉인
+// ================================================================
+
+// ── 타일 상수 ────────────────────────────────────────────────────
+const T = { WALL:0, FLOOR:1 };
+
+// ── 맵 생성 ──────────────────────────────────────────────────────
+function generateMap() {
+  let sz = CONFIG.map.size;
+  if (sz % 2 === 0) sz++;
+  const W = sz, H = sz;
+  const tiles = new Uint8Array(W * H).fill(T.WALL);
+
+  const idx = (x,y) => y*W+x;
+  const get = (x,y) => tiles[idx(x,y)];
+  const set = (x,y,v) => { tiles[idx(x,y)] = v; };
+
+  // 재귀 백트래커 미로
+  function carve(x, y) {
+    set(x, y, T.FLOOR);
+    const dirs = shuffle([[0,-2],[2,0],[0,2],[-2,0]]);
+    for (const [dx,dy] of dirs) {
+      const nx=x+dx, ny=y+dy;
+      if (nx<=0||nx>=W-1||ny<=0||ny>=H-1) continue;
+      if (get(nx,ny) !== T.WALL) continue;
+      set(x+dx/2, y+dy/2, T.FLOOR);
+      carve(nx, ny);
+    }
+  }
+  carve(1, 1);
+
+  // 루프 경로 추가 (순환 경로 보장)
+  let added=0, tries=0;
+  while (added < CONFIG.map.loopPaths && tries < 300) {
+    tries++;
+    const x = 1 + Math.floor(Math.random()*Math.floor((W-2)/2))*2;
+    const y = 1 + Math.floor(Math.random()*Math.floor((H-2)/2))*2;
+    const [dx,dy] = [[1,0],[0,1]][Math.floor(Math.random()*2)];
+    const mx=x+dx, my=y+dy, nx2=x+dx*2, ny2=y+dy*2;
+    if (nx2<=0||nx2>=W-1||ny2<=0||ny2>=H-1) continue;
+    if (get(mx,my) !== T.WALL) continue;
+    if (get(nx2,ny2) !== T.FLOOR) continue;
+    set(mx, my, T.FLOOR);
+    added++;
+  }
+
+  let floorCount = 0;
+  for (let i=0; i<tiles.length; i++) if (tiles[i]===T.FLOOR) floorCount++;
+
+  return { tiles, width:W, height:H, floorCount };
+}
+
+function shuffle(arr) {
+  const a=[...arr];
+  for (let i=a.length-1;i>0;i--) {
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+// ── 상태 ─────────────────────────────────────────────────────────
+let MAP      = null;
+let VISITED  = null;   // 방문한 타일 (미니맵 + 시야용)
+
+let player = {
+  tx:1, ty:1,
+  px:0, py:0,
+  targetX:0, targetY:0,
+  moving:false,
+  facing:'down',
+  // 키 버퍼: 이동 중 다음 방향 기억
+  nextDx:0, nextDy:0,
+};
+
+let camX=0, camY=0;
+let moveTimer=0;
+
+// ── 캔버스 ───────────────────────────────────────────────────────
+const canvas   = document.getElementById('canvas');
+const ctx      = canvas.getContext('2d');
+const mmCanvas = document.getElementById('minimap');
+const mmCtx    = mmCanvas.getContext('2d');
+let W_px, H_px;
+
+function resize() {
+  const area = document.getElementById('game-area');
+  W_px = canvas.width  = area.clientWidth;
+  H_px = canvas.height = area.clientHeight;
+  // 미니맵 크기 동기화
+  mmCanvas.width  = CONFIG.minimap.size;
+  mmCanvas.height = CONFIG.minimap.size;
+  mmCanvas.style.opacity = CONFIG.minimap.opacity;
+}
+window.addEventListener('resize', resize);
+
+// ── 초기화 ───────────────────────────────────────────────────────
+function init() {
+  MAP     = generateMap();
+  VISITED = new Uint8Array(MAP.width * MAP.height);
+
+  player.tx=1; player.ty=1;
+  player.px = 1*CONFIG.map.tileSize;
+  player.py = 1*CONFIG.map.tileSize;
+  player.targetX = player.px;
+  player.targetY = player.py;
+  player.moving  = false;
+  player.nextDx  = 0;
+  player.nextDy  = 0;
+
+  revealAround(1, 1, CONFIG.player.visionRad);
+
+  // 카메라 즉시 맞춤 (부드러운 전환 없이)
+  camX = player.px + CONFIG.map.tileSize/2 - W_px/2;
+  camY = player.py + CONFIG.map.tileSize/2 - H_px/2;
+}
+
+// ── LOS 시야 ─────────────────────────────────────────────────────
+function revealAround(tx, ty, radius) {
+  const { tiles, width, height } = MAP;
+  for (let dy=-radius; dy<=radius; dy++) {
+    for (let dx=-radius; dx<=radius; dx++) {
+      const nx=tx+dx, ny=ty+dy;
+      if (nx<0||nx>=width||ny<0||ny>=height) continue;
+      if (Math.hypot(dx,dy) > radius+0.5) continue;
+      if (hasLOS(tx,ty,nx,ny)) VISITED[ny*width+nx]=1;
+    }
+  }
+}
+
+function hasLOS(x0,y0,x1,y1) {
+  const { tiles, width } = MAP;
+  const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+  let x=x0, y=y0;
+  const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+  let err=dx-dy;
+  while (x!==x1||y!==y1) {
+    if (tiles[y*width+x]===T.WALL) return false;
+    const e2=2*err;
+    if (e2>-dy){err-=dy;x+=sx;}
+    if (e2< dx){err+=dx;y+=sy;}
+  }
+  return true;
+}
+
+// ── 입력 ─────────────────────────────────────────────────────────
+const KEYS = {};
+window.addEventListener('keydown', e => { KEYS[e.code]=true;  e.preventDefault(); });
+window.addEventListener('keyup',   e => { KEYS[e.code]=false; });
+
+function getInputDir() {
+  let dx=0, dy=0;
+  if (KEYS['KeyW']||KEYS['ArrowUp'])    dy=-1;
+  if (KEYS['KeyS']||KEYS['ArrowDown'])  dy= 1;
+  if (KEYS['KeyA']||KEYS['ArrowLeft'])  dx=-1;
+  if (KEYS['KeyD']||KEYS['ArrowRight']) dx= 1;
+  return {dx, dy};
+}
+
+function tryMove(dx, dy) {
+  if (dx===0&&dy===0) return false;
+  const nx=player.tx+dx, ny=player.ty+dy;
+  if (nx<0||nx>=MAP.width||ny<0||ny>=MAP.height) return false;
+  if (MAP.tiles[ny*MAP.width+nx]===T.WALL) return false;
+
+  if (dy<0) player.facing='up';
+  else if (dy>0) player.facing='down';
+  else if (dx<0) player.facing='left';
+  else if (dx>0) player.facing='right';
+
+  player.tx=nx; player.ty=ny;
+  player.targetX=nx*CONFIG.map.tileSize;
+  player.targetY=ny*CONFIG.map.tileSize;
+  player.moving=true;
+  moveTimer=CONFIG.player.moveDelay;
+  revealAround(nx, ny, CONFIG.player.visionRad);
+  return true;
+}
+
+function handleInput(dt) {
+  moveTimer = Math.max(0, moveTimer-dt);
+  const {dx,dy} = getInputDir();
+
+  if (player.moving) {
+    // 키 버퍼: 이동 중에도 다음 방향 저장
+    if (dx!==0||dy!==0) { player.nextDx=dx; player.nextDy=dy; }
+    return;
+  }
+
+  // 이동 딜레이 중
+  if (moveTimer > 0) return;
+
+  // 버퍼된 입력 우선, 없으면 현재 입력
+  const mdx = (dx!==0||dy!==0) ? dx : player.nextDx;
+  const mdy = (dx!==0||dy!==0) ? dy : player.nextDy;
+  if (tryMove(mdx, mdy)) {
+    player.nextDx=0; player.nextDy=0;
+  }
+}
+
+// ── 업데이트 ─────────────────────────────────────────────────────
+function update(dt) {
+  // 픽셀 이동 (타일로 슬라이드)
+  if (player.moving) {
+    const ts   = CONFIG.map.tileSize;
+    const spd  = ts / CONFIG.player.moveDelay * dt;
+    const dx   = player.targetX - player.px;
+    const dy   = player.targetY - player.py;
+    const dist = Math.hypot(dx,dy);
+    if (dist <= spd) {
+      player.px=player.targetX; player.py=player.targetY;
+      player.moving=false;
+    } else {
+      player.px+=dx/dist*spd; player.py+=dy/dist*spd;
+    }
+  }
+
+  // 카메라 부드럽게 추적
+  const ts = CONFIG.map.tileSize;
+  const tcx = player.px+ts/2-W_px/2;
+  const tcy = player.py+ts/2-H_px/2;
+  camX += (tcx-camX)*CONFIG.camera.smooth;
+  camY += (tcy-camY)*CONFIG.camera.smooth;
+}
+
+// ── 렌더링 ───────────────────────────────────────────────────────
+function render() {
+  const ts = CONFIG.map.tileSize;
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,W_px,H_px);
+
+  ctx.save();
+  ctx.translate(-camX, -camY);
+
+  const tx0=Math.max(0,Math.floor(camX/ts)-1);
+  const ty0=Math.max(0,Math.floor(camY/ts)-1);
+  const tx1=Math.min(MAP.width,  Math.ceil((camX+W_px)/ts)+1);
+  const ty1=Math.min(MAP.height, Math.ceil((camY+H_px)/ts)+1);
+
+  for (let ty=ty0;ty<ty1;ty++) {
+    for (let tx=tx0;tx<tx1;tx++) {
+      const sx=tx*ts, sy=ty*ts;
+      const vis  = VISITED[ty*MAP.width+tx];
+      const tile = MAP.tiles[ty*MAP.width+tx];
+
+      if (!vis) {
+        // 안개
+        ctx.fillStyle='#050505';
+        ctx.fillRect(sx,sy,ts,ts);
+        continue;
+      }
+
+      if (tile===T.WALL) {
+        // 벽 — 약간의 깊이감
+        ctx.fillStyle='#1c1c1c';
+        ctx.fillRect(sx,sy,ts,ts);
+        ctx.fillStyle='#141414';
+        ctx.fillRect(sx+1,sy+1,ts-2,ts-2);
+        // 벽 테두리 강조
+        ctx.strokeStyle='#242424';
+        ctx.lineWidth=1;
+        ctx.strokeRect(sx+0.5,sy+0.5,ts-1,ts-1);
+      } else {
+        // 바닥
+        ctx.fillStyle='#1e1e1e';
+        ctx.fillRect(sx,sy,ts,ts);
+        // 미세 그리드
+        ctx.strokeStyle='#252525';
+        ctx.lineWidth=0.5;
+        ctx.strokeRect(sx,sy,ts,ts);
+      }
+    }
+  }
+
+  // 플레이어
+  renderPlayer(ts);
+
+  ctx.restore();
+
+  // 비네팅
+  renderVignette();
+}
+
+function renderPlayer(ts) {
+  const cx = player.px + ts/2;
+  const cy = player.py + ts/2;
+  const r  = ts * 0.34;
+
+  // 발광 후광
+  ctx.save();
+  ctx.globalAlpha=0.1;
+  ctx.beginPath();
+  ctx.arc(cx,cy,r*1.6,0,Math.PI*2);
+  ctx.fillStyle='#00ff88';
+  ctx.fill();
+  ctx.restore();
+
+  // 몸통
+  ctx.beginPath();
+  ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.fillStyle='#00ff88';
+  ctx.shadowBlur=10;
+  ctx.shadowColor='#00ff88';
+  ctx.fill();
+  ctx.shadowBlur=0;
+
+  // 방향 도트
+  const a = {up:-Math.PI/2, down:Math.PI/2, left:Math.PI, right:0}[player.facing]??Math.PI/2;
+  ctx.beginPath();
+  ctx.arc(cx+Math.cos(a)*r*0.52, cy+Math.sin(a)*r*0.52, r*0.22, 0, Math.PI*2);
+  ctx.fillStyle='#003322';
+  ctx.fill();
+}
+
+function renderVignette() {
+  const g=ctx.createRadialGradient(W_px/2,H_px/2,H_px*0.18,W_px/2,H_px/2,H_px*0.78);
+  g.addColorStop(0,'rgba(0,0,0,0)');
+  g.addColorStop(1,'rgba(0,0,0,0.72)');
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,W_px,H_px);
+}
+
+// ── 미니맵 렌더링 ─────────────────────────────────────────────────
+function renderMinimap() {
+  const { tiles, width, height, floorCount } = MAP;
+  const mSz = CONFIG.minimap.size;
+  const s   = mSz / Math.max(width, height);
+
+  mmCtx.fillStyle='#000';
+  mmCtx.fillRect(0,0,mSz,mSz);
+
+  for (let ty=0;ty<height;ty++) {
+    for (let tx=0;tx<width;tx++) {
+      const vis  = VISITED[ty*width+tx];
+      const tile = tiles[ty*width+tx];
+
+      if (!vis) continue; // 방문 안 한 곳은 표시 안 함
+
+      mmCtx.fillStyle = tile===T.WALL ? '#1a1a1a' : '#2e2e2e';
+      mmCtx.fillRect(tx*s, ty*s, s+0.5, s+0.5);
+    }
+  }
+
+  // 플레이어 위치
+  mmCtx.fillStyle='#00ff88';
+  mmCtx.fillRect(
+    player.tx*s - 1, player.ty*s - 1,
+    Math.max(s, 3), Math.max(s, 3)
+  );
+}
+
+// ── HUD 업데이트 ─────────────────────────────────────────────────
+let visitedCount = 0;
+
+function updateHUD() {
+  visitedCount = 0;
+  for (let i=0;i<VISITED.length;i++) if (VISITED[i]) visitedCount++;
+
+  document.getElementById('hud-pos').textContent =
+    `${player.tx}, ${player.ty}`;
+  document.getElementById('hud-explored').textContent =
+    `${Math.floor(visitedCount/MAP.floorCount*100)}%`;
+}
+
+// ── DEV 정보 ─────────────────────────────────────────────────────
+function updateDevInfo() {
+  if (!document.getElementById('dev-panel').classList.contains('open')) return;
+  const t = MAP.tiles[player.ty*MAP.width+player.tx];
+  document.getElementById('di-fps').textContent     = fps;
+  document.getElementById('di-tile').textContent    = t===T.WALL?'WALL':'FLOOR';
+  document.getElementById('di-mapsize').textContent = `${MAP.width}×${MAP.height}`;
+  document.getElementById('di-floors').textContent  = MAP.floorCount;
+  document.getElementById('di-time').textContent    = Math.floor((Date.now()-startTime)/1000)+'s';
+}
+
+// ── DEV 패널 ─────────────────────────────────────────────────────
+document.getElementById('dev-toggle').addEventListener('click', () => {
+  document.getElementById('dev-panel').classList.toggle('open');
+  document.getElementById('dev-toggle').classList.toggle('on');
+  resize();
+});
+
+// 슬라이더 → CONFIG 연동
+const sliders = [
+  ['d-size',   ()=>{ CONFIG.map.size      = parseInt(document.getElementById('d-size').value); }],
+  ['d-loops',  ()=>{ CONFIG.map.loopPaths = parseInt(document.getElementById('d-loops').value); }],
+  ['d-delay',  ()=>{ CONFIG.player.moveDelay  = parseFloat(document.getElementById('d-delay').value); }],
+  ['d-vision', ()=>{ CONFIG.player.visionRad  = parseInt(document.getElementById('d-vision').value); }],
+  ['d-cam',    ()=>{ CONFIG.camera.smooth     = parseFloat(document.getElementById('d-cam').value); }],
+  ['d-mmsize', ()=>{
+    CONFIG.minimap.size = parseInt(document.getElementById('d-mmsize').value);
+    mmCanvas.width = mmCanvas.height = CONFIG.minimap.size;
+  }],
+];
+sliders.forEach(([id, fn]) => {
+  const el  = document.getElementById(id);
+  const val = document.getElementById(id+'-v');
+  el.addEventListener('input', () => { fn(); val.textContent=el.value; });
+});
+
+document.getElementById('d-regen').addEventListener('click', () => {
+  init(); startTime=Date.now();
+});
+
+// ── 메인 루프 ────────────────────────────────────────────────────
+let lastTs=0, fps=0, frameCount=0, fpsTimer=0;
+let startTime = Date.now();
+
+function loop(ts) {
+  const dt = Math.min((ts-lastTs)/1000, 0.1);
+  lastTs=ts;
+
+  frameCount++; fpsTimer+=dt;
+  if (fpsTimer>=1){ fps=frameCount; frameCount=0; fpsTimer=0; }
+
+  handleInput(dt);
+  update(dt);
+  render();
+  renderMinimap();
+  updateHUD();
+  updateDevInfo();
+
+  requestAnimationFrame(loop);
+}
+
+// ── 시작 ─────────────────────────────────────────────────────────
+resize();
+init();
+lastTs=performance.now();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
