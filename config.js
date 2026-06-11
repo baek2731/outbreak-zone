@@ -31,6 +31,10 @@ const CONFIG = {
     preciseCount:   2,     // 시작 시 정밀 소나 지급 수
   },
 
+  escape: {
+    itemCount: 3,          // 탈출에 필요한 부품 수
+  },
+
   camera: { smooth: 0.12 },
 
   minimap: {
