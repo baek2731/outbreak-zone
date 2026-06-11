@@ -38,7 +38,11 @@ canvas#minimap { display:block; image-rendering:pixelated; }
   position:absolute; inset:0; pointer-events:none; opacity:0;
   background:rgba(255,50,50,0.45); transition:opacity 0.08s;
 }
-#flash.yellow { background:rgba(255,200,0,0.35); }
+#item-flash {
+  position:absolute; inset:0; pointer-events:none; opacity:0;
+  box-shadow:inset 0 0 60px rgba(0,255,136,0.5);
+  transition:opacity 0.06s;
+}
 
 /* ── 오버레이 공통 ── */
 .overlay {
@@ -105,6 +109,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
     <canvas id="canvas"></canvas>
     <div id="minimap-wrap"><canvas id="minimap"></canvas></div>
     <div id="flash"></div>
+    <div id="item-flash"></div>
 
     <!-- 게임오버 -->
     <div id="gameover" class="overlay">
@@ -159,6 +164,8 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       <button class="dev-btn" id="d-fullhp">❤ HP 전부 회복</button>
       <button class="dev-btn" id="d-addprecise">📡 정밀 소나 +1</button>
       <button class="dev-btn" id="d-additem">🔑 아이템 +1 획득</button>
+      <button class="dev-btn" id="d-invincible">🛡 무적 모드 OFF</button>
+      <button class="dev-btn" id="d-revealall">👁 전체 밝히기 OFF</button>
 
       <div class="dev-info">
         FPS: <span id="di-fps">0</span><br>
@@ -425,13 +432,27 @@ function _buildMap(W, H, force = false) {
     if (Math.random() * 100 < CONFIG.mine.density) { set(x, y, T.MINE); mineCount++; }
   }
 
-  // 아이템 배치 — 안전반경 외 바닥 타일 중 랜덤
+  // 아이템 배치 — 서로 최소 거리 보장하며 분산 배치
   const itemCandidates = floorTiles.filter(([x, y]) => !safeSet.has(`${x},${y}`) && get(x, y) === T.FLOOR);
-  shuffle(itemCandidates);
-  const itemCount = Math.min(CONFIG.escape.itemCount, itemCandidates.length);
-  for (let i = 0; i < itemCount; i++) {
-    const [x, y] = itemCandidates[i];
+  const needed = Math.min(CONFIG.escape.itemCount, itemCandidates.length);
+  const minDist = Math.max(3, Math.floor(Math.min(W, H) / (needed + 1)));
+  const placed = [];
+  // 후보를 스폰에서 먼 순 정렬 후 거리 조건 만족하는 것만 선택
+  itemCandidates.sort((a, b) => Math.hypot(b[0]-1,b[1]-1) - Math.hypot(a[0]-1,a[1]-1));
+  for (const [x, y] of itemCandidates) {
+    if (placed.length >= needed) break;
+    const tooClose = placed.some(([px, py]) => Math.hypot(x - px, y - py) < minDist);
+    if (tooClose) continue;
+    placed.push([x, y]);
     set(x, y, T.ITEM);
+  }
+  // 거리 조건 못 채운 경우 나머지 랜덤 보충
+  if (placed.length < needed) {
+    const remaining = itemCandidates.filter(([x,y]) => get(x,y) === T.FLOOR);
+    for (const [x, y] of remaining) {
+      if (placed.length >= needed) break;
+      placed.push([x, y]); set(x, y, T.ITEM);
+    }
   }
 
   // 출구 배치 — 스폰(1,1)에서 최대한 먼 바닥 타일 1개
@@ -489,6 +510,8 @@ const sonar = {
 
 let camX = 0, camY = 0, moveTimer = 0;
 let devRevealMines = false;
+let devInvincible  = false;
+let devRevealAll   = false;
 const stats = { minesHit: 0, startTime: 0 };
 
 // ── 캔버스 ───────────────────────────────────────────────────────
@@ -551,6 +574,7 @@ function revealAround(tx, ty, radius) {
     if (Math.hypot(dx, dy) > radius + 0.5) continue;
     if (hasLOS(tx, ty, nx, ny)) { VISITED[ny * width + nx] = 1; VISIBLE[ny * width + nx] = 1; }
   }
+  if (devRevealAll) { VISITED.fill(1); VISIBLE.fill(1); }
 }
 
 function hasLOS(x0, y0, x1, y1) {
@@ -662,16 +686,17 @@ function onStep(tx, ty) {
       numbers[ny * width + nx] = cnt;
     }
     player.hp--;
+    if (devInvincible) player.hp = Math.max(1, player.hp);
     stats.minesHit++;
     triggerFlash('red');
-    if (player.hp <= 0) showGameOver();
+    if (!devInvincible && player.hp <= 0) showGameOver();
     return;
   }
 
   if (tile === T.ITEM) {
     MAP.tiles[tileIdx] = T.FLOOR;
     player.itemsFound++;
-    triggerFlash('yellow');
+    triggerFlash('item');
     return;
   }
 
@@ -684,10 +709,25 @@ function onStep(tx, ty) {
 }
 
 function triggerFlash(color) {
-  const fl = document.getElementById('flash');
-  fl.className = color === 'yellow' ? 'yellow' : '';
-  fl.style.opacity = '1';
-  setTimeout(() => { fl.style.opacity = '0'; }, 150);
+  if (color === 'red') {
+    const fl = document.getElementById('flash');
+    fl.style.opacity = '1';
+    setTimeout(() => { fl.style.opacity = '0'; }, 150);
+  } else if (color === 'item') {
+    // 아이템 수집: 초록 vignette + HUD ITEMS 숫자 팝
+    const fl = document.getElementById('item-flash');
+    fl.style.opacity = '1';
+    setTimeout(() => { fl.style.opacity = '0'; }, 220);
+    const el = document.getElementById('hud-items');
+    el.style.transform = 'scale(1.6)';
+    el.style.color = '#ffffff';
+    el.style.transition = 'transform 0.12s, color 0.12s';
+    setTimeout(() => {
+      el.style.transform = 'scale(1)';
+      el.style.color = '';
+      el.style.transition = 'transform 0.2s, color 0.2s';
+    }, 200);
+  }
 }
 
 function showGameOver() {
@@ -969,6 +1009,15 @@ document.getElementById('d-addprecise').addEventListener('click', () => { sonar.
 document.getElementById('d-additem').addEventListener('click', () => {
   if (player.itemsFound < CONFIG.escape.itemCount) player.itemsFound++;
 });
+document.getElementById('d-invincible').addEventListener('click', () => {
+  devInvincible = !devInvincible;
+  document.getElementById('d-invincible').textContent = '🛡 무적 모드 ' + (devInvincible ? 'ON' : 'OFF');
+});
+document.getElementById('d-revealall').addEventListener('click', () => {
+  devRevealAll = !devRevealAll;
+  document.getElementById('d-revealall').textContent = '👁 전체 밝히기 ' + (devRevealAll ? 'ON' : 'OFF');
+  if (devRevealAll) { VISITED.fill(1); VISIBLE.fill(1); }
+});
 document.getElementById('go-btn').addEventListener('click', () => init());
 document.getElementById('esc-btn').addEventListener('click', () => init());
 
@@ -985,6 +1034,26 @@ function loop(ts) {
 }
 
 resize(); init();
+
+// 소나 JIT 워밍업 — 오프스크린에서 draw 함수 한 번 실행
+(function warmupSonar() {
+  const oc = document.createElement('canvas');
+  oc.width = 64; oc.height = 64;
+  const octx = oc.getContext('2d');
+  const _ctx = ctx;
+  // ctx를 임시 교체해서 실제 경로 컴파일 유도
+  // eslint-disable-next-line no-global-assign
+  Object.defineProperty(window, '_sonarWarmCtx', { value: octx, configurable: true });
+  const saved = { pulseR: sonar.pulseR, pulseMaxR: sonar.pulseMaxR,
+                  pulseWx: sonar.pulseWx, pulseWy: sonar.pulseWy };
+  sonar.pulseR = 1; sonar.pulseMaxR = 10; sonar.pulseWx = 32; sonar.pulseWy = 32;
+  // ctx 직접 교체 없이 빈 arc/fill 경로만 실행
+  octx.save(); octx.beginPath(); octx.arc(32, 32, 10, 0, Math.PI*2);
+  octx.strokeStyle='#00ff88'; octx.lineWidth=2.5; octx.stroke();
+  octx.beginPath(); octx.arc(32,32,5,0,Math.PI*2); octx.fillStyle='#ffee44'; octx.fill();
+  octx.restore();
+  Object.assign(sonar, saved);
+})();
 lastTs = performance.now();
 requestAnimationFrame(loop);
 </script>
