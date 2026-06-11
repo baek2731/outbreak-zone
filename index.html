@@ -932,6 +932,8 @@ function updateZombies(dt) {
     fovHalf:     (CONFIG.zombie.fovAngle / 2) * Math.PI / 180,
     sightTiles:  CONFIG.zombie.fovRange,
     noiseTiles:  player.noiseRadius,
+    noiseX:      player.noiseX,        // 소음 발원지 (스탭4-2 낚시)
+    noiseY:      player.noiseY,
     margin:      ts * 0.15,
     sepRadius:   ts * 1.1,
     sepStrength: spd * 1.6,
@@ -951,6 +953,7 @@ function updateZombies(dt) {
 }
 
 // 인식 판정 + 상태 전환
+// 우선순위: 시야·근접(실제 위치) > 소음(발원지로 유인)
 function zombieSense(z, c, zcx, zcy, distToPlayer) {
   const distTiles = distToPlayer / c.ts;
 
@@ -962,15 +965,30 @@ function zombieSense(z, c, zcx, zcy, distToPlayer) {
     if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
     inSight = angleDiff <= c.fovHalf && hasLOS(z.tx, z.ty, player.tx, player.ty);
   }
-  // 2) 소음
-  const inNoise = c.noiseTiles > 0 && distTiles <= c.noiseTiles;
-  // 3) 근접: 0.6타일 이내 무조건 인식
+  // 2) 근접: 0.6타일 이내 무조건 인식
   const inProximity = distTiles <= 0.6;
 
-  if (inSight || inNoise || inProximity) {
+  // 3) 소음: 발원지로부터 좀비까지 거리로 판정 (낚시 기반)
+  let inNoise = false;
+  if (c.noiseTiles > 0) {
+    const nDist = Math.hypot(c.noiseX - zcx, c.noiseY - zcy) / c.ts;
+    inNoise = nDist <= c.noiseTiles;
+  }
+
+  if (inSight || inProximity) {
+    // 직접 인지 → 플레이어 실제 위치 추적
     z.state = 'CHASE';
     z.lastSeenX = c.pcx;
     z.lastSeenY = c.pcy;
+  } else if (inNoise && z.state !== 'CHASE') {
+    // 소음 인지(일회성 트리거) → 발원지를 목표로 SEARCH 유인.
+    // 소음이 곧 꺼져도 발원지까지 끝까지 이동 → 두리번 → 복귀.
+    // CHASE(직접 추적) 중이면 소음에 가로채이지 않음 (시야 > 소음).
+    z.state = 'SEARCH';
+    z.searchTimer = 99;          // 발원지 도착 전까지 유지 (도착 시 lastSeen=null로 종료)
+    z.wanderTimer = 0;
+    z.lastSeenX = c.noiseX;
+    z.lastSeenY = c.noiseY;
   } else if (z.state === 'CHASE') {
     z.state = 'SEARCH';
     z.searchTimer = 2.0;
@@ -985,7 +1003,7 @@ function zombieSense(z, c, zcx, zcy, distToPlayer) {
 function zombieMove(z, c, zcx, zcy, distToPlayer) {
   if (z.state === 'CHASE' && distToPlayer > 0.5) {
     return zombieChase(z, c, zcx, zcy);
-  } else if (z.state === 'SEARCH' && z.lastSeenX !== null) {
+  } else if (z.state === 'SEARCH') {
     return zombieSearch(z, c, zcx, zcy);
   } else {
     return zombieWander(z, c);
@@ -993,12 +1011,20 @@ function zombieMove(z, c, zcx, zcy, distToPlayer) {
 }
 
 function zombieChase(z, c, zcx, zcy) {
-  const ang = Math.atan2(c.pcy - zcy, c.pcx - zcx);
+  // 추적 목표 = lastSeen (시야/근접이면 플레이어 실위치, 소음이면 발원지)
+  const tx = z.lastSeenX !== null ? z.lastSeenX : c.pcx;
+  const ty = z.lastSeenY !== null ? z.lastSeenY : c.pcy;
+  const ang = Math.atan2(ty - zcy, tx - zcx);
   z.facingAngle = ang;
   return [Math.cos(ang) * c.spd, Math.sin(ang) * c.spd];
 }
 
 function zombieSearch(z, c, zcx, zcy) {
+  if (z.lastSeenX === null) {
+    // 목표 소실 → 제자리 두리번
+    z.facingAngle += c.dt * 1.8;
+    return [0, 0];
+  }
   const sdx = z.lastSeenX - zcx, sdy = z.lastSeenY - zcy;
   const sd  = Math.hypot(sdx, sdy);
   if (sd > c.ts * 0.5) {
@@ -1010,6 +1036,7 @@ function zombieSearch(z, c, zcx, zcy) {
     // 도달 → 제자리 두리번 (facingAngle 회전)
     z.facingAngle += c.dt * 1.8;
     z.lastSeenX = null;
+    if (z.searchTimer > 2.0) z.searchTimer = 2.0;  // 도착 후 두리번 시간으로 단축
     return [0, 0];
   }
 }
