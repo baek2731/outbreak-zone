@@ -1,61 +1,48 @@
 // ================================================================
 //  config.js — OUTBREAK ZONE 파라미터 테이블
-//  수치 조정은 이 파일만 수정하면 됩니다.
-//  파라미터 ID는 PARAMETER MASTER 엑셀과 동일합니다.
 // ================================================================
 
 const CONFIG = {
 
-  // ── A. 맵 ─────────────────────────────────────────────────────
   map: {
-    size:       17,   // A1  맵 크기 (홀수 유지)
-    tileSize:   48,   // 타일 픽셀 크기 (확정)
-    loopPaths:   6,   // A7  루프 경로 수
-    deadEndMax: 0.3,  // 막다른 길 최대 비율 (초과 시 재생성)
+    size:       17,
+    tileSize:   48,
+    loopPaths:   6,
+    deadEndMax: 0.3,
   },
 
-  // ── A3. 지뢰 ──────────────────────────────────────────────────
   mine: {
-    density:    15,   // A3  지뢰 밀도 (%)
+    density: 15,   // A3 지뢰 밀도 (%)
   },
 
-  // ── B. 플레이어 ───────────────────────────────────────────────
   player: {
-    moveDelay:  0.25, // B1  이동 딜레이 (초)
-    visionRad:   4,   // B3  시야 반경 (타일)
-    maxHp:       3,   // B2  최대 HP
+    moveDelay: 0.25,
+    visionRad:  4,
+    maxHp:      3,
   },
 
-  // ── C. 소나 ───────────────────────────────────────────────────
-  // 렌더링 교체 시: index.html RESOURCE LAYER 섹션 참고
   sonar: {
-    minCharge:   0.5,  // C1  최소 차징 시간 (초)
-    maxCharge:   1.5,  // C2  최대 차징 시간 (초)
-    minRadius:   2,    // C3  최소 스캔 반경 (타일)
-    maxRadius:   4,    // C4  최대 스캔 반경 (타일)
-    numDurMin:   0.5,  // C5  숫자 유지 시간 — 최소 차징 (초)
-    numDurMax:   1.2,  // C6  숫자 유지 시간 — 최대 차징 (초)
-    ghostFade:   0.4,  // 숫자 페이드아웃 구간 (초)
-    ghostAlpha:  0.18, // 잔상 초기 불투명도
-    ghostDecay:  0.06, // 잔상 소멸 속도 (/초)
-    pulseSpeed:  160,  // C13 파장 속도 (px/초)
-    mmDecay:     0.04, // 미니맵 지뢰 점 소멸 속도 (/초)
+    minCharge:      0.5,   // C1 최소 차징
+    maxCharge:      1.5,   // C2 최대 차징
+    minRadius:      2,     // C3 최소 스캔 반경
+    maxRadius:      4,     // C4 최대 스캔 반경
+    pingDuration:   1.2,   // 핑 표시 지속 (초)
+    pulseSpeed:     160,   // 파장 속도 (px/초)
+    preciseCount:   2,     // 시작 시 정밀 소나 지급 수
   },
 
-  // ── D. 카메라 & 미니맵 ────────────────────────────────────────
-  camera: {
-    smooth:    0.12,  // 카메라 추적 계수
-  },
+  camera: { smooth: 0.12 },
+
   minimap: {
-    size:    80,      // 미니맵 크기 (px)
-    opacity: 0.80,    // 미니맵 불투명도
+    size:    80,
+    opacity: 0.80,
   },
 
-  // ── F. 좀비 (예약 — Step 4) ───────────────────────────────────
+  // 예약 — Step 4
   zombie: {
-    fovAngle:  120,   // F3  시야각 (도)
-    fovRange:    5,   // F4  시야 거리 (타일)
-    hearRange:   4,   // F5  청각 범위 (타일)
+    fovAngle:  120,
+    fovRange:    5,
+    hearRange:   4,
   },
 
 };
