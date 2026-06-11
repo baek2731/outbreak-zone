@@ -351,41 +351,53 @@ function hasLOS(x0,y0,x1,y1) {
 
 // ── 입력 ─────────────────────────────────────────────────────────
 const KEYS = {};
+const PREV_KEYS = {};
 
 window.addEventListener('keydown', e => {
-  // 반복 이벤트 즉시 차단 (렉 방지)
-  if (e.repeat) { e.preventDefault(); return; }
   e.preventDefault();
-
-  // F키: 기본 소나 (KEYS 배열과 완전 분리)
-  if (e.code==='KeyF') {
-    if (!sonar.charging && !player.dead) {
-      sonar.charging=true; sonar.chargeTime=0;
-    }
-    return;
-  }
-
-  // G키: 정밀 소나 (잔여 횟수 소모)
-  if (e.code==='KeyG') {
-    if (!sonar.chargingPrecise && sonar.precise>0 && !player.dead) {
-      sonar.chargingPrecise=true; sonar.chargeTimePrecise=0;
-    }
-    return;
-  }
-
-  KEYS[e.code]=true;
-  const dir=codeToDir(e.code);
-  if (dir) {
-    updateFacing(dir.dx,dir.dy);
-    if (!player.moving&&moveTimer<=0&&!player.dead) tryMove(dir.dx,dir.dy);
-  }
+  KEYS[e.code] = true;
 });
-
 window.addEventListener('keyup', e => {
-  if (e.code==='KeyF') { if (sonar.charging) fireSonar(false); return; }
-  if (e.code==='KeyG') { if (sonar.chargingPrecise) fireSonar(true); return; }
-  KEYS[e.code]=false;
+  KEYS[e.code] = false;
 });
+
+// 매 프레임 호출 — 이전 프레임 키 상태와 비교해 엣지 감지
+function processKeys() {
+  // 방향키: 처음 눌린 순간 이동
+  const dir = getHeldDir();
+  if (dir) {
+    updateFacing(dir.dx, dir.dy);
+    if (!PREV_KEYS[dirToCode(dir)] && !player.moving && moveTimer<=0 && !player.dead) {
+      tryMove(dir.dx, dir.dy);
+    }
+  }
+
+  // F키: 눌린 순간 차징 시작, 뗀 순간 발동
+  if (KEYS['KeyF'] && !PREV_KEYS['KeyF'] && !sonar.charging && !player.dead) {
+    sonar.charging=true; sonar.chargeTime=0;
+  }
+  if (!KEYS['KeyF'] && PREV_KEYS['KeyF'] && sonar.charging) {
+    fireSonar(false);
+  }
+
+  // G키: 눌린 순간 차징 시작, 뗀 순간 발동
+  if (KEYS['KeyG'] && !PREV_KEYS['KeyG'] && !sonar.chargingPrecise && sonar.precise>0 && !player.dead) {
+    sonar.chargingPrecise=true; sonar.chargeTimePrecise=0;
+  }
+  if (!KEYS['KeyG'] && PREV_KEYS['KeyG'] && sonar.chargingPrecise) {
+    fireSonar(true);
+  }
+
+  // 이전 프레임 상태 저장
+  Object.assign(PREV_KEYS, KEYS);
+}
+
+function dirToCode(dir) {
+  if (dir.dy===-1) return 'KeyW';
+  if (dir.dy=== 1) return 'KeyS';
+  if (dir.dx===-1) return 'KeyA';
+  return 'KeyD';
+}
 
 function codeToDir(code) {
   if (code==='KeyW'||code==='ArrowUp')    return {dx:0, dy:-1};
@@ -427,9 +439,12 @@ function tryMove(dx,dy) {
 
 function handleInput(dt) {
   moveTimer=Math.max(0,moveTimer-dt);
-  if (player.moving||moveTimer>0||player.dead) return;
-  const dir=getHeldDir();
-  if (dir) { updateFacing(dir.dx,dir.dy); tryMove(dir.dx,dir.dy); }
+  processKeys(); // 키 엣지 감지 + 첫 입력 이동
+  // 꾹 누를 때 반복 이동
+  if (!player.moving&&moveTimer<=0&&!player.dead) {
+    const dir=getHeldDir();
+    if (dir) { updateFacing(dir.dx,dir.dy); tryMove(dir.dx,dir.dy); }
+  }
 }
 
 // ── 타일 효과 ────────────────────────────────────────────────────
@@ -525,7 +540,7 @@ function updateSonar(dt) {
     p.timer-=dt;
     p.alpha=Math.max(0,p.timer/cfg.pingDuration);
   }
-  sonar.pings=sonar.pings.filter(p=>p.alpha>0);
+  sonar.pings=sonar.pings.filter(p=>!p.lit||p.alpha>0);
 
   // 정밀 마크 타이머 & 페이드
   const markDur=cfg.pingDuration*1.5;
@@ -534,7 +549,7 @@ function updateSonar(dt) {
     m.timer-=dt;
     m.alpha=Math.max(0,m.timer/markDur);
   }
-  sonar.preciseMarks=sonar.preciseMarks.filter(m=>m.alpha>0);
+  sonar.preciseMarks=sonar.preciseMarks.filter(m=>!m.lit||m.alpha>0);
 }
 
 // ── 업데이트 ─────────────────────────────────────────────────────
