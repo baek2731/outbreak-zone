@@ -26,6 +26,23 @@ const CONFIG = {
     density:    15,   // A3  지뢰 밀도 (%) — DEV 슬라이더로 조정 가능
   },
 
+  // ── C. 소나 (Step 2-B 추가) ──────────────────────────────────
+  // RESOURCE LAYER: drawSonarPulse, drawSonarNumbers, drawSonarGhosts
+  // 스프라이트 교체 시 index.html의 RESOURCE LAYER 섹션을 수정하세요
+  sonar: {
+    minCharge:   0.5,  // C1  최소 차징 시간 (초)
+    maxCharge:   1.5,  // C2  최대 차징 시간 (초)
+    minRadius:   2,    // C3  최소 스캔 반경 (타일)
+    maxRadius:   4,    // C4  최대 스캔 반경 (타일)
+    numDurMin:   0.5,  // C5  숫자 유지 시간 — 최소 차징 (초)
+    numDurMax:   1.2,  // C6  숫자 유지 시간 — 최대 차징 (초)
+    ghostFade:   0.4,  // 페이드아웃 구간 (초)
+    ghostAlpha:  0.18, // 잔상 초기 알파
+    ghostDecay:  0.06, // 잔상 소멸 속도 (알파/초)
+    pulseSpeed:  160,  // C13 파장 퍼지는 속도 (px/초)
+    mmDecay:     0.04, // 미니맵 지뢰 점 소멸 속도
+  },
+
   // ── C. 카메라 ─────────────────────────────────────────────────
   camera: {
     smooth:    0.12,  // 카메라 추적 계수 — 확정

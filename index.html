@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>OUTBREAK ZONE — Step 2-A</title>
+<title>OUTBREAK ZONE — Step 2-B</title>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
 body {
@@ -191,6 +191,23 @@ canvas#minimap { display:block; image-rendering:pixelated; }
         <span class="dev-val" id="d-cam-v">0.12</span>
       </div>
 
+      <div class="dev-section">SONAR (Step 2-B)</div>
+      <div class="dev-row">
+        <label>최대 차징 (C2)</label>
+        <input type="range" id="d-maxcharge" min="0.5" max="3.0" step="0.1" value="1.5">
+        <span class="dev-val" id="d-maxcharge-v">1.5</span>
+      </div>
+      <div class="dev-row">
+        <label>스캔 반경 (C4)</label>
+        <input type="range" id="d-radius" min="2" max="6" step="1" value="4">
+        <span class="dev-val" id="d-radius-v">4</span>
+      </div>
+      <div class="dev-row">
+        <label>숫자 유지 (C6)</label>
+        <input type="range" id="d-numdur" min="0.5" max="3.0" step="0.1" value="1.2">
+        <span class="dev-val" id="d-numdur-v">1.2</span>
+      </div>
+
       <div class="dev-section">MINE (Step 2-A)</div>
       <div class="dev-row">
         <label>지뢰 밀도 (A3)</label>
@@ -223,14 +240,15 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 <script src="config.js"></script>
 <script>
 // ================================================================
-//  index.html — OUTBREAK ZONE Step 2-A
-//  Step 1 봉인 완료
+//  index.html — OUTBREAK ZONE Step 2-B
+//  Step 2-A 봉인 완료
 //  추가:
-//  ① 지뢰 타일 배치 (밀도 설정 가능)
-//  ② 지뢰 밟으면 HP -1 + 플래시 효과
-//  ③ HP 하트 실제 연동
-//  ④ 게임오버 화면 (HP 0)
-//  ⑤ 막다른 길 끝 보장 공간 (아이템 예약)
+//  ① 소나 F키 홀딩 차징
+//  ② 파장이 퍼지면서 타일 순차 점등
+//  ③ 숫자 N초 표시 후 페이드아웃
+//  ④ 잔상 (흐릿하게 남는 흔적)
+//  ⑤ 미니맵 소나 탐지 지뢰 점 표시
+//  ⑥ 리소스 교체 가능 구조 (drawXxx 함수 분리)
 // ================================================================
 
 // ── 타일 상수 ────────────────────────────────────────────────────
@@ -385,6 +403,36 @@ let camX=0, camY=0;
 let moveTimer=0;
 let devRevealMines = false; // DEV: 지뢰 표시
 
+// ── 소나 상태 ────────────────────────────────────────────────────
+// 리소스 교체 가이드:
+// drawSonarPulse(), drawSonarNumber(), drawSonarGhost() 함수를
+// 스프라이트 버전으로 교체하면 됩니다.
+const sonar = {
+  // 차징
+  charging:    false,
+  chargeTime:  0,       // 현재 홀딩 시간 (초)
+
+  // 파장 애니메이션
+  firing:      false,
+  pulseR:      0,       // 현재 파장 반경 (px)
+  pulseMaxR:   0,       // 최대 파장 반경 (px)
+  pulseWx:     0,       // 파장 발원지 월드 좌표 X
+  pulseWy:     0,
+
+  // 스캔된 타일 숫자 목록
+  // { tx, ty, number, alpha, timer, lit }
+  // lit: 파장이 해당 타일에 도달했는지
+  scanned:     [],
+
+  // 잔상 목록
+  // { tx, ty, alpha }
+  ghosts:      [],
+
+  // 미니맵 지뢰 점
+  // { tx, ty, alpha }
+  mmMines:     [],
+};
+
 // ── 캔버스 ───────────────────────────────────────────────────────
 const canvas    = document.getElementById('canvas');
 const ctx       = canvas.getContext('2d');
@@ -419,6 +467,10 @@ function init() {
   player.dead    = false;
   stats = { minesHit:0, startTime:Date.now() };
   document.getElementById('gameover').classList.remove('show');
+  // 소나 초기화
+  sonar.charging=false; sonar.chargeTime=0;
+  sonar.firing=false; sonar.pulseR=0;
+  sonar.scanned=[]; sonar.ghosts=[]; sonar.mmMines=[];
 
   revealAround(1, 1, CONFIG.player.visionRad);
 
@@ -467,6 +519,12 @@ window.addEventListener('keydown', e => {
   KEYS[e.code] = true;
   e.preventDefault();
 
+  // F키 — 소나 차징 시작
+  if (e.code === 'KeyF' && !sonar.charging && !player.dead) {
+    sonar.charging   = true;
+    sonar.chargeTime = 0;
+  }
+
   // 방향키 — facing 즉시 업데이트 (이동 가능 여부 무관)
   const dir = codeToDir(e.code);
   if (dir) {
@@ -477,7 +535,13 @@ window.addEventListener('keydown', e => {
     }
   }
 });
-window.addEventListener('keyup', e => { KEYS[e.code] = false; });
+window.addEventListener('keyup', e => {
+  KEYS[e.code] = false;
+  // F키 뗌 → 소나 발사
+  if (e.code === 'KeyF' && sonar.charging) {
+    fireSonar();
+  }
+});
 
 function codeToDir(code) {
   if (code==='KeyW'||code==='ArrowUp')    return {dx:0,  dy:-1};
@@ -518,6 +582,108 @@ function tryMove(dx, dy) {
   revealAround(nx, ny, CONFIG.player.visionRad);
   onStep(nx, ny); // 타일 효과
   return true;
+}
+
+// ── 소나 로직 ────────────────────────────────────────────────────
+function fireSonar() {
+  if (!sonar.charging) return;
+  sonar.charging = false;
+
+  const cfg = CONFIG.sonar;
+  const t   = Math.min(sonar.chargeTime, cfg.maxCharge);
+  const ratio = t / cfg.maxCharge; // 0~1
+
+  // 차징 비율에 따라 반경, 유지시간 결정
+  const radius  = Math.round(cfg.minRadius + (cfg.maxRadius - cfg.minRadius) * ratio);
+  const numDur  = cfg.numDurMin + (cfg.numDurMax - cfg.numDurMin) * ratio;
+  const ts      = CONFIG.map.tileSize;
+
+  // 발원지 (낚시용 — Step 4에서 활용)
+  sonar.pulseWx   = player.px + ts/2;
+  sonar.pulseWy   = player.py + ts/2;
+  sonar.pulseR    = 0;
+  sonar.pulseMaxR = radius * ts;
+  sonar.firing    = true;
+  sonar.chargeTime = 0;
+
+  // 스캔 대상 타일 등록 (파장이 지나가면서 순차 점등)
+  const { tiles, numbers, width, height } = MAP;
+  const newScanned = [];
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const nx = player.tx + dx, ny = player.ty + dy;
+      if (nx<0||nx>=width||ny<0||ny>=height) continue;
+      if (Math.hypot(dx,dy) > radius + 0.5) continue;
+      if (tiles[ny*width+nx] === T.WALL) continue;
+      const dist = Math.hypot(dx,dy) * ts; // 픽셀 거리
+      newScanned.push({
+        tx: nx, ty: ny,
+        number: numbers[ny*width+nx],
+        isMine: tiles[ny*width+nx] === T.MINE,
+        dist,           // 파장 도달 거리
+        lit:   false,   // 아직 점등 안 됨
+        alpha: 0,
+        timer: numDur,
+      });
+    }
+  }
+  sonar.scanned = newScanned;
+}
+
+function updateSonar(dt) {
+  const cfg = CONFIG.sonar;
+
+  // 차징 시간 누적
+  if (sonar.charging) {
+    sonar.chargeTime = Math.min(sonar.chargeTime + dt, cfg.maxCharge);
+  }
+
+  // 파장 퍼지기
+  if (sonar.firing) {
+    sonar.pulseR += cfg.pulseSpeed * dt;
+    // 파장이 지나간 타일 순차 점등
+    for (const tile of sonar.scanned) {
+      if (!tile.lit && sonar.pulseR >= tile.dist) {
+        tile.lit   = true;
+        tile.alpha = 1.0;
+        // 지뢰 탐지 시 미니맵 등록
+        if (tile.isMine) {
+          const existing = sonar.mmMines.find(m => m.tx===tile.tx&&m.ty===tile.ty);
+          if (!existing) {
+            sonar.mmMines.push({ tx:tile.tx, ty:tile.ty, alpha:1.0 });
+          } else {
+            existing.alpha = 1.0; // 갱신
+          }
+        }
+      }
+    }
+    if (sonar.pulseR >= sonar.pulseMaxR) sonar.firing = false;
+  }
+
+  // 숫자 페이드아웃
+  for (const tile of sonar.scanned) {
+    if (!tile.lit) continue;
+    tile.timer -= dt;
+    if (tile.timer < cfg.ghostFade) {
+      tile.alpha = Math.max(0, tile.timer / cfg.ghostFade);
+    }
+    // 완전히 사라지면 잔상으로 전환
+    if (tile.alpha <= 0) {
+      const hasGhost = sonar.ghosts.find(g=>g.tx===tile.tx&&g.ty===tile.ty);
+      if (!hasGhost) {
+        sonar.ghosts.push({ tx:tile.tx, ty:tile.ty, alpha: cfg.ghostAlpha });
+      }
+    }
+  }
+  sonar.scanned = sonar.scanned.filter(t => t.alpha > 0);
+
+  // 잔상 서서히 소멸
+  for (const g of sonar.ghosts) g.alpha -= cfg.ghostDecay * dt;
+  sonar.ghosts = sonar.ghosts.filter(g => g.alpha > 0);
+
+  // 미니맵 지뢰 점 서서히 소멸
+  for (const m of sonar.mmMines) m.alpha -= cfg.mmDecay * dt;
+  sonar.mmMines = sonar.mmMines.filter(m => m.alpha > 0);
 }
 
 // ── 타일 효과 ─────────────────────────────────────────────────────
@@ -665,10 +831,138 @@ function render() {
     }
   }
 
+  // 소나 잔상 (타일 위, 플레이어 아래)
+  drawSonarGhosts();
+  // 소나 숫자
+  drawSonarNumbers();
+  // 소나 파장
+  drawSonarPulse();
+
   renderPlayer(ts);
+  // 소나 차징 게이지 (플레이어 위)
+  drawSonarCharging(ts);
+
   ctx.restore();
   renderVignette();
 }
+
+// ================================================================
+//  RESOURCE LAYER — 이 아래 함수들을 스프라이트로 교체 가능
+//  각 함수는 Canvas API로 그리며, 스프라이트 버전으로 1:1 교체 가능
+// ================================================================
+
+// 소나 차징 게이지 (플레이어 위에 표시)
+// 교체 시: 차징 애니메이션 스프라이트로 변경
+function drawSonarCharging(ts) {
+  if (!sonar.charging) return;
+  const cx = player.px + ts/2;
+  const cy = player.py + ts/2;
+  const ratio = Math.min(sonar.chargeTime / CONFIG.sonar.maxCharge, 1);
+
+  // 게이지 바 (플레이어 위)
+  const bw=36, bh=5;
+  const bx = cx - bw/2, by = cy - ts*0.7;
+  ctx.fillStyle='#222';
+  ctx.fillRect(bx, by, bw, bh);
+  const col = ratio > 0.8 ? '#ffaa00' : '#00ff88';
+  ctx.fillStyle=col;
+  ctx.fillRect(bx, by, bw*ratio, bh);
+  ctx.strokeStyle='#444';
+  ctx.lineWidth=0.5;
+  ctx.strokeRect(bx, by, bw, bh);
+
+  // 차징 원형 범위 표시
+  const maxR = CONFIG.sonar.maxRadius * ts;
+  ctx.save();
+  ctx.globalAlpha = 0.08 + ratio*0.07;
+  ctx.beginPath();
+  ctx.arc(cx, cy, maxR * ratio, 0, Math.PI*2);
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// 소나 파장 애니메이션
+// 교체 시: 파장 이펙트 스프라이트/셰이더로 변경
+function drawSonarPulse() {
+  if (!sonar.firing && sonar.pulseR <= 0) return;
+  const sx = sonar.pulseWx - camX;
+  const sy = sonar.pulseWy - camY;
+  const r  = sonar.pulseR;
+  if (r <= 0) return;
+
+  ctx.save();
+  // 파장 원
+  ctx.globalAlpha = Math.max(0, 0.35 * (1 - r / sonar.pulseMaxR));
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, 0, Math.PI*2);
+  ctx.strokeStyle = '#00ff88';
+  ctx.lineWidth   = 2;
+  ctx.stroke();
+  // 내부 채움
+  ctx.globalAlpha = Math.max(0, 0.04 * (1 - r / sonar.pulseMaxR));
+  ctx.fillStyle   = '#00ff88';
+  ctx.fill();
+  ctx.restore();
+}
+
+// 소나 스캔 숫자 표시
+// 교체 시: 숫자 폰트 스프라이트로 변경
+function drawSonarNumbers() {
+  const ts = CONFIG.map.tileSize;
+  const numColors = ['','#4488ff','#44cc44','#ff6666','#cc44ff','#ff8800','#00cccc','#ffffff','#aaaaaa'];
+
+  for (const tile of sonar.scanned) {
+    if (!tile.lit || tile.alpha <= 0) continue;
+    const sx = tile.tx*ts - camX;
+    const sy = tile.ty*ts - camY;
+
+    ctx.save();
+    ctx.globalAlpha = tile.alpha;
+
+    if (tile.isMine) {
+      // 지뢰 타일: 붉은 X 표시
+      ctx.strokeStyle = '#ff4444';
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.moveTo(sx+8,sy+8); ctx.lineTo(sx+ts-8,sy+ts-8);
+      ctx.moveTo(sx+ts-8,sy+8); ctx.lineTo(sx+8,sy+ts-8);
+      ctx.stroke();
+    } else if (tile.number > 0) {
+      // 숫자 표시
+      ctx.font         = `bold ${ts*0.42}px monospace`;
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle    = numColors[Math.min(tile.number, 8)];
+      ctx.shadowBlur   = 6;
+      ctx.shadowColor  = ctx.fillStyle;
+      ctx.fillText(tile.number, sx+ts/2, sy+ts/2);
+      ctx.shadowBlur   = 0;
+    }
+
+    ctx.restore();
+  }
+}
+
+// 소나 잔상
+// 교체 시: 잔상 파티클 스프라이트로 변경
+function drawSonarGhosts() {
+  const ts = CONFIG.map.tileSize;
+  for (const g of sonar.ghosts) {
+    const sx = g.tx*ts - camX;
+    const sy = g.ty*ts - camY;
+    ctx.save();
+    ctx.globalAlpha = g.alpha * 0.4;
+    ctx.fillStyle   = '#00ff88';
+    ctx.fillRect(sx+4, sy+4, ts-8, ts-8);
+    ctx.restore();
+  }
+}
+
+// ================================================================
+//  END RESOURCE LAYER
+// ================================================================
 
 function renderPlayer(ts) {
   const cx = player.px + ts/2;
@@ -731,11 +1025,18 @@ function renderMinimap(targetCtx, targetSize) {
     ps, ps
   );
 
-  // Step 2 이후 추가 예정:
-  // 소나 탐지 지뢰 → 붉은 점 (서서히 흐려짐)
-  // 발견한 아이템 → 노란 점
-  // 출구 위치 → 파란 점
-  // 레이더 탐지 좀비 → 주황 점 (3초 후 소멸)
+  // 소나 탐지 지뢰 — 붉은 점 (서서히 흐려짐)
+  for (const m of sonar.mmMines) {
+    mmCtx.save();
+    mmCtx.globalAlpha = m.alpha;
+    mmCtx.fillStyle   = '#ff4444';
+    const ps = Math.max(s, 2);
+    mmCtx.fillRect(m.tx*s, m.ty*s, ps, ps);
+    mmCtx.restore();
+  }
+  // TODO Step 2-C: 발견한 아이템 → 노란 점
+  // TODO Step 2-C: 출구 위치 → 파란 점
+  // TODO Step 4:   레이더 탐지 좀비 → 주황 점 (3초 후 소멸)
 }
 
 // ── HUD ──────────────────────────────────────────────────────────
@@ -784,6 +1085,9 @@ const sliders = [
   ['d-delay',    () => { CONFIG.player.moveDelay  = parseFloat(document.getElementById('d-delay').value); }],
   ['d-vision',   () => { CONFIG.player.visionRad  = parseInt(document.getElementById('d-vision').value); }],
   ['d-cam',      () => { CONFIG.camera.smooth      = parseFloat(document.getElementById('d-cam').value); }],
+  ['d-maxcharge',() => { CONFIG.sonar.maxCharge = parseFloat(document.getElementById('d-maxcharge').value); }],
+  ['d-radius',   () => { CONFIG.sonar.maxRadius  = parseInt(document.getElementById('d-radius').value); }],
+  ['d-numdur',   () => { CONFIG.sonar.numDurMax  = parseFloat(document.getElementById('d-numdur').value); }],
   ['d-mine',     () => { CONFIG.mine.density    = parseInt(document.getElementById('d-mine').value); document.getElementById('d-mine-v').textContent = document.getElementById('d-mine').value + '%'; }],
   ['d-hp',       () => { CONFIG.player.maxHp   = parseInt(document.getElementById('d-hp').value); }],
 ];
@@ -819,6 +1123,7 @@ function loop(ts) {
   if (fpsTimer>=1){ fps=frameCount; frameCount=0; fpsTimer=0; }
 
   handleInput(dt);
+  updateSonar(dt);
   update(dt);
   render();
 
