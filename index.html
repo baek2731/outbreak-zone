@@ -7,19 +7,16 @@
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
 body {
-  background:#000; color:#ccc;
-  font-family:monospace;
+  background:#000; color:#ccc; font-family:monospace;
   height:100vh; overflow:hidden;
-  display:flex; flex-direction:column;
-  user-select:none;
+  display:flex; flex-direction:column; user-select:none;
 }
 
-/* 헤더 */
+/* ── 헤더 ── */
 #header {
   display:flex; align-items:center; justify-content:space-between;
   padding:5px 12px; background:#000;
-  border-bottom:1px solid #1a1a1a;
-  flex-shrink:0; gap:12px;
+  border-bottom:1px solid #1a1a1a; flex-shrink:0; gap:12px;
 }
 #title { color:#ff3333; font-size:0.85rem; letter-spacing:0.2em; flex-shrink:0; }
 #hud { display:flex; gap:16px; font-size:0.6rem; align-items:center; }
@@ -33,57 +30,42 @@ body {
 }
 #dev-toggle:hover, #dev-toggle.on { border-color:#ffaa00; color:#ffaa00; }
 
-/* 메인 */
+/* ── 메인 ── */
 #main { display:flex; flex:1; overflow:hidden; }
 #game-area { flex:1; position:relative; overflow:hidden; }
 canvas#canvas { display:block; }
 
-/* 미니맵 — 기본 (우하단 고정) */
-#minimap-wrap {
-  position:absolute; bottom:10px; right:10px;
-  border:1px solid rgba(0,255,136,0.2);
-  transition: all 0.2s;
-}
+/* ── 미니맵 ── */
+#minimap-wrap { position:absolute; bottom:10px; right:10px; border:1px solid rgba(0,255,136,0.2); }
 canvas#minimap { display:block; image-rendering:pixelated; }
 
-
-/* 플래시 오버레이 */
+/* ── 피격 플래시 ── */
 #flash {
-  position:absolute; inset:0;
-  pointer-events:none; opacity:0;
-  background:rgba(255,50,50,0.45);
-  transition:opacity 0.08s;
+  position:absolute; inset:0; pointer-events:none; opacity:0;
+  background:rgba(255,50,50,0.45); transition:opacity 0.08s;
 }
 
-/* 게임오버 */
+/* ── 게임오버 ── */
 #gameover {
-  display:none; position:absolute; inset:0;
-  background:rgba(0,0,0,0.88);
+  display:none; position:absolute; inset:0; background:rgba(0,0,0,0.88);
   flex-direction:column; align-items:center; justify-content:center;
   gap:14px; z-index:20;
 }
 #gameover.show { display:flex; }
-#go-title {
-  font-family:monospace; font-size:1.4rem; font-weight:bold;
-  color:#ff3333; letter-spacing:0.25em;
-  text-shadow:0 0 20px #ff3333;
-}
+#go-title { font-family:monospace; font-size:1.4rem; font-weight:bold; color:#ff3333; letter-spacing:0.25em; text-shadow:0 0 20px #ff3333; }
 #go-stats { font-size:0.7rem; color:#888; text-align:center; line-height:1.9; }
 #go-stats span { color:#ff8888; }
 #go-btn {
   background:none; border:1px solid #ff3333; color:#ff3333;
-  font-family:monospace; font-size:0.65rem;
-  padding:8px 24px; cursor:pointer; border-radius:2px;
-  letter-spacing:0.15em; margin-top:4px;
+  font-family:monospace; font-size:0.65rem; padding:8px 24px;
+  cursor:pointer; border-radius:2px; letter-spacing:0.15em; margin-top:4px;
 }
 #go-btn:hover { background:rgba(255,50,50,0.1); }
 
-/* DEV 패널 */
+/* ── DEV 패널 ── */
 #dev-panel {
-  width:0; background:#0d0d0d;
-  border-left:1px solid #1a1a1a;
-  overflow:hidden; flex-shrink:0;
-  transition:width 0.15s;
+  width:0; background:#0d0d0d; border-left:1px solid #1a1a1a;
+  overflow:hidden; flex-shrink:0; transition:width 0.15s;
 }
 #dev-panel.open { width:190px; }
 #dev-inner { padding:10px; min-width:190px; }
@@ -94,9 +76,8 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 .dev-row input[type=range] { width:65px; accent-color:#00ff88; cursor:pointer; }
 .dev-val { font-size:0.58rem; color:#00ff88; min-width:28px; text-align:right; }
 .dev-btn {
-  background:none; border:1px solid #333; color:#bbb;
-  font-family:monospace; font-size:0.56rem;
-  padding:3px 6px; cursor:pointer; border-radius:2px;
+  background:none; border:1px solid #333; color:#bbb; font-family:monospace;
+  font-size:0.56rem; padding:3px 6px; cursor:pointer; border-radius:2px;
   width:100%; margin-top:4px; text-align:left;
 }
 .dev-btn:hover { border-color:#00ff88; color:#00ff88; }
@@ -109,18 +90,9 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 <div id="header">
   <div id="title">OUTBREAK ZONE</div>
   <div id="hud">
-    <div class="hud-item">
-      <div class="hud-label">POSITION</div>
-      <div class="hud-val" id="hud-pos">1, 1</div>
-    </div>
-    <div class="hud-item">
-      <div class="hud-label">EXPLORED</div>
-      <div class="hud-val" id="hud-explored">0%</div>
-    </div>
-    <div class="hud-item">
-      <div class="hud-label">HP</div>
-      <div class="hud-val" id="hud-hp">❤❤❤</div>
-    </div>
+    <div class="hud-item"><div class="hud-label">POS</div><div class="hud-val" id="hud-pos">1,1</div></div>
+    <div class="hud-item"><div class="hud-label">HP</div><div class="hud-val" id="hud-hp">❤❤❤</div></div>
+    <div class="hud-item"><div class="hud-label">EXPLORED</div><div class="hud-val" id="hud-explored">0%</div></div>
   </div>
   <button id="dev-toggle">⚙ DEV</button>
 </div>
@@ -128,109 +100,49 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 <div id="main">
   <div id="game-area">
     <canvas id="canvas"></canvas>
-
-    <!-- 미니맵 기본 -->
-    <!-- 피격 플래시 -->
+    <div id="minimap-wrap"><canvas id="minimap"></canvas></div>
     <div id="flash"></div>
-
-    <!-- 게임오버 -->
     <div id="gameover">
       <div id="go-title">☣ OUTBREAK</div>
       <div id="go-stats">
-        생존 구역: <span id="go-rooms">0</span>개<br>
         밟은 지뢰: <span id="go-mines">0</span>개<br>
         생존 시간: <span id="go-time">0초</span>
       </div>
       <button id="go-btn">RETRY</button>
     </div>
-
-    <div id="minimap-wrap">
-      <canvas id="minimap"></canvas>
-    </div>
-
   </div>
 
-  <!-- DEV 패널 -->
   <div id="dev-panel">
     <div id="dev-inner">
-      <div class="dev-title">⚙ DEV — STEP 1</div>
+      <div class="dev-title">⚙ DEV — STEP 2-B</div>
 
-      <div class="dev-section">MAP (A)</div>
-      <div class="dev-row">
-        <label>맵 크기 (A1)</label>
-        <input type="range" id="d-size" min="9" max="31" step="2" value="17">
-        <span class="dev-val" id="d-size-v">17</span>
-      </div>
-      <div class="dev-row">
-        <label>타일 크기</label>
-        <input type="range" id="d-tilesize" min="24" max="64" step="4" value="48">
-        <span class="dev-val" id="d-tilesize-v">48</span>
-      </div>
-      <div class="dev-row">
-        <label>루프 경로 (A7)</label>
-        <input type="range" id="d-loops" min="0" max="12" step="1" value="6">
-        <span class="dev-val" id="d-loops-v">6</span>
-      </div>
+      <div class="dev-section">MAP</div>
+      <div class="dev-row"><label>맵 크기</label><input type="range" id="d-mapsize" min="9" max="31" step="2" value="17"><span class="dev-val" id="d-mapsize-v">17</span></div>
+      <div class="dev-row"><label>타일 크기</label><input type="range" id="d-tilesize" min="24" max="64" step="4" value="48"><span class="dev-val" id="d-tilesize-v">48</span></div>
+      <div class="dev-row"><label>루프 경로</label><input type="range" id="d-loops" min="0" max="12" step="1" value="6"><span class="dev-val" id="d-loops-v">6</span></div>
 
-      <div class="dev-section">PLAYER (B)</div>
-      <div class="dev-row">
-        <label>이동 딜레이 (B1)</label>
-        <input type="range" id="d-delay" min="0.10" max="0.40" step="0.01" value="0.25">
-        <span class="dev-val" id="d-delay-v">0.25</span>
-      </div>
-      <div class="dev-row">
-        <label>시야 반경 (B3)</label>
-        <input type="range" id="d-vision" min="2" max="8" step="1" value="4">
-        <span class="dev-val" id="d-vision-v">4</span>
-      </div>
+      <div class="dev-section">PLAYER</div>
+      <div class="dev-row"><label>이동 딜레이</label><input type="range" id="d-delay" min="0.10" max="0.40" step="0.01" value="0.25"><span class="dev-val" id="d-delay-v">0.25</span></div>
+      <div class="dev-row"><label>시야 반경</label><input type="range" id="d-vision" min="2" max="8" step="1" value="4"><span class="dev-val" id="d-vision-v">4</span></div>
+      <div class="dev-row"><label>최대 HP</label><input type="range" id="d-hp" min="1" max="5" step="1" value="3"><span class="dev-val" id="d-hp-v">3</span></div>
 
-      <div class="dev-section">CAMERA (C)</div>
-      <div class="dev-row">
-        <label>카메라 부드러움</label>
-        <input type="range" id="d-cam" min="0.05" max="1.0" step="0.05" value="0.12">
-        <span class="dev-val" id="d-cam-v">0.12</span>
-      </div>
+      <div class="dev-section">MINE</div>
+      <div class="dev-row"><label>지뢰 밀도 %</label><input type="range" id="d-mine" min="5" max="35" step="5" value="15"><span class="dev-val" id="d-mine-v">15</span></div>
 
-      <div class="dev-section">SONAR (Step 2-B)</div>
-      <div class="dev-row">
-        <label>최대 차징 (C2)</label>
-        <input type="range" id="d-maxcharge" min="0.5" max="3.0" step="0.1" value="1.5">
-        <span class="dev-val" id="d-maxcharge-v">1.5</span>
-      </div>
-      <div class="dev-row">
-        <label>스캔 반경 (C4)</label>
-        <input type="range" id="d-radius" min="2" max="6" step="1" value="4">
-        <span class="dev-val" id="d-radius-v">4</span>
-      </div>
-      <div class="dev-row">
-        <label>숫자 유지 (C6)</label>
-        <input type="range" id="d-numdur" min="0.5" max="3.0" step="0.1" value="1.2">
-        <span class="dev-val" id="d-numdur-v">1.2</span>
-      </div>
-
-      <div class="dev-section">MINE (Step 2-A)</div>
-      <div class="dev-row">
-        <label>지뢰 밀도 (A3)</label>
-        <input type="range" id="d-mine" min="5" max="35" step="5" value="15">
-        <span class="dev-val" id="d-mine-v">15%</span>
-      </div>
-      <div class="dev-row">
-        <label>시작 HP</label>
-        <input type="range" id="d-hp" min="1" max="5" step="1" value="3">
-        <span class="dev-val" id="d-hp-v">3</span>
-      </div>
+      <div class="dev-section">SONAR</div>
+      <div class="dev-row"><label>최대 차징 C2</label><input type="range" id="d-maxcharge" min="0.5" max="3.0" step="0.1" value="1.5"><span class="dev-val" id="d-maxcharge-v">1.5</span></div>
+      <div class="dev-row"><label>스캔 반경 C4</label><input type="range" id="d-radius" min="2" max="6" step="1" value="4"><span class="dev-val" id="d-radius-v">4</span></div>
+      <div class="dev-row"><label>숫자 유지 C6</label><input type="range" id="d-numdur" min="0.5" max="3.0" step="0.1" value="1.2"><span class="dev-val" id="d-numdur-v">1.2</span></div>
 
       <button class="dev-btn" id="d-regen">🔄 맵 재생성</button>
-      <button class="dev-btn" id="d-reveal-mines">💣 지뢰 표시 OFF</button>
+      <button class="dev-btn" id="d-reveal">💣 지뢰 표시 OFF</button>
       <button class="dev-btn" id="d-fullhp">❤ HP 전부 회복</button>
 
       <div class="dev-info">
         FPS: <span id="di-fps">0</span><br>
         타일: <span id="di-tile">FLOOR</span><br>
         지뢰 수: <span id="di-mines">0</span>개<br>
-        HP: <span id="di-hp">3/3</span><br>
-        막다른길: <span id="di-dead">0</span>개<br>
-        맵: <span id="di-mapsize">0×0</span><br>
+        막다른 길: <span id="di-dead">0%</span><br>
         경과: <span id="di-time">0s</span>
       </div>
     </div>
@@ -240,49 +152,44 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 <script src="config.js"></script>
 <script>
 // ================================================================
-//  index.html — OUTBREAK ZONE Step 2-B
-//  Step 2-A 봉인 완료
-//  추가:
-//  ① 소나 F키 홀딩 차징
-//  ② 파장이 퍼지면서 타일 순차 점등
-//  ③ 숫자 N초 표시 후 페이드아웃
-//  ④ 잔상 (흐릿하게 남는 흔적)
-//  ⑤ 미니맵 소나 탐지 지뢰 점 표시
-//  ⑥ 리소스 교체 가능 구조 (drawXxx 함수 분리)
+//  OUTBREAK ZONE — Step 2-B
+//  Step 1: 맵 생성 + 이동 (봉인)
+//  Step 2-A: 지뢰 배치 + HP (봉인)
+//  Step 2-B: 소나 차징 + 파장 + 숫자 표시 + 잔상
 // ================================================================
 
 // ── 타일 상수 ────────────────────────────────────────────────────
 const T = { WALL:0, FLOOR:1, MINE:2 };
+
+// 숫자 색상 (지뢰찾기 표준)
+const NUM_COLORS = ['','#4488ff','#44cc44','#ff6666','#cc44ff','#ff8800','#00cccc','#ffffff','#aaaaaa'];
 
 // ── 맵 생성 ──────────────────────────────────────────────────────
 function generateMap() {
   let sz = CONFIG.map.size;
   if (sz % 2 === 0) sz++;
   const W = sz, H = sz;
-
-  // 최대 10회 시도 (막다른 길 비율 체크)
   for (let attempt = 0; attempt < 10; attempt++) {
     const result = _buildMap(W, H);
     if (result) return result;
   }
-  // 10회 실패 시 마지막 결과 그냥 사용
   return _buildMap(W, H, true);
 }
 
 function _buildMap(W, H, force = false) {
-  const tiles = new Uint8Array(W * H).fill(T.WALL);
-  const idx = (x,y) => y*W+x;
-  const get = (x,y) => tiles[idx(x,y)];
-  const set = (x,y,v) => { tiles[idx(x,y)] = v; };
+  const tiles   = new Uint8Array(W * H).fill(T.WALL);
+  const numbers = new Uint8Array(W * H);
+  const idx = (x, y) => y * W + x;
+  const get = (x, y) => tiles[idx(x, y)];
+  const set = (x, y, v) => { tiles[idx(x, y)] = v; };
 
-  // 재귀 백트래커 미로
+  // 미로 생성 (재귀 백트래커)
   function carve(x, y) {
     set(x, y, T.FLOOR);
-    const dirs = shuffle([[0,-2],[2,0],[0,2],[-2,0]]);
-    for (const [dx,dy] of dirs) {
-      const nx=x+dx, ny=y+dy;
+    for (const [dx, dy] of shuffle([[0,-2],[2,0],[0,2],[-2,0]])) {
+      const nx = x+dx, ny = y+dy;
       if (nx<=0||nx>=W-1||ny<=0||ny>=H-1) continue;
-      if (get(nx,ny) !== T.WALL) continue;
+      if (get(nx, ny) !== T.WALL) continue;
       set(x+dx/2, y+dy/2, T.FLOOR);
       carve(nx, ny);
     }
@@ -290,60 +197,41 @@ function _buildMap(W, H, force = false) {
   carve(1, 1);
 
   // 루프 경로 추가
-  let added=0, tries=0;
+  let added = 0, tries = 0;
   while (added < CONFIG.map.loopPaths && tries < 400) {
     tries++;
-    const x = 1 + Math.floor(Math.random()*Math.floor((W-2)/2))*2;
-    const y = 1 + Math.floor(Math.random()*Math.floor((H-2)/2))*2;
-    const [dx,dy] = [[1,0],[0,1]][Math.floor(Math.random()*2)];
-    const mx=x+dx, my=y+dy, nx2=x+dx*2, ny2=y+dy*2;
-    if (nx2<=0||nx2>=W-1||ny2<=0||ny2>=H-1) continue;
+    const x = 1 + Math.floor(Math.random() * Math.floor((W-2)/2)) * 2;
+    const y = 1 + Math.floor(Math.random() * Math.floor((H-2)/2)) * 2;
+    const [dx, dy] = [[1,0],[0,1]][Math.floor(Math.random()*2)];
+    const mx = x+dx, my = y+dy, nx = x+dx*2, ny = y+dy*2;
+    if (nx<=0||nx>=W-1||ny<=0||ny>=H-1) continue;
     if (get(mx,my) !== T.WALL) continue;
-    if (get(nx2,ny2) !== T.FLOOR) continue;
+    if (get(nx,ny) !== T.FLOOR) continue;
     set(mx, my, T.FLOOR);
     added++;
   }
 
-  // 막다른 길 비율 계산
-  // 막다른 길 = 연결된 바닥 타일이 1개뿐인 바닥 타일
+  // 막다른 길 비율 체크
   let floorCount = 0, deadEndCount = 0;
   for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
     if (get(x,y) !== T.FLOOR) continue;
     floorCount++;
-    let neighbors = 0;
+    let n = 0;
     for (const [dx,dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
       const nx=x+dx, ny=y+dy;
-      if (nx>=0&&nx<W&&ny>=0&&ny<H&&get(nx,ny)===T.FLOOR) neighbors++;
+      if (nx>=0&&nx<W&&ny>=0&&ny<H&&get(nx,ny)===T.FLOOR) n++;
     }
-    if (neighbors === 1) deadEndCount++;
+    if (n === 1) deadEndCount++;
   }
-
   const deadEndRatio = deadEndCount / (floorCount || 1);
-
-  // 막다른 길 비율 초과 시 재시도 (force=true면 통과)
   if (!force && deadEndRatio > CONFIG.map.deadEndMax) return null;
 
-  // 지뢰 배치
-  // 스폰 주변 안전 반경 확보 (3×3)
+  // 지뢰 배치 (스폰 주변 2타일 안전)
   const safeSet = new Set();
   for (let dy=-2; dy<=2; dy++)
     for (let dx=-2; dx<=2; dx++)
       safeSet.add(`${1+dx},${1+dy}`);
 
-  // 막다른 길 위치 수집 (나중에 아이템 배치용)
-  const deadEnds = [];
-  for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
-    if (get(x,y) !== T.FLOOR) continue;
-    if (safeSet.has(`${x},${y}`)) continue;
-    let neighbors = 0;
-    for (const [ddx,ddy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
-      const nnx=x+ddx, nny=y+ddy;
-      if (nnx>=0&&nnx<W&&nny>=0&&nny<H&&get(nnx,nny)===T.FLOOR) neighbors++;
-    }
-    if (neighbors === 1) deadEnds.push([x,y]);
-  }
-
-  // 지뢰 배치 (FLOOR 타일 중 안전 구역 제외)
   let mineCount = 0;
   for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
     if (get(x,y) !== T.FLOOR) continue;
@@ -354,8 +242,7 @@ function _buildMap(W, H, force = false) {
     }
   }
 
-  // 지뢰 숫자 계산 (FLOOR/MINE 타일에 주변 지뢰 수 저장)
-  const numbers = new Uint8Array(W * H);
+  // 숫자 계산 (모든 비벽 타일)
   for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
     if (get(x,y) === T.WALL) continue;
     let cnt = 0;
@@ -367,85 +254,68 @@ function _buildMap(W, H, force = false) {
     numbers[idx(x,y)] = cnt;
   }
 
-  return { tiles, numbers, width:W, height:H,
-           floorCount, deadEndCount, deadEndRatio,
-           mineCount, deadEnds };
+  return { tiles, numbers, width:W, height:H, floorCount, mineCount, deadEndCount, deadEndRatio };
 }
 
 function shuffle(arr) {
-  const a=[...arr];
-  for (let i=a.length-1;i>0;i--) {
-    const j=Math.floor(Math.random()*(i+1));
-    [a[i],a[j]]=[a[j],a[i]];
+  const a = [...arr];
+  for (let i=a.length-1; i>0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
   }
   return a;
 }
 
-// ── 상태 ─────────────────────────────────────────────────────────
+// ── 게임 상태 ────────────────────────────────────────────────────
 let MAP     = null;
-let VISITED = null;  // 누적 방문 타일 (미니맵용)
-let VISIBLE = null;  // 현재 시야 타일 (매 프레임 갱신)
+let VISITED = null; // 누적 방문 (미니맵용)
+let VISIBLE = null; // 현재 시야 (렌더용)
 
-let player = {
-  tx:1, ty:1,
-  px:0, py:0,
+const player = {
+  tx:1, ty:1, px:0, py:0,
   targetX:0, targetY:0,
-  moving:false,
-  facing:'down',
-  hp:3, maxHp:3,
-  dead:false,
+  moving:false, facing:'down',
+  hp:3, maxHp:3, dead:false,
 };
 
-// 런 통계
-let stats = { minesHit:0, startTime:0 };
-
-let camX=0, camY=0;
-let moveTimer=0;
-let devRevealMines = false; // DEV: 지뢰 표시
-
-// ── 소나 상태 ────────────────────────────────────────────────────
-// 리소스 교체 가이드:
-// drawSonarPulse(), drawSonarNumber(), drawSonarGhost() 함수를
-// 스프라이트 버전으로 교체하면 됩니다.
+// 소나 상태
+// ================================================================
+//  RESOURCE LAYER 안내:
+//  소나 렌더링 함수: drawSonarPulse / drawSonarNumbers / drawSonarGhosts
+//  스프라이트로 교체 시 해당 함수만 수정하면 됩니다.
+//  주의: 이 함수들은 render() 내부 ctx.translate(-camX,-camY) 블록에서
+//        호출되므로 월드 좌표를 그대로 사용합니다 (camX 빼지 않음).
+// ================================================================
 const sonar = {
-  // 차징
-  charging:    false,
-  chargeTime:  0,       // 현재 홀딩 시간 (초)
-
-  // 파장 애니메이션
-  firing:      false,
-  pulseR:      0,       // 현재 파장 반경 (px)
-  pulseMaxR:   0,       // 최대 파장 반경 (px)
-  pulseWx:     0,       // 파장 발원지 월드 좌표 X
-  pulseWy:     0,
-
-  // 스캔된 타일 숫자 목록
-  // { tx, ty, number, alpha, timer, lit }
-  // lit: 파장이 해당 타일에 도달했는지
-  scanned:     [],
-
-  // 잔상 목록
-  // { tx, ty, alpha }
-  ghosts:      [],
-
-  // 미니맵 지뢰 점
-  // { tx, ty, alpha }
-  mmMines:     [],
+  charging:   false,
+  chargeTime: 0,
+  firing:     false,
+  pulseR:     0,
+  pulseMaxR:  0,
+  pulseWx:    0,
+  pulseWy:    0,
+  scanned:    [], // { tx, ty, number, isMine, dist, lit, alpha, timer }
+  ghosts:     [], // { tx, ty, alpha }
+  mmMines:    [], // { tx, ty, alpha } — 미니맵 지뢰 점
 };
+
+let camX = 0, camY = 0;
+let moveTimer = 0;
+let devRevealMines = false;
+const stats = { minesHit:0, startTime:0 };
 
 // ── 캔버스 ───────────────────────────────────────────────────────
-const canvas    = document.getElementById('canvas');
-const ctx       = canvas.getContext('2d');
-const mmCanvas  = document.getElementById('minimap');
-const mmCtx     = mmCanvas.getContext('2d');
+const canvas   = document.getElementById('canvas');
+const ctx      = canvas.getContext('2d');
+const mmCanvas = document.getElementById('minimap');
+const mmCtx    = mmCanvas.getContext('2d');
 let W_px, H_px;
 
 function resize() {
   const area = document.getElementById('game-area');
   W_px = canvas.width  = area.clientWidth;
   H_px = canvas.height = area.clientHeight;
-  // 미니맵 크기 설정
-  mmCanvas.width  = mmCanvas.height  = CONFIG.minimap.size;
+  mmCanvas.width = mmCanvas.height = CONFIG.minimap.size;
 }
 window.addEventListener('resize', resize);
 
@@ -455,43 +325,47 @@ function init() {
   VISITED = new Uint8Array(MAP.width * MAP.height);
   VISIBLE = new Uint8Array(MAP.width * MAP.height);
 
-  player.tx=1; player.ty=1;
-  player.px = 1*CONFIG.map.tileSize;
-  player.py = 1*CONFIG.map.tileSize;
-  player.targetX = player.px;
-  player.targetY = player.py;
-  player.moving  = false;
-  player.facing  = 'down';
-  player.hp      = CONFIG.player.maxHp;
-  player.maxHp   = CONFIG.player.maxHp;
-  player.dead    = false;
-  stats = { minesHit:0, startTime:Date.now() };
-  document.getElementById('gameover').classList.remove('show');
-  // 소나 초기화
-  sonar.charging=false; sonar.chargeTime=0;
-  sonar.firing=false; sonar.pulseR=0;
-  sonar.scanned=[]; sonar.ghosts=[]; sonar.mmMines=[];
+  Object.assign(player, {
+    tx:1, ty:1,
+    px: CONFIG.map.tileSize,
+    py: CONFIG.map.tileSize,
+    targetX: CONFIG.map.tileSize,
+    targetY: CONFIG.map.tileSize,
+    moving:false, facing:'down',
+    hp: CONFIG.player.maxHp,
+    maxHp: CONFIG.player.maxHp,
+    dead:false,
+  });
+
+  Object.assign(sonar, {
+    charging:false, chargeTime:0,
+    firing:false, pulseR:0, pulseMaxR:0,
+    scanned:[], ghosts:[], mmMines:[],
+  });
+
+  stats.minesHit  = 0;
+  stats.startTime = Date.now();
+  moveTimer = 0;
 
   revealAround(1, 1, CONFIG.player.visionRad);
-
   camX = player.px + CONFIG.map.tileSize/2 - W_px/2;
   camY = player.py + CONFIG.map.tileSize/2 - H_px/2;
+
+  document.getElementById('gameover').classList.remove('show');
 }
 
-// ── LOS 시야 ─────────────────────────────────────────────────────
-// 원칙: 미니맵에 표시되는 정보 = 시야(VISITED)와 완전히 동일
+// ── 시야 (LOS) ───────────────────────────────────────────────────
 function revealAround(tx, ty, radius) {
-  const { tiles, width, height } = MAP;
-  // 현재 시야 초기화 (매 호출마다 갱신)
   VISIBLE.fill(0);
+  const { width, height } = MAP;
   for (let dy=-radius; dy<=radius; dy++) {
     for (let dx=-radius; dx<=radius; dx++) {
       const nx=tx+dx, ny=ty+dy;
       if (nx<0||nx>=width||ny<0||ny>=height) continue;
       if (Math.hypot(dx,dy) > radius+0.5) continue;
       if (hasLOS(tx,ty,nx,ny)) {
-        VISITED[ny*width+nx]=1; // 누적 방문
-        VISIBLE[ny*width+nx]=1; // 현재 시야
+        VISITED[ny*width+nx] = 1;
+        VISIBLE[ny*width+nx] = 1;
       }
     }
   }
@@ -519,25 +393,26 @@ window.addEventListener('keydown', e => {
   KEYS[e.code] = true;
   e.preventDefault();
 
-  // F키 — 소나 차징 시작
-  if (e.code === 'KeyF' && !sonar.charging && !player.dead) {
+  // F키: 반복 이벤트 차단 후 차징 시작
+  if (e.code === 'KeyF' && !e.repeat && !sonar.charging && !player.dead) {
     sonar.charging   = true;
     sonar.chargeTime = 0;
+    return;
   }
 
-  // 방향키 — facing 즉시 업데이트 (이동 가능 여부 무관)
+  // 방향키: facing 즉시 업데이트 (이동 불가여도)
   const dir = codeToDir(e.code);
   if (dir) {
     updateFacing(dir.dx, dir.dy);
-    // 이동 가능하면 이동
-    if (!player.moving && moveTimer <= 0) {
+    if (!player.moving && moveTimer <= 0 && !player.dead) {
       tryMove(dir.dx, dir.dy);
     }
   }
 });
+
 window.addEventListener('keyup', e => {
   KEYS[e.code] = false;
-  // F키 뗌 → 소나 발사
+  // F키 뗌: 그 시점의 차징으로 소나 발동
   if (e.code === 'KeyF' && sonar.charging) {
     fireSonar();
   }
@@ -551,16 +426,15 @@ function codeToDir(code) {
   return null;
 }
 
-// facing 업데이트 — 이동 성공 여부와 무관하게 항상 실행
 function updateFacing(dx, dy) {
-  if      (dy < 0) player.facing = 'up';
-  else if (dy > 0) player.facing = 'down';
-  else if (dx < 0) player.facing = 'left';
-  else if (dx > 0) player.facing = 'right';
+  if      (dy<0) player.facing='up';
+  else if (dy>0) player.facing='down';
+  else if (dx<0) player.facing='left';
+  else if (dx>0) player.facing='right';
 }
 
-// 꾹 누를 때 반복 이동 (4방향 우선순위: 상>하>좌>우)
-function getInputDir() {
+// 꾹 누를 때 반복 이동
+function getHeldDir() {
   if (KEYS['KeyW']||KEYS['ArrowUp'])    return {dx:0,  dy:-1};
   if (KEYS['KeyS']||KEYS['ArrowDown'])  return {dx:0,  dy: 1};
   if (KEYS['KeyA']||KEYS['ArrowLeft'])  return {dx:-1, dy: 0};
@@ -569,65 +443,85 @@ function getInputDir() {
 }
 
 function tryMove(dx, dy) {
-  if (player.dead) return false;
   const nx=player.tx+dx, ny=player.ty+dy;
   if (nx<0||nx>=MAP.width||ny<0||ny>=MAP.height) return false;
   if (MAP.tiles[ny*MAP.width+nx]===T.WALL) return false;
-
+  updateFacing(dx, dy);
   player.tx=nx; player.ty=ny;
   player.targetX=nx*CONFIG.map.tileSize;
   player.targetY=ny*CONFIG.map.tileSize;
   player.moving=true;
   moveTimer=CONFIG.player.moveDelay;
   revealAround(nx, ny, CONFIG.player.visionRad);
-  onStep(nx, ny); // 타일 효과
+  onStep(nx, ny);
   return true;
 }
 
-// ── 소나 로직 ────────────────────────────────────────────────────
+function handleInput(dt) {
+  moveTimer = Math.max(0, moveTimer-dt);
+  if (player.moving || moveTimer>0 || player.dead) return;
+  const dir = getHeldDir();
+  if (dir) {
+    updateFacing(dir.dx, dir.dy);
+    tryMove(dir.dx, dir.dy);
+  }
+}
+
+// ── 타일 효과 ────────────────────────────────────────────────────
+function onStep(tx, ty) {
+  if (MAP.tiles[ty*MAP.width+tx] !== T.MINE) return;
+  MAP.tiles[ty*MAP.width+tx] = T.FLOOR;
+  player.hp--;
+  stats.minesHit++;
+  const fl = document.getElementById('flash');
+  fl.style.opacity = '1';
+  setTimeout(() => fl.style.opacity='0', 150);
+  if (player.hp <= 0) {
+    player.dead = true;
+    const elapsed = Math.floor((Date.now()-stats.startTime)/1000);
+    document.getElementById('go-mines').textContent = stats.minesHit;
+    document.getElementById('go-time').textContent  = elapsed+'초';
+    document.getElementById('gameover').classList.add('show');
+  }
+}
+
+// ── 소나 ─────────────────────────────────────────────────────────
 function fireSonar() {
-  if (!sonar.charging) return;
-  sonar.charging = false;
+  const cfg   = CONFIG.sonar;
+  const ratio = Math.min(sonar.chargeTime, cfg.maxCharge) / cfg.maxCharge;
+  const radius = Math.round(cfg.minRadius + (cfg.maxRadius-cfg.minRadius)*ratio);
+  const numDur = cfg.numDurMin + (cfg.numDurMax-cfg.numDurMin)*ratio;
+  const ts     = CONFIG.map.tileSize;
 
-  const cfg = CONFIG.sonar;
-  const t   = Math.min(sonar.chargeTime, cfg.maxCharge);
-  const ratio = t / cfg.maxCharge; // 0~1
-
-  // 차징 비율에 따라 반경, 유지시간 결정
-  const radius  = Math.round(cfg.minRadius + (cfg.maxRadius - cfg.minRadius) * ratio);
-  const numDur  = cfg.numDurMin + (cfg.numDurMax - cfg.numDurMin) * ratio;
-  const ts      = CONFIG.map.tileSize;
-
-  // 발원지 (낚시용 — Step 4에서 활용)
-  sonar.pulseWx   = player.px + ts/2;
-  sonar.pulseWy   = player.py + ts/2;
-  sonar.pulseR    = 0;
-  sonar.pulseMaxR = radius * ts;
-  sonar.firing    = true;
+  sonar.charging   = false;
   sonar.chargeTime = 0;
+  sonar.pulseWx    = player.px + ts/2;
+  sonar.pulseWy    = player.py + ts/2;
+  sonar.pulseR     = 0;
+  sonar.pulseMaxR  = radius * ts;
+  sonar.firing     = true;
 
-  // 스캔 대상 타일 등록 (파장이 지나가면서 순차 점등)
+  // 스캔 대상 등록 (플레이어 자신 위치 제외)
   const { tiles, numbers, width, height } = MAP;
-  const newScanned = [];
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      const nx = player.tx + dx, ny = player.ty + dy;
+  sonar.scanned = [];
+  for (let dy=-radius; dy<=radius; dy++) {
+    for (let dx=-radius; dx<=radius; dx++) {
+      if (dx===0 && dy===0) continue; // 플레이어 위치 제외
+      const nx=player.tx+dx, ny=player.ty+dy;
       if (nx<0||nx>=width||ny<0||ny>=height) continue;
-      if (Math.hypot(dx,dy) > radius + 0.5) continue;
-      if (tiles[ny*width+nx] === T.WALL) continue;
-      const dist = Math.hypot(dx,dy) * ts; // 픽셀 거리
-      newScanned.push({
-        tx: nx, ty: ny,
+      if (Math.hypot(dx,dy) > radius+0.5) continue;
+      if (tiles[ny*width+nx]===T.WALL) continue;
+      sonar.scanned.push({
+        tx:nx, ty:ny,
         number: numbers[ny*width+nx],
-        isMine: tiles[ny*width+nx] === T.MINE,
-        dist,           // 파장 도달 거리
-        lit:   false,   // 아직 점등 안 됨
-        alpha: 0,
-        timer: numDur,
+        isMine: tiles[ny*width+nx]===T.MINE,
+        dist:   Math.hypot(dx,dy)*ts,
+        lit:    false,
+        alpha:  0,
+        timer:  numDur,
       });
     }
   }
-  sonar.scanned = newScanned;
 }
 
 function updateSonar(dt) {
@@ -635,111 +529,67 @@ function updateSonar(dt) {
 
   // 차징 시간 누적
   if (sonar.charging) {
-    sonar.chargeTime = Math.min(sonar.chargeTime + dt, cfg.maxCharge);
+    sonar.chargeTime = Math.min(sonar.chargeTime+dt, cfg.maxCharge);
   }
 
-  // 파장 퍼지기
+  // 파장 확산 + 순차 점등
   if (sonar.firing) {
     sonar.pulseR += cfg.pulseSpeed * dt;
-    // 파장이 지나간 타일 순차 점등
-    for (const tile of sonar.scanned) {
-      if (!tile.lit && sonar.pulseR >= tile.dist) {
-        tile.lit   = true;
-        tile.alpha = 1.0;
-        // 지뢰 탐지 시 미니맵 등록
-        if (tile.isMine) {
-          const existing = sonar.mmMines.find(m => m.tx===tile.tx&&m.ty===tile.ty);
-          if (!existing) {
-            sonar.mmMines.push({ tx:tile.tx, ty:tile.ty, alpha:1.0 });
-          } else {
-            existing.alpha = 1.0; // 갱신
-          }
+    for (const t of sonar.scanned) {
+      if (!t.lit && sonar.pulseR >= t.dist) {
+        t.lit   = true;
+        t.alpha = 1.0;
+        if (t.isMine) {
+          const existing = sonar.mmMines.find(m=>m.tx===t.tx&&m.ty===t.ty);
+          if (existing) existing.alpha = 1.0;
+          else sonar.mmMines.push({tx:t.tx, ty:t.ty, alpha:1.0});
         }
       }
     }
-    if (sonar.pulseR >= sonar.pulseMaxR) {
-      sonar.firing = false;
-      // firing 완료 후 pulseR 고정 유지 (렌더에서 alpha로 페이드)
-    }
+    if (sonar.pulseR >= sonar.pulseMaxR) sonar.firing = false;
   }
-  // firing 완료 후 pulseR 서서히 증가해 사라지는 효과
-  if (!sonar.firing && sonar.pulseR > 0 && sonar.pulseMaxR > 0) {
-    sonar.pulseR += CONFIG.sonar.pulseSpeed * dt * 0.5;
-    if (sonar.pulseR > sonar.pulseMaxR * 1.5) {
-      sonar.pulseR = 0;
-      sonar.pulseMaxR = 0;
+
+  // 파장 완료 후 링 페이드아웃
+  if (!sonar.firing && sonar.pulseR>0 && sonar.pulseMaxR>0) {
+    sonar.pulseR += cfg.pulseSpeed*dt*0.5;
+    if (sonar.pulseR > sonar.pulseMaxR*1.5) {
+      sonar.pulseR=0; sonar.pulseMaxR=0;
     }
   }
 
-  // 숫자 페이드아웃
-  for (const tile of sonar.scanned) {
-    if (!tile.lit) continue;
-    tile.timer -= dt;
-    if (tile.timer < cfg.ghostFade) {
-      tile.alpha = Math.max(0, tile.timer / cfg.ghostFade);
+  // 숫자 타이머 & 페이드
+  const next = [];
+  for (const t of sonar.scanned) {
+    if (!t.lit) { next.push(t); continue; }
+    t.timer -= dt;
+    if (t.timer < cfg.ghostFade) {
+      t.alpha = Math.max(0, t.timer/cfg.ghostFade);
     }
-    // 완전히 사라지면 잔상으로 전환
-    if (tile.alpha <= 0) {
-      const hasGhost = sonar.ghosts.find(g=>g.tx===tile.tx&&g.ty===tile.ty);
-      if (!hasGhost) {
-        sonar.ghosts.push({ tx:tile.tx, ty:tile.ty, alpha: cfg.ghostAlpha });
+    if (t.alpha <= 0) {
+      // 완전히 사라지면 잔상으로 전환
+      if (!sonar.ghosts.find(g=>g.tx===t.tx&&g.ty===t.ty)) {
+        sonar.ghosts.push({tx:t.tx, ty:t.ty, alpha:cfg.ghostAlpha});
       }
+    } else {
+      next.push(t);
     }
   }
-  sonar.scanned = sonar.scanned.filter(t => t.alpha > 0);
+  sonar.scanned = next;
 
-  // 잔상 서서히 소멸
-  for (const g of sonar.ghosts) g.alpha -= cfg.ghostDecay * dt;
-  sonar.ghosts = sonar.ghosts.filter(g => g.alpha > 0);
+  // 잔상 소멸
+  for (const g of sonar.ghosts) g.alpha -= cfg.ghostDecay*dt;
+  sonar.ghosts = sonar.ghosts.filter(g=>g.alpha>0);
 
-  // 미니맵 지뢰 점 서서히 소멸
-  for (const m of sonar.mmMines) m.alpha -= cfg.mmDecay * dt;
-  sonar.mmMines = sonar.mmMines.filter(m => m.alpha > 0);
-}
-
-// ── 타일 효과 ─────────────────────────────────────────────────────
-function onStep(tx, ty) {
-  const t = MAP.tiles[ty * MAP.width + tx];
-  if (t === T.MINE) {
-    MAP.tiles[ty * MAP.width + tx] = T.FLOOR; // 지뢰 제거 (폭발)
-    player.hp--;
-    stats.minesHit++;
-    // 피격 플래시
-    const fl = document.getElementById('flash');
-    fl.style.opacity = '1';
-    setTimeout(() => fl.style.opacity = '0', 150);
-    // HP 0 → 게임오버
-    if (player.hp <= 0) {
-      player.dead = true;
-      triggerGameOver();
-    }
-  }
-}
-
-function triggerGameOver() {
-  const elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
-  document.getElementById('go-mines').textContent = stats.minesHit;
-  document.getElementById('go-time').textContent  = elapsed + '초';
-  document.getElementById('go-rooms').textContent = '1'; // Step 3에서 업데이트
-  document.getElementById('gameover').classList.add('show');
-}
-
-function handleInput(dt) {
-  moveTimer = Math.max(0, moveTimer-dt);
-  if (player.moving || moveTimer > 0) return;
-
-  const dir = getInputDir();
-  if (dir) {
-    updateFacing(dir.dx, dir.dy); // 꾹 누를 때도 facing 유지
-    tryMove(dir.dx, dir.dy);
-  }
+  // 미니맵 지뢰 점 소멸
+  for (const m of sonar.mmMines) m.alpha -= cfg.mmDecay*dt;
+  sonar.mmMines = sonar.mmMines.filter(m=>m.alpha>0);
 }
 
 // ── 업데이트 ─────────────────────────────────────────────────────
 function update(dt) {
+  // 플레이어 픽셀 이동
   if (player.moving) {
-    const ts   = CONFIG.map.tileSize;
-    const spd  = ts / CONFIG.player.moveDelay * dt;
+    const spd  = CONFIG.map.tileSize / CONFIG.player.moveDelay * dt;
     const dx   = player.targetX - player.px;
     const dy   = player.targetY - player.py;
     const dist = Math.hypot(dx,dy);
@@ -750,15 +600,13 @@ function update(dt) {
       player.px+=dx/dist*spd; player.py+=dy/dist*spd;
     }
   }
-
-  const ts = CONFIG.map.tileSize;
-  const tcx = player.px+ts/2-W_px/2;
-  const tcy = player.py+ts/2-H_px/2;
-  camX += (tcx-camX)*CONFIG.camera.smooth;
-  camY += (tcy-camY)*CONFIG.camera.smooth;
+  // 카메라 추적
+  const ts  = CONFIG.map.tileSize;
+  camX += (player.px+ts/2-W_px/2-camX)*CONFIG.camera.smooth;
+  camY += (player.py+ts/2-H_px/2-camY)*CONFIG.camera.smooth;
 }
 
-// ── 게임 렌더링 ───────────────────────────────────────────────────
+// ── 렌더링 ───────────────────────────────────────────────────────
 function render() {
   const ts = CONFIG.map.tileSize;
   ctx.fillStyle='#000';
@@ -767,315 +615,199 @@ function render() {
   ctx.save();
   ctx.translate(-camX, -camY);
 
-  const tx0=Math.max(0,Math.floor(camX/ts)-1);
-  const ty0=Math.max(0,Math.floor(camY/ts)-1);
+  // 타일 렌더링
+  const tx0=Math.max(0, Math.floor(camX/ts)-1);
+  const ty0=Math.max(0, Math.floor(camY/ts)-1);
   const tx1=Math.min(MAP.width,  Math.ceil((camX+W_px)/ts)+1);
   const ty1=Math.min(MAP.height, Math.ceil((camY+H_px)/ts)+1);
 
-  for (let ty=ty0;ty<ty1;ty++) {
-    for (let tx=tx0;tx<tx1;tx++) {
-      const sx=tx*ts, sy=ty*ts;
+  for (let ty=ty0; ty<ty1; ty++) {
+    for (let tx=tx0; tx<tx1; tx++) {
+      const sx   = tx*ts, sy=ty*ts;
       const vis  = VISITED[ty*MAP.width+tx];
+      const vis2 = VISIBLE[ty*MAP.width+tx];
       const tile = MAP.tiles[ty*MAP.width+tx];
 
-      // 3단계 시야:
-      // 0 = 미방문 (암흑)
-      // 1 = 방문했지만 현재 시야 밖 (그림자)
-      // 2 = 현재 시야 안 (완전 밝음)
-      const vis2 = VISIBLE[ty*MAP.width+tx]; // 현재 시야
-
       if (!vis) {
-        // 미방문 — 완전 암흑
-        ctx.fillStyle='#050505';
-        ctx.fillRect(sx,sy,ts,ts);
-        continue;
+        ctx.fillStyle='#050505'; ctx.fillRect(sx,sy,ts,ts); continue;
       }
-
       if (tile===T.WALL) {
         if (vis2) {
-          // 현재 시야 — 완전 밝음
-          ctx.fillStyle='#1c1c1c';
-          ctx.fillRect(sx,sy,ts,ts);
-          ctx.fillStyle='#141414';
-          ctx.fillRect(sx+1,sy+1,ts-2,ts-2);
-          ctx.strokeStyle='#242424';
-          ctx.lineWidth=1;
+          ctx.fillStyle='#1c1c1c'; ctx.fillRect(sx,sy,ts,ts);
+          ctx.fillStyle='#141414'; ctx.fillRect(sx+1,sy+1,ts-2,ts-2);
+          ctx.strokeStyle='#242424'; ctx.lineWidth=1;
           ctx.strokeRect(sx+0.5,sy+0.5,ts-1,ts-1);
         } else {
-          // 방문했지만 시야 밖 — 그림자 (형태만)
-          ctx.fillStyle='#0e0e0e';
-          ctx.fillRect(sx,sy,ts,ts);
-          ctx.fillStyle='#0a0a0a';
-          ctx.fillRect(sx+1,sy+1,ts-2,ts-2);
+          ctx.fillStyle='#0e0e0e'; ctx.fillRect(sx,sy,ts,ts);
+          ctx.fillStyle='#0a0a0a'; ctx.fillRect(sx+1,sy+1,ts-2,ts-2);
         }
       } else {
         if (vis2) {
-          // 현재 시야 — 완전 밝음
-          ctx.fillStyle='#1e1e1e';
-          ctx.fillRect(sx,sy,ts,ts);
-          ctx.strokeStyle='#252525';
-          ctx.lineWidth=0.5;
+          ctx.fillStyle='#1e1e1e'; ctx.fillRect(sx,sy,ts,ts);
+          ctx.strokeStyle='#252525'; ctx.lineWidth=0.5;
           ctx.strokeRect(sx,sy,ts,ts);
         } else {
-          // 방문했지만 시야 밖 — 그림자
-          ctx.fillStyle='#0f0f0f';
-          ctx.fillRect(sx,sy,ts,ts);
+          ctx.fillStyle='#0f0f0f'; ctx.fillRect(sx,sy,ts,ts);
         }
-
-      // 지뢰 — 시야 안에서만 표시 (소나 없이는 X 표시 안 함)
-      // Step 2-B에서 소나 스캔 시 숫자 표시 추가
-      // 개발자 모드에서만 표시 (DEV 패널 열려있을 때)
-      if (tile === T.MINE && vis2 && devRevealMines) {
-        ctx.save();
-        ctx.globalAlpha = 0.35;
-        ctx.fillStyle = 'rgba(255,50,50,0.15)';
-        ctx.fillRect(sx,sy,ts,ts);
-        ctx.strokeStyle = '#ff3333';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(sx+8,sy+8); ctx.lineTo(sx+ts-8,sy+ts-8);
-        ctx.moveTo(sx+ts-8,sy+8); ctx.lineTo(sx+8,sy+ts-8);
-        ctx.stroke();
-        ctx.restore();
-      }
+        // DEV 지뢰 표시
+        if (tile===T.MINE && vis2 && devRevealMines) {
+          ctx.save();
+          ctx.globalAlpha=0.35;
+          ctx.fillStyle='rgba(255,50,50,0.15)'; ctx.fillRect(sx,sy,ts,ts);
+          ctx.strokeStyle='#ff3333'; ctx.lineWidth=1.5;
+          ctx.beginPath();
+          ctx.moveTo(sx+8,sy+8); ctx.lineTo(sx+ts-8,sy+ts-8);
+          ctx.moveTo(sx+ts-8,sy+8); ctx.lineTo(sx+8,sy+ts-8);
+          ctx.stroke();
+          ctx.restore();
+        }
       }
     }
   }
 
-  // 소나 잔상 (타일 위, 플레이어 아래)
+  // ── RESOURCE LAYER ────────────────────────────────────────────
+  // 이 아래 draw 함수들은 스프라이트로 교체 가능합니다.
+  // 모든 좌표는 월드 좌표 (ctx.translate 적용됨, camX 빼지 않음)
   drawSonarGhosts();
-  // 소나 숫자
   drawSonarNumbers();
-  // 소나 파장
   drawSonarPulse();
-
-  renderPlayer(ts);
-  // 소나 차징 게이지 (플레이어 위)
+  drawPlayer(ts);
   drawSonarCharging(ts);
+  // ── END RESOURCE LAYER ────────────────────────────────────────
 
   ctx.restore();
-  renderVignette();
+
+  // 비네팅
+  const vig=ctx.createRadialGradient(W_px/2,H_px/2,H_px*0.18,W_px/2,H_px/2,H_px*0.78);
+  vig.addColorStop(0,'rgba(0,0,0,0)');
+  vig.addColorStop(1,'rgba(0,0,0,0.72)');
+  ctx.fillStyle=vig; ctx.fillRect(0,0,W_px,H_px);
 }
 
-// ================================================================
-//  RESOURCE LAYER — 이 아래 함수들을 스프라이트로 교체 가능
-//  각 함수는 Canvas API로 그리며, 스프라이트 버전으로 1:1 교체 가능
-// ================================================================
+// ── RESOURCE LAYER 함수들 ─────────────────────────────────────────
+// 월드 좌표 사용 (ctx.translate 적용 상태)
 
-// 소나 차징 게이지 (플레이어 위에 표시)
-// 교체 시: 차징 애니메이션 스프라이트로 변경
-// ※ render() 안 ctx.save()/translate() 블록 내에서 호출됨
-//   → 좌표는 월드 좌표 그대로 사용 (camX 빼지 않음)
-function drawSonarCharging(ts) {
-  if (!sonar.charging) return;
-  const cx = player.px + ts/2;
-  const cy = player.py + ts/2;
-  const ratio = Math.min(sonar.chargeTime / CONFIG.sonar.maxCharge, 1);
-  const col = ratio > 0.8 ? '#ffaa00' : '#00ff88';
-
-  // 게이지 바 (플레이어 위) — 월드 좌표
-  const bw=36, bh=5;
-  const bx = cx - bw/2, by = cy - ts*0.75;
-  ctx.fillStyle='#222';
-  ctx.fillRect(bx, by, bw, bh);
-  ctx.fillStyle=col;
-  ctx.fillRect(bx, by, bw*ratio, bh);
-  ctx.strokeStyle='#555';
-  ctx.lineWidth=0.5;
-  ctx.strokeRect(bx, by, bw, bh);
-  // 차징 중에는 원형 표시 없음 (파장과 혼동 방지)
-}
-
-// 소나 파장 애니메이션
-// 교체 시: 파장 이펙트 스프라이트/셰이더로 변경
-// ※ render() 안 ctx.save()/translate() 블록 내에서 호출됨
-//   → 월드 좌표 그대로 사용 (camX 빼지 않음)
-function drawSonarPulse() {
-  if (sonar.pulseR <= 0 || sonar.pulseMaxR <= 0) return;
-  // 발원지는 월드 좌표 (translate 적용됐으므로 camX 빼지 않음)
-  const wx = sonar.pulseWx;
-  const wy = sonar.pulseWy;
-  const r  = sonar.pulseR;
-  const progress = Math.min(r / sonar.pulseMaxR, 1);
-  const alpha = Math.max(0, 0.5 * (1 - progress));
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(wx, wy, r, 0, Math.PI*2);
-  ctx.strokeStyle = '#00ff88';
-  ctx.lineWidth   = 2.5;
-  ctx.globalAlpha = alpha;
-  ctx.stroke();
-  ctx.globalAlpha = alpha * 0.12;
-  ctx.fillStyle   = '#00ff88';
-  ctx.fill();
-  ctx.restore();
-}
-
-// 소나 스캔 숫자 표시
-// 교체 시: 숫자 폰트 스프라이트로 변경
-function drawSonarNumbers() {
-  const ts = CONFIG.map.tileSize;
-  const numColors = ['','#4488ff','#44cc44','#ff6666','#cc44ff','#ff8800','#00cccc','#ffffff','#aaaaaa'];
-
-  for (const tile of sonar.scanned) {
-    if (!tile.lit || tile.alpha <= 0) continue;
-    const sx = tile.tx*ts - camX;
-    const sy = tile.ty*ts - camY;
-
-    ctx.save();
-    ctx.globalAlpha = tile.alpha;
-
-    if (tile.isMine) {
-      // 지뢰 타일: 붉은 X 표시
-      ctx.strokeStyle = '#ff4444';
-      ctx.lineWidth   = 2;
-      ctx.beginPath();
-      ctx.moveTo(sx+8,sy+8); ctx.lineTo(sx+ts-8,sy+ts-8);
-      ctx.moveTo(sx+ts-8,sy+8); ctx.lineTo(sx+8,sy+ts-8);
-      ctx.stroke();
-    } else if (tile.number > 0) {
-      // 숫자 표시
-      ctx.font         = `bold ${ts*0.42}px monospace`;
-      ctx.textAlign    = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle    = numColors[Math.min(tile.number, 8)];
-      ctx.shadowBlur   = 6;
-      ctx.shadowColor  = ctx.fillStyle;
-      ctx.fillText(tile.number, sx+ts/2, sy+ts/2);
-      ctx.shadowBlur   = 0;
-    }
-
-    ctx.restore();
-  }
-}
-
-// 소나 잔상
-// 교체 시: 잔상 파티클 스프라이트로 변경
-// ※ render() 안 ctx.save()/translate() 블록 내에서 호출됨
-//   → 월드 좌표 그대로 사용 (camX 빼지 않음)
-function drawSonarGhosts() {
-  const ts = CONFIG.map.tileSize;
-  for (const g of sonar.ghosts) {
-    const wx = g.tx * ts;
-    const wy = g.ty * ts;
-    ctx.save();
-    ctx.globalAlpha = g.alpha;
-    ctx.fillStyle   = '#00ff88';
-    ctx.fillRect(wx+4, wy+4, ts-8, ts-8);
-    ctx.restore();
-  }
-}
-
-// ================================================================
-//  END RESOURCE LAYER
-// ================================================================
-
-function renderPlayer(ts) {
-  const cx = player.px + ts/2;
-  const cy = player.py + ts/2;
-  const r  = ts * 0.34;
-
-  // 후광
+function drawPlayer(ts) {
+  const cx=player.px+ts/2, cy=player.py+ts/2, r=ts*0.34;
   ctx.save();
   ctx.globalAlpha=0.1;
   ctx.beginPath(); ctx.arc(cx,cy,r*1.6,0,Math.PI*2);
   ctx.fillStyle='#00ff88'; ctx.fill();
   ctx.restore();
-
-  // 몸통
   ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
-  ctx.fillStyle='#00ff88';
-  ctx.shadowBlur=10; ctx.shadowColor='#00ff88';
+  ctx.fillStyle='#00ff88'; ctx.shadowBlur=10; ctx.shadowColor='#00ff88';
   ctx.fill(); ctx.shadowBlur=0;
-
-  // 방향 도트
-  const a = {up:-Math.PI/2, down:Math.PI/2, left:Math.PI, right:0}[player.facing]??Math.PI/2;
+  const a={up:-Math.PI/2,down:Math.PI/2,left:Math.PI,right:0}[player.facing]??Math.PI/2;
   ctx.beginPath();
   ctx.arc(cx+Math.cos(a)*r*0.52, cy+Math.sin(a)*r*0.52, r*0.22, 0, Math.PI*2);
   ctx.fillStyle='#003322'; ctx.fill();
 }
 
-function renderVignette() {
-  const g=ctx.createRadialGradient(W_px/2,H_px/2,H_px*0.18,W_px/2,H_px/2,H_px*0.78);
-  g.addColorStop(0,'rgba(0,0,0,0)');
-  g.addColorStop(1,'rgba(0,0,0,0.72)');
-  ctx.fillStyle=g; ctx.fillRect(0,0,W_px,H_px);
+function drawSonarCharging(ts) {
+  if (!sonar.charging) return;
+  const cx=player.px+ts/2, cy=player.py+ts/2;
+  const ratio=Math.min(sonar.chargeTime/CONFIG.sonar.maxCharge, 1);
+  const col=ratio>0.8?'#ffaa00':'#00ff88';
+  const bw=36, bh=5, bx=cx-bw/2, by=cy-ts*0.75;
+  ctx.fillStyle='#222'; ctx.fillRect(bx,by,bw,bh);
+  ctx.fillStyle=col;    ctx.fillRect(bx,by,bw*ratio,bh);
+  ctx.strokeStyle='#555'; ctx.lineWidth=0.5; ctx.strokeRect(bx,by,bw,bh);
+}
+
+function drawSonarPulse() {
+  if (sonar.pulseR<=0 || sonar.pulseMaxR<=0) return;
+  const progress=Math.min(sonar.pulseR/sonar.pulseMaxR, 1);
+  const alpha=Math.max(0, 0.5*(1-progress));
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(sonar.pulseWx, sonar.pulseWy, sonar.pulseR, 0, Math.PI*2);
+  ctx.strokeStyle='#00ff88'; ctx.lineWidth=2.5; ctx.globalAlpha=alpha;
+  ctx.stroke();
+  ctx.globalAlpha=alpha*0.12; ctx.fillStyle='#00ff88'; ctx.fill();
+  ctx.restore();
+}
+
+function drawSonarNumbers() {
+  const ts=CONFIG.map.tileSize;
+  for (const t of sonar.scanned) {
+    if (!t.lit || t.alpha<=0) continue;
+    const wx=t.tx*ts, wy=t.ty*ts;
+    ctx.save();
+    ctx.globalAlpha=t.alpha;
+    if (t.isMine) {
+      ctx.fillStyle='rgba(255,50,50,0.15)'; ctx.fillRect(wx,wy,ts,ts);
+      ctx.strokeStyle='#ff4444'; ctx.lineWidth=2.5;
+      ctx.beginPath();
+      ctx.moveTo(wx+10,wy+10); ctx.lineTo(wx+ts-10,wy+ts-10);
+      ctx.moveTo(wx+ts-10,wy+10); ctx.lineTo(wx+10,wy+ts-10);
+      ctx.stroke();
+    } else if (t.number>0) {
+      ctx.font=`bold ${ts*0.44}px monospace`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle=NUM_COLORS[Math.min(t.number,8)];
+      ctx.shadowBlur=8; ctx.shadowColor=ctx.fillStyle;
+      ctx.fillText(t.number, wx+ts/2, wy+ts/2);
+      ctx.shadowBlur=0;
+    }
+    // 숫자 0 = 안전 타일: 표시 없음
+    ctx.restore();
+  }
+}
+
+function drawSonarGhosts() {
+  const ts=CONFIG.map.tileSize;
+  for (const g of sonar.ghosts) {
+    ctx.save();
+    ctx.globalAlpha=g.alpha;
+    ctx.fillStyle='#00ff88';
+    ctx.fillRect(g.tx*ts+4, g.ty*ts+4, ts-8, ts-8);
+    ctx.restore();
+  }
 }
 
 // ── 미니맵 렌더링 ─────────────────────────────────────────────────
-// 원칙: 미니맵 표시 = VISITED(시야)와 완전히 동일
-// 나중에 소나 탐지 정보, 레이더 정보도 VISITED 기반으로 연동
-function renderMinimap(targetCtx, targetSize) {
+function renderMinimap() {
   const { tiles, width, height } = MAP;
-  const s = targetSize / Math.max(width, height);
-
-  targetCtx.fillStyle='#000';
-  targetCtx.fillRect(0,0,targetSize,targetSize);
-
-  for (let ty=0;ty<height;ty++) {
-    for (let tx=0;tx<width;tx++) {
-      if (!VISITED[ty*width+tx]) continue; // 방문 안 한 곳 = 미표시
-
-      const tile = tiles[ty*width+tx];
-      targetCtx.fillStyle = tile===T.WALL ? '#1a1a1a' : '#303030';
-      targetCtx.fillRect(tx*s, ty*s, s+0.5, s+0.5);
-    }
+  const sz=CONFIG.minimap.size;
+  const s=sz/Math.max(width,height);
+  mmCtx.fillStyle='#000'; mmCtx.fillRect(0,0,sz,sz);
+  for (let ty=0; ty<height; ty++) for (let tx=0; tx<width; tx++) {
+    if (!VISITED[ty*width+tx]) continue;
+    mmCtx.fillStyle=tiles[ty*width+tx]===T.WALL?'#1a1a1a':'#303030';
+    mmCtx.fillRect(tx*s, ty*s, s+0.5, s+0.5);
   }
-
-  // 플레이어 위치 (항상 표시)
-  const ps = Math.max(s, 3);
-  targetCtx.fillStyle='#00ff88';
-  targetCtx.fillRect(
-    player.tx*s - ps/2 + s/2,
-    player.ty*s - ps/2 + s/2,
-    ps, ps
-  );
-
-  // 소나 탐지 지뢰 — 붉은 점 (서서히 흐려짐)
+  // 소나 탐지 지뢰 (붉은 점)
   for (const m of sonar.mmMines) {
-    mmCtx.save();
-    mmCtx.globalAlpha = m.alpha;
-    mmCtx.fillStyle   = '#ff4444';
-    const ps = Math.max(s, 2);
+    mmCtx.save(); mmCtx.globalAlpha=m.alpha;
+    mmCtx.fillStyle='#ff4444';
+    const ps=Math.max(s,2);
     mmCtx.fillRect(m.tx*s, m.ty*s, ps, ps);
     mmCtx.restore();
   }
-  // TODO Step 2-C: 발견한 아이템 → 노란 점
-  // TODO Step 2-C: 출구 위치 → 파란 점
-  // TODO Step 4:   레이더 탐지 좀비 → 주황 점 (3초 후 소멸)
+  // 플레이어
+  const ps=Math.max(s,3);
+  mmCtx.fillStyle='#00ff88';
+  mmCtx.fillRect(player.tx*s-ps/2+s/2, player.ty*s-ps/2+s/2, ps, ps);
 }
 
-// ── HUD ──────────────────────────────────────────────────────────
-let visitedCount = 0;
-
+// ── HUD & DEV ────────────────────────────────────────────────────
 function updateHUD() {
-  visitedCount = 0;
-  for (let i=0;i<VISITED.length;i++) if (VISITED[i]) visitedCount++;
-
-  document.getElementById('hud-pos').textContent =
-    `${player.tx}, ${player.ty}`;
-  document.getElementById('hud-explored').textContent =
-    `${Math.floor(visitedCount/MAP.floorCount*100)}%`;
-  // HP 하트 실제 연동
-  const hp    = Math.max(0, player.hp);
-  const maxHp = player.maxHp;
-  document.getElementById('hud-hp').textContent =
-    '❤'.repeat(hp) + '🖤'.repeat(Math.max(0, maxHp - hp));
+  const hp=Math.max(0,player.hp);
+  document.getElementById('hud-pos').textContent      = `${player.tx},${player.ty}`;
+  document.getElementById('hud-hp').textContent       = '❤'.repeat(hp)+'🖤'.repeat(Math.max(0,player.maxHp-hp));
+  let visited=0;
+  for (let i=0;i<VISITED.length;i++) if(VISITED[i]) visited++;
+  document.getElementById('hud-explored').textContent = `${Math.floor(visited/MAP.floorCount*100)}%`;
 }
 
-// ── DEV 정보 ─────────────────────────────────────────────────────
 function updateDevInfo() {
   if (!document.getElementById('dev-panel').classList.contains('open')) return;
-  const t = MAP.tiles[player.ty*MAP.width+player.tx];
-  document.getElementById('di-fps').textContent     = fps;
-  document.getElementById('di-tile').textContent    = t===T.WALL?'WALL':'FLOOR';
-  document.getElementById('di-dead').textContent    =
-    `${MAP.deadEndCount} (${Math.floor(MAP.deadEndRatio*100)}%)`;
-  document.getElementById('di-mapsize').textContent = `${MAP.width}×${MAP.height}`;
-  document.getElementById('di-mines').textContent  = MAP.mineCount;
-  document.getElementById('di-hp').textContent     = `${player.hp}/${player.maxHp}`;
-  document.getElementById('di-time').textContent    = Math.floor((Date.now()-startTime)/1000)+'s';
+  const t=MAP.tiles[player.ty*MAP.width+player.tx];
+  document.getElementById('di-fps').textContent   = fps;
+  document.getElementById('di-tile').textContent  = t===T.WALL?'WALL':t===T.MINE?'MINE':'FLOOR';
+  document.getElementById('di-mines').textContent = MAP.mineCount;
+  document.getElementById('di-dead').textContent  = `${Math.floor(MAP.deadEndRatio*100)}%`;
+  document.getElementById('di-time').textContent  = Math.floor((Date.now()-stats.startTime)/1000)+'s';
 }
 
 // ── DEV 패널 ─────────────────────────────────────────────────────
@@ -1085,69 +817,54 @@ document.getElementById('dev-toggle').addEventListener('click', () => {
   resize();
 });
 
-const sliders = [
-  ['d-size',     () => { CONFIG.map.size       = parseInt(document.getElementById('d-size').value); }],
-  ['d-tilesize', () => { CONFIG.map.tileSize   = parseInt(document.getElementById('d-tilesize').value); }],
-  ['d-loops',    () => { CONFIG.map.loopPaths  = parseInt(document.getElementById('d-loops').value); }],
-  ['d-delay',    () => { CONFIG.player.moveDelay  = parseFloat(document.getElementById('d-delay').value); }],
-  ['d-vision',   () => { CONFIG.player.visionRad  = parseInt(document.getElementById('d-vision').value); }],
-  ['d-cam',      () => { CONFIG.camera.smooth      = parseFloat(document.getElementById('d-cam').value); }],
-  ['d-maxcharge',() => { CONFIG.sonar.maxCharge = parseFloat(document.getElementById('d-maxcharge').value); }],
-  ['d-radius',   () => { CONFIG.sonar.maxRadius  = parseInt(document.getElementById('d-radius').value); }],
-  ['d-numdur',   () => { CONFIG.sonar.numDurMax  = parseFloat(document.getElementById('d-numdur').value); }],
-  ['d-mine',     () => { CONFIG.mine.density    = parseInt(document.getElementById('d-mine').value); document.getElementById('d-mine-v').textContent = document.getElementById('d-mine').value + '%'; }],
-  ['d-hp',       () => { CONFIG.player.maxHp   = parseInt(document.getElementById('d-hp').value); }],
+const SLIDERS = [
+  ['d-mapsize',   v => CONFIG.map.size              = parseInt(v)],
+  ['d-tilesize',  v => CONFIG.map.tileSize          = parseInt(v)],
+  ['d-loops',     v => CONFIG.map.loopPaths         = parseInt(v)],
+  ['d-delay',     v => CONFIG.player.moveDelay      = parseFloat(v)],
+  ['d-vision',    v => CONFIG.player.visionRad      = parseInt(v)],
+  ['d-hp',        v => CONFIG.player.maxHp          = parseInt(v)],
+  ['d-mine',      v => CONFIG.mine.density          = parseInt(v)],
+  ['d-maxcharge', v => CONFIG.sonar.maxCharge       = parseFloat(v)],
+  ['d-radius',    v => CONFIG.sonar.maxRadius       = parseInt(v)],
+  ['d-numdur',    v => CONFIG.sonar.numDurMax       = parseFloat(v)],
 ];
-sliders.forEach(([id, fn]) => {
-  const el  = document.getElementById(id);
-  const val = document.getElementById(id+'-v');
-  el.addEventListener('input', () => { fn(); val.textContent=el.value; });
+SLIDERS.forEach(([id, fn]) => {
+  const el=document.getElementById(id);
+  const vEl=document.getElementById(id+'-v');
+  el.addEventListener('input', () => { fn(el.value); vEl.textContent=el.value; });
 });
 
-document.getElementById('d-regen').addEventListener('click', () => {
-  init(); startTime=Date.now();
-});
-document.getElementById('d-reveal-mines').addEventListener('click', () => {
-  devRevealMines = !devRevealMines;
-  document.getElementById('d-reveal-mines').textContent =
-    '💣 지뢰 표시 ' + (devRevealMines ? 'ON' : 'OFF');
+document.getElementById('d-regen').addEventListener('click', () => { init(); });
+document.getElementById('d-reveal').addEventListener('click', () => {
+  devRevealMines=!devRevealMines;
+  document.getElementById('d-reveal').textContent='💣 지뢰 표시 '+(devRevealMines?'ON':'OFF');
 });
 document.getElementById('d-fullhp').addEventListener('click', () => {
-  player.hp = player.maxHp;
-  player.dead = false;
+  player.hp=player.maxHp; player.dead=false;
   document.getElementById('gameover').classList.remove('show');
 });
+document.getElementById('go-btn').addEventListener('click', () => { init(); });
 
 // ── 메인 루프 ────────────────────────────────────────────────────
 let lastTs=0, fps=0, frameCount=0, fpsTimer=0;
-let startTime = Date.now();
 
 function loop(ts) {
-  const dt = Math.min((ts-lastTs)/1000, 0.1);
+  const dt=Math.min((ts-lastTs)/1000, 0.1);
   lastTs=ts;
-
   frameCount++; fpsTimer+=dt;
-  if (fpsTimer>=1){ fps=frameCount; frameCount=0; fpsTimer=0; }
+  if (fpsTimer>=1){fps=frameCount;frameCount=0;fpsTimer=0;}
 
   handleInput(dt);
   updateSonar(dt);
   update(dt);
   render();
-
-  // 미니맵 렌더링 (기본 + 확대)
-  renderMinimap(mmCtx, CONFIG.minimap.size);
-
+  renderMinimap();
   updateHUD();
   updateDevInfo();
 
   requestAnimationFrame(loop);
 }
-
-// ── 게임오버 RETRY ───────────────────────────────────────────────
-document.getElementById('go-btn').addEventListener('click', () => {
-  init();
-  startTime = Date.now();
-});
 
 // ── 시작 ─────────────────────────────────────────────────────────
 resize();
