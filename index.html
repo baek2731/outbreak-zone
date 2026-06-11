@@ -198,7 +198,6 @@ const T = { WALL:0, FLOOR:1, MINE:2, ITEM:3, EXIT:4 };
 
 // ── 방향 배열 상수 ───────────────────────────────────────────────
 const DIR4  = [[0,-1],[1,0],[0,1],[-1,0]];
-const DIR8  = [[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]];
 const DMAZE = [[0,-2],[2,0],[0,2],[-2,0]];
 
 // ================================================================
@@ -484,8 +483,6 @@ function _buildMap(W, H, force = false) {
   // 각 후보의 스폰 거리 계산
   const withDist = itemCandidates.map(([x, y]) => ({ x, y, d: Math.hypot(x - 1, y - 1) }));
   withDist.sort((a, b) => a.d - b.d);
-  // 거리 순 정렬 후 needed개 구간으로 균등 분할, 각 구간에서 랜덤 1개
-  const placed = [];
   const zoneSize = Math.floor(withDist.length / needed);
   for (let i = 0; i < needed; i++) {
     const zoneStart = i * zoneSize;
@@ -493,7 +490,6 @@ function _buildMap(W, H, force = false) {
     const zone      = withDist.slice(zoneStart, zoneEnd).filter(({ x, y }) => get(x, y) === T.FLOOR);
     if (zone.length === 0) continue;
     const pick = zone[Math.floor(Math.random() * zone.length)];
-    placed.push([pick.x, pick.y]);
     set(pick.x, pick.y, T.ITEM);
   }
 
@@ -1308,7 +1304,6 @@ resize(); init();
   const _ctx = ctx;
   // ctx를 임시 교체해서 실제 경로 컴파일 유도
   // eslint-disable-next-line no-global-assign
-  Object.defineProperty(window, '_sonarWarmCtx', { value: octx, configurable: true });
   const saved = { pulseR: sonar.pulseR, pulseMaxR: sonar.pulseMaxR,
                   pulseWx: sonar.pulseWx, pulseWy: sonar.pulseWy };
   sonar.pulseR = 1; sonar.pulseMaxR = 10; sonar.pulseWx = 32; sonar.pulseWy = 32;
