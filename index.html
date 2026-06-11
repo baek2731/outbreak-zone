@@ -1019,10 +1019,13 @@ function zombieSense(z, c, zcx, zcy, distToPlayer) {
     z.lastSeenX = c.noiseX;
     z.lastSeenY = c.noiseY;
   } else if (z.state === 'CHASE') {
-    z.state = 'SEARCH';
-    z.searchTimer = 2.0;
-    z.wanderTimer = 0;
-    z.wpTx = null; z.wpTy = null;
+    // 이동 중일 때는 상태 전환 보류 — 보간 중 FOV 이탈 오판 방지
+    if (!z.moving) {
+      z.state = 'SEARCH';
+      z.searchTimer = 2.0;
+      z.wanderTimer = 0;
+      z.wpTx = null; z.wpTy = null;
+    }
   } else if (z.state === 'SEARCH') {
     z.searchTimer -= c.dt;
     if (z.searchTimer <= 0) z.state = 'WANDER';
@@ -1050,16 +1053,19 @@ function zombieNextStepDir(fromTx, fromTy, goalTx, goalTy) {
 
   if (fromTx === goalTx && fromTy === goalTy) return null; // 이미 도착
 
-  // BFS
+  // BFS — 고정 배열 큐 (shift() O(n) 제거)
   const visited = new Uint8Array(width * height);
-  const parent  = new Int16Array(width * height).fill(-1); // 부모 인덱스
-  const queue   = [fromTy * width + fromTx];
-  visited[fromTy * width + fromTx] = 1;
+  const parent  = new Int16Array(width * height).fill(-1);
+  const queue   = new Int32Array(width * height);
+  let head = 0, tail = 0;
+  const startIdx = fromTy * width + fromTx;
+  queue[tail++] = startIdx;
+  visited[startIdx] = 1;
   const goalIdx = goalTy * width + goalTx;
   let found = false;
 
-  outer: while (queue.length) {
-    const cur = queue.shift();
+  outer: while (head < tail) {
+    const cur = queue[head++];
     const cx  = cur % width, cy = Math.floor(cur / width);
     for (const [dx, dy] of DIR4) {
       const nx = cx + dx, ny = cy + dy;
@@ -1069,7 +1075,7 @@ function zombieNextStepDir(fromTx, fromTy, goalTx, goalTy) {
       visited[ni] = 1;
       parent[ni]  = cur;
       if (ni === goalIdx) { found = true; break outer; }
-      queue.push(ni);
+      queue[tail++] = ni;
     }
   }
 
