@@ -45,12 +45,12 @@ const CONFIG = {
   // 예약 — Step 4
   zombie: {
     count:      3,     // 스폰 수
-    speed:      0.65,  // 플레이어 대비 속도 비율
+    speed:      0.30,  // 플레이어 대비 속도 비율 (절반으로 낮춤)
     spawnDist:  6,     // 스폰 최소 거리 (스폰 지점에서)
     damageCool: 1.5,   // 접촉 피해 쿨타임 (초)
-    fovAngle:   120,   // 예약 Step 4
-    fovRange:   5,     // 예약 Step 4
-    hearRange:  4,     // 예약 Step 4
+    fovAngle:   90,    // 시야각 (도) — 절반으로 줄임
+    fovRange:   2,     // 시야 거리 (타일) — 절반으로 줄임
+    hearRange:  4,     // 소음 인식 예약
   },
 
 };
