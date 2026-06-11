@@ -16,14 +16,13 @@ body {
 
 /* 헤더 */
 #header {
-  display:flex; align-items:center;
-  justify-content:space-between;
-  padding:5px 12px;
-  background:#000; border-bottom:1px solid #1a1a1a;
-  flex-shrink:0; font-size:0.65rem; gap:12px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:5px 12px; background:#000;
+  border-bottom:1px solid #1a1a1a;
+  flex-shrink:0; gap:12px;
 }
 #title { color:#ff3333; font-size:0.85rem; letter-spacing:0.2em; flex-shrink:0; }
-#hud   { display:flex; gap:16px; font-size:0.6rem; align-items:center; }
+#hud { display:flex; gap:16px; font-size:0.6rem; align-items:center; }
 .hud-item { display:flex; flex-direction:column; align-items:center; gap:1px; }
 .hud-label { color:#444; font-size:0.48rem; letter-spacing:0.1em; text-transform:uppercase; }
 .hud-val   { color:#00ff88; font-size:0.68rem; }
@@ -39,11 +38,31 @@ body {
 #game-area { flex:1; position:relative; overflow:hidden; }
 canvas#canvas { display:block; }
 
-/* 미니맵 */
-canvas#minimap {
+/* 미니맵 — 기본 (우하단 고정) */
+#minimap-wrap {
   position:absolute; bottom:10px; right:10px;
   border:1px solid rgba(0,255,136,0.2);
-  image-rendering:pixelated;
+  transition: all 0.2s;
+}
+canvas#minimap { display:block; image-rendering:pixelated; }
+
+/* 미니맵 — 확대 오버레이 */
+#minimap-overlay {
+  display:none;
+  position:absolute; inset:0;
+  background:rgba(0,0,0,0.7);
+  align-items:center; justify-content:center;
+  z-index:10;
+}
+#minimap-overlay.show { display:flex; }
+#minimap-overlay-inner {
+  border:1px solid rgba(0,255,136,0.4);
+  position:relative;
+}
+canvas#minimap-large { display:block; image-rendering:pixelated; }
+#minimap-hint {
+  position:absolute; bottom:-20px; left:0; right:0;
+  text-align:center; font-size:0.5rem; color:#444; letter-spacing:0.1em;
 }
 
 /* DEV 패널 */
@@ -85,6 +104,10 @@ canvas#minimap {
       <div class="hud-label">EXPLORED</div>
       <div class="hud-val" id="hud-explored">0%</div>
     </div>
+    <div class="hud-item">
+      <div class="hud-label">FACING</div>
+      <div class="hud-val" id="hud-facing">DOWN</div>
+    </div>
   </div>
   <button id="dev-toggle">⚙ DEV</button>
 </div>
@@ -92,8 +115,22 @@ canvas#minimap {
 <div id="main">
   <div id="game-area">
     <canvas id="canvas"></canvas>
-    <canvas id="minimap"></canvas>
+
+    <!-- 미니맵 기본 -->
+    <div id="minimap-wrap">
+      <canvas id="minimap"></canvas>
+    </div>
+
+    <!-- 미니맵 확대 오버레이 (M키) -->
+    <div id="minimap-overlay">
+      <div id="minimap-overlay-inner">
+        <canvas id="minimap-large"></canvas>
+        <div id="minimap-hint">[M] 닫기</div>
+      </div>
+    </div>
   </div>
+
+  <!-- DEV 패널 -->
   <div id="dev-panel">
     <div id="dev-inner">
       <div class="dev-title">⚙ DEV — STEP 1</div>
@@ -106,15 +143,15 @@ canvas#minimap {
       </div>
       <div class="dev-row">
         <label>루프 경로 (A7)</label>
-        <input type="range" id="d-loops" min="0" max="8" step="1" value="3">
-        <span class="dev-val" id="d-loops-v">3</span>
+        <input type="range" id="d-loops" min="0" max="12" step="1" value="6">
+        <span class="dev-val" id="d-loops-v">6</span>
       </div>
 
       <div class="dev-section">PLAYER (B)</div>
       <div class="dev-row">
         <label>이동 딜레이 (B1)</label>
-        <input type="range" id="d-delay" min="0.04" max="0.20" step="0.01" value="0.07">
-        <span class="dev-val" id="d-delay-v">0.07</span>
+        <input type="range" id="d-delay" min="0.10" max="0.40" step="0.01" value="0.25">
+        <span class="dev-val" id="d-delay-v">0.25</span>
       </div>
       <div class="dev-row">
         <label>시야 반경 (B3)</label>
@@ -129,34 +166,31 @@ canvas#minimap {
         <span class="dev-val" id="d-cam-v">0.12</span>
       </div>
 
-      <div class="dev-section">MINIMAP (D)</div>
-      <div class="dev-row">
-        <label>미니맵 크기</label>
-        <input type="range" id="d-mmsize" min="60" max="140" step="10" value="90">
-        <span class="dev-val" id="d-mmsize-v">90</span>
-      </div>
-
       <button class="dev-btn" id="d-regen">🔄 맵 재생성</button>
 
       <div class="dev-info">
         FPS: <span id="di-fps">0</span><br>
         타일: <span id="di-tile">FLOOR</span><br>
+        방향: <span id="di-facing">DOWN</span><br>
+        막다른길: <span id="di-dead">0</span>개<br>
         맵: <span id="di-mapsize">0×0</span><br>
-        바닥: <span id="di-floors">0</span>개<br>
         경과: <span id="di-time">0s</span>
       </div>
     </div>
   </div>
 </div>
 
-<!-- config.js 먼저 로드 -->
 <script src="config.js"></script>
-
 <script>
 // ================================================================
 //  index.html — OUTBREAK ZONE Step 1
-//  맵 생성 + 플레이어 이동 + 미니맵
-//  검증 완료 후 봉인
+//  수정사항:
+//  ① facing — 이동 불가여도 방향 즉시 업데이트
+//  ② loopPaths 6개 + 막다른 길 비율 체크 (재생성)
+//  ③ moveDelay 0.25초 확정
+//  ④ M키 미니맵 토글 (80px ↔ 200px 오버레이)
+//  ⑤ 미니맵 정보 = 시야 정보와 일치
+//     (방문한 곳만 표시, 나중에 소나/레이더 정보 연동)
 // ================================================================
 
 // ── 타일 상수 ────────────────────────────────────────────────────
@@ -167,8 +201,18 @@ function generateMap() {
   let sz = CONFIG.map.size;
   if (sz % 2 === 0) sz++;
   const W = sz, H = sz;
-  const tiles = new Uint8Array(W * H).fill(T.WALL);
 
+  // 최대 10회 시도 (막다른 길 비율 체크)
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const result = _buildMap(W, H);
+    if (result) return result;
+  }
+  // 10회 실패 시 마지막 결과 그냥 사용
+  return _buildMap(W, H, true);
+}
+
+function _buildMap(W, H, force = false) {
+  const tiles = new Uint8Array(W * H).fill(T.WALL);
   const idx = (x,y) => y*W+x;
   const get = (x,y) => tiles[idx(x,y)];
   const set = (x,y,v) => { tiles[idx(x,y)] = v; };
@@ -187,9 +231,9 @@ function generateMap() {
   }
   carve(1, 1);
 
-  // 루프 경로 추가 (순환 경로 보장)
+  // 루프 경로 추가
   let added=0, tries=0;
-  while (added < CONFIG.map.loopPaths && tries < 300) {
+  while (added < CONFIG.map.loopPaths && tries < 400) {
     tries++;
     const x = 1 + Math.floor(Math.random()*Math.floor((W-2)/2))*2;
     const y = 1 + Math.floor(Math.random()*Math.floor((H-2)/2))*2;
@@ -202,10 +246,26 @@ function generateMap() {
     added++;
   }
 
-  let floorCount = 0;
-  for (let i=0; i<tiles.length; i++) if (tiles[i]===T.FLOOR) floorCount++;
+  // 막다른 길 비율 계산
+  // 막다른 길 = 연결된 바닥 타일이 1개뿐인 바닥 타일
+  let floorCount = 0, deadEndCount = 0;
+  for (let y=0; y<H; y++) for (let x=0; x<W; x++) {
+    if (get(x,y) !== T.FLOOR) continue;
+    floorCount++;
+    let neighbors = 0;
+    for (const [dx,dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+      const nx=x+dx, ny=y+dy;
+      if (nx>=0&&nx<W&&ny>=0&&ny<H&&get(nx,ny)===T.FLOOR) neighbors++;
+    }
+    if (neighbors === 1) deadEndCount++;
+  }
 
-  return { tiles, width:W, height:H, floorCount };
+  const deadEndRatio = deadEndCount / (floorCount || 1);
+
+  // 막다른 길 비율 초과 시 재시도 (force=true면 통과)
+  if (!force && deadEndRatio > CONFIG.map.deadEndMax) return null;
+
+  return { tiles, width:W, height:H, floorCount, deadEndCount, deadEndRatio };
 }
 
 function shuffle(arr) {
@@ -218,8 +278,8 @@ function shuffle(arr) {
 }
 
 // ── 상태 ─────────────────────────────────────────────────────────
-let MAP      = null;
-let VISITED  = null;   // 방문한 타일 (미니맵 + 시야용)
+let MAP     = null;
+let VISITED = null;  // 방문한 타일 (미니맵 = 시야와 동일)
 
 let player = {
   tx:1, ty:1,
@@ -227,28 +287,30 @@ let player = {
   targetX:0, targetY:0,
   moving:false,
   facing:'down',
-  // 키 버퍼: 이동 중 다음 방향 기억
-  nextDx:0, nextDy:0,
 };
 
 let camX=0, camY=0;
 let moveTimer=0;
+let minimapExpanded = false;
 
 // ── 캔버스 ───────────────────────────────────────────────────────
-const canvas   = document.getElementById('canvas');
-const ctx      = canvas.getContext('2d');
-const mmCanvas = document.getElementById('minimap');
-const mmCtx    = mmCanvas.getContext('2d');
+const canvas    = document.getElementById('canvas');
+const ctx       = canvas.getContext('2d');
+const mmCanvas  = document.getElementById('minimap');
+const mmCtx     = mmCanvas.getContext('2d');
+const mmlCanvas = document.getElementById('minimap-large');
+const mmlCtx    = mmlCanvas.getContext('2d');
 let W_px, H_px;
 
 function resize() {
   const area = document.getElementById('game-area');
   W_px = canvas.width  = area.clientWidth;
   H_px = canvas.height = area.clientHeight;
-  // 미니맵 크기 동기화
-  mmCanvas.width  = CONFIG.minimap.size;
-  mmCanvas.height = CONFIG.minimap.size;
-  mmCanvas.style.opacity = CONFIG.minimap.opacity;
+  // 미니맵 크기 설정
+  mmCanvas.width  = mmCanvas.height  = CONFIG.minimap.size;
+  mmlCanvas.width = mmlCanvas.height = CONFIG.minimap.sizeExpand;
+  document.getElementById('minimap-overlay-inner').style.width  = CONFIG.minimap.sizeExpand + 'px';
+  document.getElementById('minimap-overlay-inner').style.height = CONFIG.minimap.sizeExpand + 'px';
 }
 window.addEventListener('resize', resize);
 
@@ -263,17 +325,16 @@ function init() {
   player.targetX = player.px;
   player.targetY = player.py;
   player.moving  = false;
-  player.nextDx  = 0;
-  player.nextDy  = 0;
+  player.facing  = 'down';
 
   revealAround(1, 1, CONFIG.player.visionRad);
 
-  // 카메라 즉시 맞춤 (부드러운 전환 없이)
   camX = player.px + CONFIG.map.tileSize/2 - W_px/2;
   camY = player.py + CONFIG.map.tileSize/2 - H_px/2;
 }
 
 // ── LOS 시야 ─────────────────────────────────────────────────────
+// 원칙: 미니맵에 표시되는 정보 = 시야(VISITED)와 완전히 동일
 function revealAround(tx, ty, radius) {
   const { tiles, width, height } = MAP;
   for (let dy=-radius; dy<=radius; dy++) {
@@ -303,29 +364,58 @@ function hasLOS(x0,y0,x1,y1) {
 
 // ── 입력 ─────────────────────────────────────────────────────────
 const KEYS = {};
-window.addEventListener('keydown', e => { KEYS[e.code]=true;  e.preventDefault(); });
-window.addEventListener('keyup',   e => { KEYS[e.code]=false; });
 
+window.addEventListener('keydown', e => {
+  KEYS[e.code] = true;
+  e.preventDefault();
+
+  // M키 — 미니맵 토글
+  if (e.code === 'KeyM') {
+    toggleMinimap();
+    return;
+  }
+
+  // 방향키 — facing 즉시 업데이트 (이동 가능 여부 무관)
+  const dir = codeToDir(e.code);
+  if (dir) {
+    updateFacing(dir.dx, dir.dy);
+    // 이동 가능하면 이동
+    if (!player.moving && moveTimer <= 0) {
+      tryMove(dir.dx, dir.dy);
+    }
+  }
+});
+window.addEventListener('keyup', e => { KEYS[e.code] = false; });
+
+function codeToDir(code) {
+  if (code==='KeyW'||code==='ArrowUp')    return {dx:0,  dy:-1};
+  if (code==='KeyS'||code==='ArrowDown')  return {dx:0,  dy: 1};
+  if (code==='KeyA'||code==='ArrowLeft')  return {dx:-1, dy: 0};
+  if (code==='KeyD'||code==='ArrowRight') return {dx: 1, dy: 0};
+  return null;
+}
+
+// facing 업데이트 — 이동 성공 여부와 무관하게 항상 실행
+function updateFacing(dx, dy) {
+  if      (dy < 0) player.facing = 'up';
+  else if (dy > 0) player.facing = 'down';
+  else if (dx < 0) player.facing = 'left';
+  else if (dx > 0) player.facing = 'right';
+}
+
+// 꾹 누를 때 반복 이동 (4방향 우선순위: 상>하>좌>우)
 function getInputDir() {
-  // 4방향만 허용 — 우선순위: 상 > 하 > 좌 > 우
-  // 대각선 입력 시 세로 방향 우선
   if (KEYS['KeyW']||KEYS['ArrowUp'])    return {dx:0,  dy:-1};
   if (KEYS['KeyS']||KEYS['ArrowDown'])  return {dx:0,  dy: 1};
   if (KEYS['KeyA']||KEYS['ArrowLeft'])  return {dx:-1, dy: 0};
   if (KEYS['KeyD']||KEYS['ArrowRight']) return {dx: 1, dy: 0};
-  return {dx:0, dy:0};
+  return null;
 }
 
 function tryMove(dx, dy) {
-  if (dx===0&&dy===0) return false;
   const nx=player.tx+dx, ny=player.ty+dy;
   if (nx<0||nx>=MAP.width||ny<0||ny>=MAP.height) return false;
   if (MAP.tiles[ny*MAP.width+nx]===T.WALL) return false;
-
-  if (dy<0) player.facing='up';
-  else if (dy>0) player.facing='down';
-  else if (dx<0) player.facing='left';
-  else if (dx>0) player.facing='right';
 
   player.tx=nx; player.ty=ny;
   player.targetX=nx*CONFIG.map.tileSize;
@@ -338,28 +428,25 @@ function tryMove(dx, dy) {
 
 function handleInput(dt) {
   moveTimer = Math.max(0, moveTimer-dt);
-  const {dx,dy} = getInputDir();
+  if (player.moving || moveTimer > 0) return;
 
-  if (player.moving) {
-    // 키 버퍼: 이동 중에도 다음 방향 저장
-    if (dx!==0||dy!==0) { player.nextDx=dx; player.nextDy=dy; }
-    return;
+  const dir = getInputDir();
+  if (dir) {
+    updateFacing(dir.dx, dir.dy); // 꾹 누를 때도 facing 유지
+    tryMove(dir.dx, dir.dy);
   }
+}
 
-  // 이동 딜레이 중
-  if (moveTimer > 0) return;
-
-  // 버퍼된 입력 우선, 없으면 현재 입력
-  const mdx = (dx!==0||dy!==0) ? dx : player.nextDx;
-  const mdy = (dx!==0||dy!==0) ? dy : player.nextDy;
-  if (tryMove(mdx, mdy)) {
-    player.nextDx=0; player.nextDy=0;
-  }
+// ── 미니맵 토글 ──────────────────────────────────────────────────
+function toggleMinimap() {
+  minimapExpanded = !minimapExpanded;
+  const overlay = document.getElementById('minimap-overlay');
+  if (minimapExpanded) overlay.classList.add('show');
+  else                 overlay.classList.remove('show');
 }
 
 // ── 업데이트 ─────────────────────────────────────────────────────
 function update(dt) {
-  // 픽셀 이동 (타일로 슬라이드)
   if (player.moving) {
     const ts   = CONFIG.map.tileSize;
     const spd  = ts / CONFIG.player.moveDelay * dt;
@@ -374,7 +461,6 @@ function update(dt) {
     }
   }
 
-  // 카메라 부드럽게 추적
   const ts = CONFIG.map.tileSize;
   const tcx = player.px+ts/2-W_px/2;
   const tcy = player.py+ts/2-H_px/2;
@@ -382,7 +468,7 @@ function update(dt) {
   camY += (tcy-camY)*CONFIG.camera.smooth;
 }
 
-// ── 렌더링 ───────────────────────────────────────────────────────
+// ── 게임 렌더링 ───────────────────────────────────────────────────
 function render() {
   const ts = CONFIG.map.tileSize;
   ctx.fillStyle='#000';
@@ -403,27 +489,22 @@ function render() {
       const tile = MAP.tiles[ty*MAP.width+tx];
 
       if (!vis) {
-        // 안개
         ctx.fillStyle='#050505';
         ctx.fillRect(sx,sy,ts,ts);
         continue;
       }
 
       if (tile===T.WALL) {
-        // 벽 — 약간의 깊이감
         ctx.fillStyle='#1c1c1c';
         ctx.fillRect(sx,sy,ts,ts);
         ctx.fillStyle='#141414';
         ctx.fillRect(sx+1,sy+1,ts-2,ts-2);
-        // 벽 테두리 강조
         ctx.strokeStyle='#242424';
         ctx.lineWidth=1;
         ctx.strokeRect(sx+0.5,sy+0.5,ts-1,ts-1);
       } else {
-        // 바닥
         ctx.fillStyle='#1e1e1e';
         ctx.fillRect(sx,sy,ts,ts);
-        // 미세 그리드
         ctx.strokeStyle='#252525';
         ctx.lineWidth=0.5;
         ctx.strokeRect(sx,sy,ts,ts);
@@ -431,12 +512,8 @@ function render() {
     }
   }
 
-  // 플레이어
   renderPlayer(ts);
-
   ctx.restore();
-
-  // 비네팅
   renderVignette();
 }
 
@@ -445,70 +522,85 @@ function renderPlayer(ts) {
   const cy = player.py + ts/2;
   const r  = ts * 0.34;
 
-  // 발광 후광
+  // 후광
   ctx.save();
   ctx.globalAlpha=0.1;
-  ctx.beginPath();
-  ctx.arc(cx,cy,r*1.6,0,Math.PI*2);
-  ctx.fillStyle='#00ff88';
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(cx,cy,r*1.6,0,Math.PI*2);
+  ctx.fillStyle='#00ff88'; ctx.fill();
   ctx.restore();
 
   // 몸통
-  ctx.beginPath();
-  ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
   ctx.fillStyle='#00ff88';
-  ctx.shadowBlur=10;
-  ctx.shadowColor='#00ff88';
-  ctx.fill();
-  ctx.shadowBlur=0;
+  ctx.shadowBlur=10; ctx.shadowColor='#00ff88';
+  ctx.fill(); ctx.shadowBlur=0;
 
   // 방향 도트
   const a = {up:-Math.PI/2, down:Math.PI/2, left:Math.PI, right:0}[player.facing]??Math.PI/2;
   ctx.beginPath();
   ctx.arc(cx+Math.cos(a)*r*0.52, cy+Math.sin(a)*r*0.52, r*0.22, 0, Math.PI*2);
-  ctx.fillStyle='#003322';
-  ctx.fill();
+  ctx.fillStyle='#003322'; ctx.fill();
 }
 
 function renderVignette() {
   const g=ctx.createRadialGradient(W_px/2,H_px/2,H_px*0.18,W_px/2,H_px/2,H_px*0.78);
   g.addColorStop(0,'rgba(0,0,0,0)');
   g.addColorStop(1,'rgba(0,0,0,0.72)');
-  ctx.fillStyle=g;
-  ctx.fillRect(0,0,W_px,H_px);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W_px,H_px);
 }
 
 // ── 미니맵 렌더링 ─────────────────────────────────────────────────
-function renderMinimap() {
-  const { tiles, width, height, floorCount } = MAP;
-  const mSz = CONFIG.minimap.size;
-  const s   = mSz / Math.max(width, height);
+// 원칙: 미니맵 표시 = VISITED(시야)와 완전히 동일
+// 나중에 소나 탐지 정보, 레이더 정보도 VISITED 기반으로 연동
+function renderMinimap(targetCtx, targetSize) {
+  const { tiles, width, height } = MAP;
+  const s = targetSize / Math.max(width, height);
 
-  mmCtx.fillStyle='#000';
-  mmCtx.fillRect(0,0,mSz,mSz);
+  targetCtx.fillStyle='#000';
+  targetCtx.fillRect(0,0,targetSize,targetSize);
 
   for (let ty=0;ty<height;ty++) {
     for (let tx=0;tx<width;tx++) {
-      const vis  = VISITED[ty*width+tx];
+      if (!VISITED[ty*width+tx]) continue; // 방문 안 한 곳 = 미표시
+
       const tile = tiles[ty*width+tx];
-
-      if (!vis) continue; // 방문 안 한 곳은 표시 안 함
-
-      mmCtx.fillStyle = tile===T.WALL ? '#1a1a1a' : '#2e2e2e';
-      mmCtx.fillRect(tx*s, ty*s, s+0.5, s+0.5);
+      targetCtx.fillStyle = tile===T.WALL ? '#1a1a1a' : '#303030';
+      targetCtx.fillRect(tx*s, ty*s, s+0.5, s+0.5);
     }
   }
 
-  // 플레이어 위치
-  mmCtx.fillStyle='#00ff88';
-  mmCtx.fillRect(
-    player.tx*s - 1, player.ty*s - 1,
-    Math.max(s, 3), Math.max(s, 3)
+  // 플레이어 위치 (항상 표시)
+  const ps = Math.max(s, 3);
+  targetCtx.fillStyle='#00ff88';
+  targetCtx.fillRect(
+    player.tx*s - ps/2 + s/2,
+    player.ty*s - ps/2 + s/2,
+    ps, ps
   );
+
+  // 확대 미니맵 전용 — 추가 정보 표시 영역
+  // (Step 2 이후: 소나 탐지 지뢰, 발견한 아이템, 출구 등)
+  if (targetSize === CONFIG.minimap.sizeExpand) {
+    _renderMinimapExtras(targetCtx, s);
+  }
 }
 
-// ── HUD 업데이트 ─────────────────────────────────────────────────
+// 확대 미니맵 추가 정보 (Step 2 이후 채워질 예정)
+function _renderMinimapExtras(targetCtx, s) {
+  // TODO Step 2: 발견한 아이템 → 노란 점
+  // TODO Step 2: 소나 탐지 지뢰 → 붉은 점 (서서히 흐려짐)
+  // TODO Step 2: 출구 위치 → 파란 점
+  // TODO Step 4: 레이더 탐지 좀비 → 주황 점 (3초 후 소멸)
+
+  // 범례 표시 (확대 맵 우하단)
+  const sz = CONFIG.minimap.sizeExpand;
+  targetCtx.font = '8px monospace';
+  targetCtx.fillStyle = '#333';
+  targetCtx.textAlign = 'right';
+  targetCtx.fillText('● 플레이어', sz-4, sz-4);
+}
+
+// ── HUD ──────────────────────────────────────────────────────────
 let visitedCount = 0;
 
 function updateHUD() {
@@ -519,6 +611,8 @@ function updateHUD() {
     `${player.tx}, ${player.ty}`;
   document.getElementById('hud-explored').textContent =
     `${Math.floor(visitedCount/MAP.floorCount*100)}%`;
+  document.getElementById('hud-facing').textContent =
+    player.facing.toUpperCase();
 }
 
 // ── DEV 정보 ─────────────────────────────────────────────────────
@@ -527,8 +621,10 @@ function updateDevInfo() {
   const t = MAP.tiles[player.ty*MAP.width+player.tx];
   document.getElementById('di-fps').textContent     = fps;
   document.getElementById('di-tile').textContent    = t===T.WALL?'WALL':'FLOOR';
+  document.getElementById('di-facing').textContent  = player.facing.toUpperCase();
+  document.getElementById('di-dead').textContent    =
+    `${MAP.deadEndCount} (${Math.floor(MAP.deadEndRatio*100)}%)`;
   document.getElementById('di-mapsize').textContent = `${MAP.width}×${MAP.height}`;
-  document.getElementById('di-floors').textContent  = MAP.floorCount;
   document.getElementById('di-time').textContent    = Math.floor((Date.now()-startTime)/1000)+'s';
 }
 
@@ -539,17 +635,12 @@ document.getElementById('dev-toggle').addEventListener('click', () => {
   resize();
 });
 
-// 슬라이더 → CONFIG 연동
 const sliders = [
-  ['d-size',   ()=>{ CONFIG.map.size      = parseInt(document.getElementById('d-size').value); }],
-  ['d-loops',  ()=>{ CONFIG.map.loopPaths = parseInt(document.getElementById('d-loops').value); }],
-  ['d-delay',  ()=>{ CONFIG.player.moveDelay  = parseFloat(document.getElementById('d-delay').value); }],
-  ['d-vision', ()=>{ CONFIG.player.visionRad  = parseInt(document.getElementById('d-vision').value); }],
-  ['d-cam',    ()=>{ CONFIG.camera.smooth     = parseFloat(document.getElementById('d-cam').value); }],
-  ['d-mmsize', ()=>{
-    CONFIG.minimap.size = parseInt(document.getElementById('d-mmsize').value);
-    mmCanvas.width = mmCanvas.height = CONFIG.minimap.size;
-  }],
+  ['d-size',   () => { CONFIG.map.size       = parseInt(document.getElementById('d-size').value); }],
+  ['d-loops',  () => { CONFIG.map.loopPaths  = parseInt(document.getElementById('d-loops').value); }],
+  ['d-delay',  () => { CONFIG.player.moveDelay  = parseFloat(document.getElementById('d-delay').value); }],
+  ['d-vision', () => { CONFIG.player.visionRad  = parseInt(document.getElementById('d-vision').value); }],
+  ['d-cam',    () => { CONFIG.camera.smooth      = parseFloat(document.getElementById('d-cam').value); }],
 ];
 sliders.forEach(([id, fn]) => {
   const el  = document.getElementById(id);
@@ -575,7 +666,11 @@ function loop(ts) {
   handleInput(dt);
   update(dt);
   render();
-  renderMinimap();
+
+  // 미니맵 렌더링 (기본 + 확대)
+  renderMinimap(mmCtx,  CONFIG.minimap.size);
+  if (minimapExpanded) renderMinimap(mmlCtx, CONFIG.minimap.sizeExpand);
+
   updateHUD();
   updateDevInfo();
 
