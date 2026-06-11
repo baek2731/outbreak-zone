@@ -1010,11 +1010,79 @@ function zombieMove(z, c, zcx, zcy, distToPlayer) {
   }
 }
 
+// BFS 길찾기 — 좀비 현재 타일에서 목표 타일까지 최단경로 첫 칸 방향 반환
+// 반환: [nextTileX, nextTileY] 또는 null(경로 없음)
+function zombieNextStepDir(fromTx, fromTy, goalTx, goalTy) {
+  const { tiles, width, height } = MAP;
+
+  // 시작/목표 타일이 WALL이면 인접 FLOOR로 보정
+  function nearestFloor(tx, ty) {
+    if (tiles[ty * width + tx] !== T.WALL) return [tx, ty];
+    for (const [dx, dy] of DIR4) {
+      const nx = tx + dx, ny = ty + dy;
+      if (nx >= 0 && ny >= 0 && nx < width && ny < height
+          && tiles[ny * width + nx] !== T.WALL) return [nx, ny];
+    }
+    return [tx, ty]; // 보정 실패 시 원값 유지
+  }
+
+  [fromTx, fromTy] = nearestFloor(fromTx, fromTy);
+  [goalTx, goalTy] = nearestFloor(goalTx, goalTy);
+
+  if (fromTx === goalTx && fromTy === goalTy) return null; // 이미 도착
+
+  // BFS
+  const visited = new Uint8Array(width * height);
+  const parent  = new Int16Array(width * height).fill(-1); // 부모 인덱스
+  const queue   = [fromTy * width + fromTx];
+  visited[fromTy * width + fromTx] = 1;
+  const goalIdx = goalTy * width + goalTx;
+  let found = false;
+
+  outer: while (queue.length) {
+    const cur = queue.shift();
+    const cx  = cur % width, cy = Math.floor(cur / width);
+    for (const [dx, dy] of DIR4) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const ni = ny * width + nx;
+      if (visited[ni] || tiles[ni] === T.WALL) continue;
+      visited[ni] = 1;
+      parent[ni]  = cur;
+      if (ni === goalIdx) { found = true; break outer; }
+      queue.push(ni);
+    }
+  }
+
+  if (!found) return null;
+
+  // 역추적 — 출발 직후 첫 칸 찾기
+  let cur = goalIdx;
+  const start = fromTy * width + fromTx;
+  while (parent[cur] !== start) {
+    cur = parent[cur];
+    if (cur === -1) return null;
+  }
+  return [cur % width, Math.floor(cur / width)]; // [nextTx, nextTy]
+}
+
 function zombieChase(z, c, zcx, zcy) {
   // 추적 목표 = lastSeen (시야/근접이면 플레이어 실위치, 소음이면 발원지)
-  const tx = z.lastSeenX !== null ? z.lastSeenX : c.pcx;
-  const ty = z.lastSeenY !== null ? z.lastSeenY : c.pcy;
-  const ang = Math.atan2(ty - zcy, tx - zcx);
+  const tWx = z.lastSeenX !== null ? z.lastSeenX : c.pcx;
+  const tWy = z.lastSeenY !== null ? z.lastSeenY : c.pcy;
+  const goalTx = Math.round(tWx / c.ts), goalTy = Math.round(tWy / c.ts);
+
+  const next = zombieNextStepDir(z.tx, z.ty, goalTx, goalTy);
+  if (next) {
+    // BFS 다음 타일 중심을 향해 이동
+    const nx = next[0] * c.ts + c.ts / 2;
+    const ny = next[1] * c.ts + c.ts / 2;
+    const ang = Math.atan2(ny - zcy, nx - zcx);
+    z.facingAngle = ang;
+    return [Math.cos(ang) * c.spd, Math.sin(ang) * c.spd];
+  }
+  // 경로 없음(같은 타일) → 직선 폴백
+  const ang = Math.atan2(tWy - zcy, tWx - zcx);
   z.facingAngle = ang;
   return [Math.cos(ang) * c.spd, Math.sin(ang) * c.spd];
 }
@@ -1028,15 +1096,25 @@ function zombieSearch(z, c, zcx, zcy) {
   const sdx = z.lastSeenX - zcx, sdy = z.lastSeenY - zcy;
   const sd  = Math.hypot(sdx, sdy);
   if (sd > c.ts * 0.5) {
-    // 마지막 목격 위치로 이동
+    // BFS 다음 타일 중심을 향해 이동
+    const goalTx = Math.round(z.lastSeenX / c.ts), goalTy = Math.round(z.lastSeenY / c.ts);
+    const next = zombieNextStepDir(z.tx, z.ty, goalTx, goalTy);
+    if (next) {
+      const nx = next[0] * c.ts + c.ts / 2;
+      const ny = next[1] * c.ts + c.ts / 2;
+      const ang = Math.atan2(ny - zcy, nx - zcx);
+      z.facingAngle = ang;
+      return [Math.cos(ang) * c.spd * 0.7, Math.sin(ang) * c.spd * 0.7];
+    }
+    // 경로 없음 → 직선 폴백
     const ang = Math.atan2(sdy, sdx);
     z.facingAngle = ang;
     return [Math.cos(ang) * c.spd * 0.7, Math.sin(ang) * c.spd * 0.7];
   } else {
-    // 도달 → 제자리 두리번 (facingAngle 회전)
+    // 도달 → 제자리 두리번
     z.facingAngle += c.dt * 1.8;
     z.lastSeenX = null;
-    if (z.searchTimer > 2.0) z.searchTimer = 2.0;  // 도착 후 두리번 시간으로 단축
+    if (z.searchTimer > 2.0) z.searchTimer = 2.0;
     return [0, 0];
   }
 }
