@@ -12,7 +12,7 @@ const CONFIG = {
   },
 
   mine: {
-    density: 15,   // A3 지뢰 밀도 (%)
+    density: 8,   // A3 지뢰 밀도 (%)
   },
 
   player: {
@@ -44,13 +44,13 @@ const CONFIG = {
 
   // 예약 — Step 4
   zombie: {
-    count:      3,     // 스폰 수
-    speed:      0.30,  // 플레이어 대비 속도 비율 (절반으로 낮춤)
-    spawnDist:  6,     // 스폰 최소 거리 (스폰 지점에서)
-    damageCool: 1.5,   // 접촉 피해 쿨타임 (초)
-    fovAngle:   90,    // 시야각 (도) — 절반으로 줄임
-    fovRange:   2,     // 시야 거리 (타일) — 절반으로 줄임
-    hearRange:  4,     // 소음 인식 예약
+    count:      2,     // 스폰 수
+    speed:      0.30,
+    spawnDist:  6,
+    damageCool: 1.5,
+    fovAngle:   90,
+    fovRange:   2,
+    hearRange:  4,
   },
 
 };

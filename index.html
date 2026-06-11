@@ -148,7 +148,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       <div class="dev-row"><label>최대 HP</label><input type="range" id="d-hp" min="1" max="5" step="1" value="3"><span class="dev-val" id="d-hp-v">3</span></div>
 
       <div class="dev-section">MINE</div>
-      <div class="dev-row"><label>지뢰 밀도 %</label><input type="range" id="d-mine" min="5" max="35" step="5" value="15"><span class="dev-val" id="d-mine-v">15</span></div>
+      <div class="dev-row"><label>지뢰 밀도 %</label><input type="range" id="d-mine" min="5" max="35" step="5" value="8"><span class="dev-val" id="d-mine-v">8</span></div>
 
       <div class="dev-section">SONAR</div>
       <div class="dev-row"><label>최대 차징 C2</label><input type="range" id="d-maxcharge" min="0.5" max="3.0" step="0.1" value="1.5"><span class="dev-val" id="d-maxcharge-v">1.5</span></div>
@@ -160,7 +160,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       <div class="dev-row"><label>필요 아이템 수</label><input type="range" id="d-items" min="1" max="6" step="1" value="3"><span class="dev-val" id="d-items-v">3</span></div>
 
       <div class="dev-section">ZOMBIE</div>
-      <div class="dev-row"><label>좀비 수</label><input type="range" id="d-zcount" min="0" max="8" step="1" value="3"><span class="dev-val" id="d-zcount-v">3</span></div>
+      <div class="dev-row"><label>좀비 수</label><input type="range" id="d-zcount" min="0" max="8" step="1" value="2"><span class="dev-val" id="d-zcount-v">2</span></div>
       <div class="dev-row"><label>좀비 속도</label><input type="range" id="d-zspeed" min="0.1" max="1.5" step="0.05" value="0.30"><span class="dev-val" id="d-zspeed-v">0.30</span></div>
 
       <button class="dev-btn" id="d-regen">🔄 맵 재생성</button>
@@ -735,7 +735,7 @@ function onStep(tx, ty) {
     player.hp--;
     if (devInvincible) player.hp = Math.max(1, player.hp);
     stats.minesHit++;
-    player.noiseRadius = 8; // 지뢰 폭발 — 큰 소음
+    player.noiseRadius = 5;
     triggerFlash('red');
     if (!devInvincible && player.hp <= 0) showGameOver();
     return;
@@ -807,7 +807,7 @@ function fireSonar(isPrecise) {
   else           { sonar.charging = false; sonar.chargeTime = 0; }
 
   // 소나 발동 소음 — 반경만큼 좀비 인식 유발
-  player.noiseRadius = radius * 1.5;
+  player.noiseRadius = radius * 0.8;
 
   sonar.pulseWx  = player.px + ts / 2;
   sonar.pulseWy  = player.py + ts / 2;
@@ -949,7 +949,7 @@ function updateZombies(dt) {
     // 2) 소음
     const inNoise = noiseTiles > 0 && distTiles <= noiseTiles;
     // 3) 근접 감지: 1타일 이내 무조건 인식
-    const inProximity = distTiles <= 1.2;
+    const inProximity = distTiles <= 0.6;
 
     // ── 상태 전환 ──
     if (inSight || inNoise || inProximity) {
@@ -959,7 +959,7 @@ function updateZombies(dt) {
     } else if (z.state === 'CHASE') {
       // CHASE → SEARCH: 마지막 목격 위치로 이동 후 두리번
       z.state = 'SEARCH';
-      z.searchTimer = 3.5; // 3.5초 탐색 후 포기
+      z.searchTimer = 2.0;
       z.wanderTimer = 0;
     } else if (z.state === 'SEARCH') {
       z.searchTimer -= dt;
