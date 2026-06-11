@@ -42,15 +42,15 @@ const CONFIG = {
     opacity: 0.80,
   },
 
-  // 예약 — Step 4
+  // 좀비 (Step 3 적용 중)
   zombie: {
     count:      2,     // 스폰 수
-    speed:      0.30,
-    spawnDist:  6,
-    damageCool: 1.5,
-    fovAngle:   90,
-    fovRange:   2,
-    hearRange:  4,
+    speed:      0.30,  // 플레이어 대비 속도 비율
+    spawnDist:  6,     // 스폰 최소 거리 (스폰 지점에서, 타일)
+    damageCool: 1.5,   // 접촉 피해 쿨타임 (초)
+    fovAngle:   90,    // 시야각 (도)
+    fovRange:   2,     // 시야 거리 (타일)
+    hearRange:  4,     // 청각 범위 (예약 — Step 4 소나 패널티)
   },
 
 };
