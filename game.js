@@ -300,6 +300,7 @@ function drawMinigame(ts) {
 function drawMinePrompt(ts) {
   const tileIdx = player.ty * MAP.width + player.tx;
   if (MAP.tiles[tileIdx] !== T.MINE) return;
+  if (!MAP.detected[tileIdx]) return; // 미탐지 병원체는 프롬프트 없음
   if (minigame.active) return;
 
   const wx = player.px + ts / 2;
@@ -443,7 +444,8 @@ function _buildMap(W, H, force = false) {
     numbers[idx(x, y)] = cnt;
   }
 
-  return { tiles, numbers, width:W, height:H, floorCount, mineCount, deadEndCount, deadEndRatio };
+  const detected = new Uint8Array(W * H); // 소나 탐지 여부 (0=미탐지, 1=탐지됨)
+  return { tiles, numbers, detected, width:W, height:H, floorCount, mineCount, deadEndCount, deadEndRatio };
 }
 
 function shuffle(arr) {
@@ -652,10 +654,12 @@ window.addEventListener('keydown', e => {
   }
 
   if (e.code === 'KeyE') {
-    // 병원체 위에 서 있을 때 회수 시도
+    // 탐지된 병원체 위에 서 있을 때만 회수 시도
     if (!e.repeat && !player.dead && !minigame.active) {
       const tileIdx = player.ty * MAP.width + player.tx;
-      if (MAP.tiles[tileIdx] === T.MINE) startMinigame('mine', tileIdx);
+      if (MAP.tiles[tileIdx] === T.MINE && MAP.detected[tileIdx]) {
+        startMinigame('mine', tileIdx);
+      }
     }
     return;
   }
@@ -728,8 +732,18 @@ function onStep(tx, ty) {
   const tile    = MAP.tiles[tileIdx];
 
   if (tile === T.MINE) {
-    // 병원체 위에 섬 — 타일 유지, E키로 선택적 회수
-    devLog('병원체 위에 섬 — [E] 회수 시도', '');
+    const tileIdx2 = ty * MAP.width + tx;
+    if (MAP.detected[tileIdx2]) {
+      // 탐지된 병원체 — E키 프롬프트 (타일 유지)
+      devLog('병원체 위에 섬 — [E] 회수 시도', '');
+    } else {
+      // 미탐지 병원체 밟기 — 놀람 패널티 (감염 소폭 증가)
+      const penalty = 8;
+      player.infection = Math.min(100, player.infection + penalty);
+      triggerFlash('red');
+      devLog(`미탐지 병원체 밟음 — 감염 +${penalty}% (소나로 먼저 탐지하세요)`, 'danger');
+      if (player.infection >= 100 && !player.dead) showGameOver('infected');
+    }
     return;
   }
 
@@ -905,9 +919,10 @@ function updateMinigame(dt) {
   }
 }
 
-// 주변 numbers 재계산 (병원체 제거 후)
+// 주변 numbers 재계산 + detected 초기화 (병원체 제거 후)
 function recalcNumbers(tx, ty) {
-  const { tiles, numbers, width, height } = MAP;
+  const { tiles, numbers, detected, width, height } = MAP;
+  detected[ty * width + tx] = 0; // 제거된 타일 탐지 초기화
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
     const nx = tx + dx, ny = ty + dy;
     if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
@@ -970,8 +985,10 @@ function fireSonar(isPrecise) {
       const tile = tiles[ny * width + nx];
       if (tile === T.WALL) continue;
       const dist = Math.hypot(dx, dy) * ts;
-      // 병원체 인접 타일은 위험도 핑 (기존 동일)
-      if (tile !== T.MINE) {
+      // 병원체 인접 타일 핑 + 탐지 플래그
+      if (tile === T.MINE) {
+        MAP.detected[ny * width + nx] = 1; // 탐지됨
+      } else {
         const danger = numbers[ny * width + nx];
         if (danger > 0)
           newPings.push({ tx:nx, ty:ny, dist, danger, lit:false, alpha:0, timer:cfg.pingDuration });
@@ -1003,8 +1020,10 @@ function fireSonar(isPrecise) {
       const tile = tiles[ny * width + nx];
       if (tile === T.WALL) continue;
       const dist = Math.hypot(dx, dy) * ts;
-      if (tile === T.MINE)
+      if (tile === T.MINE) {
+        MAP.detected[ny * width + nx] = 1; // 정밀 탐지
         newMarks.push({ tx:nx, ty:ny, dist, kind:'mine', lit:false, alpha:0, timer:cfg.pingDuration * 1.5 });
+      }
     }
     // 정밀 소나: 좀비 위치 눈 표시
     for (const z of zombies) {
@@ -1498,11 +1517,13 @@ function render() {
       ctx.fillStyle = vis2 ? '#1e1e1e' : '#0f0f0f'; ctx.fillRect(sx, sy, ts, ts);
       if (vis2) { ctx.strokeStyle = '#252525'; ctx.lineWidth = 0.5; ctx.strokeRect(sx, sy, ts, ts); }
 
-      // DEV 지뢰 표시
+      // DEV 지뢰 표시 (탐지됨=초록테두리 / 미탐지=빨강)
       if (tile === T.MINE && vis2 && devRevealMines) {
+        const det = MAP.detected[ty * MAP.width + tx];
         ctx.save(); ctx.globalAlpha = 0.4;
-        ctx.fillStyle = 'rgba(255,50,50,0.15)'; ctx.fillRect(sx, sy, ts, ts);
-        ctx.strokeStyle = '#ff3333'; ctx.lineWidth = 1.5;
+        ctx.fillStyle = det ? 'rgba(0,255,136,0.1)' : 'rgba(255,50,50,0.15)';
+        ctx.fillRect(sx, sy, ts, ts);
+        ctx.strokeStyle = det ? '#00ff88' : '#ff3333'; ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(sx+8, sy+8); ctx.lineTo(sx+ts-8, sy+ts-8);
         ctx.moveTo(sx+ts-8, sy+8); ctx.lineTo(sx+8, sy+ts-8);
