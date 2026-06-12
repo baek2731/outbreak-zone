@@ -403,7 +403,7 @@ function devLog(msg, cls = '') {
 }
 
 function _renderDevLog() {
-  const el = document.getElementById('dev-log');
+  const el = document.getElementById('log-body');
   if (!el) return;
   el.innerHTML = devLogEntries.map(e =>
     `<div class="log-entry ${e.cls}">[${e.time}s] ${e.msg}</div>`
@@ -1469,6 +1469,9 @@ document.getElementById('d-zombiefov').addEventListener('click', () => {
 });
 document.getElementById('go-btn').addEventListener('click', () => init());
 document.getElementById('esc-btn').addEventListener('click', () => init());
+document.getElementById('log-clear').addEventListener('click', () => {
+  devLogEntries.length = 0; _renderDevLog();
+});
 
 // ── 메인 루프 ────────────────────────────────────────────────────
 let lastTs = 0, fps = 0, frameCount = 0, fpsTimer = 0;
