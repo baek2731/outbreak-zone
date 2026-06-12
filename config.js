@@ -21,13 +21,13 @@ const CONFIG = {
   },
 
   oxygen: {
-    max:              100,         // 산소 최대치
-    drainPerStage:    [4, 7, 11], // 스테이지별 자연 감소 속도 (%/초)
-    drainOnHit:        15,         // 좀비 피격 시 산소 감소량
-    infectThreshold:   60,         // 산소 이 % 이하부터 감염 시작
-    infectRate:         2.5,       // 감염 증가 속도 (%/초) — 위험구간
-    infectRateEmpty:    6.0,       // 감염 증가 속도 (%/초) — 산소 0일 때
-    capsuleHeal:       33,         // 산소 캡슐 1개당 회복량 (%)
+    max:              100,           // 산소 최대치
+    drainPerStage:    [2, 3.5, 5.5], // 스테이지별 자연 감소 속도 (%/초)
+    drainOnHit:        7.5,          // 좀비 피격 시 산소 감소량
+    infectThreshold:   60,           // 산소 이 % 이하부터 감염 시작
+    infectRate:         1.25,        // 감염 증가 속도 (%/초) — 위험구간
+    infectRateEmpty:    3.0,         // 감염 증가 속도 (%/초) — 산소 0일 때
+    capsuleHeal:       33,           // 산소 캡슐 1개당 회복량 (%)
   },
 
   sonar: {

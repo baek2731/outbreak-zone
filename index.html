@@ -87,6 +87,15 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 .dev-btn:hover { border-color:#00ff88; color:#00ff88; }
 .dev-info { font-size:0.63rem; color:#444; line-height:2.0; margin-top:10px; border-top:1px solid #1a1a1a; padding-top:8px; }
 .dev-info span { color:#00ff88; }
+#dev-log {
+  font-size:0.58rem; color:#555; line-height:1.8;
+  max-height:120px; overflow-y:auto;
+  border-top:1px solid #1a1a1a; padding-top:6px; margin-top:4px;
+}
+#dev-log .log-entry { color:#888; }
+#dev-log .log-entry.warn  { color:#ff8800; }
+#dev-log .log-entry.danger{ color:#ff3333; }
+#dev-log .log-entry.good  { color:#00ff88; }
 
 /* ── 산소/감염 게이지 ── */
 .hud-gauge-wrap { min-width:80px; }
@@ -219,6 +228,9 @@ canvas#minimap { display:block; image-rendering:pixelated; }
         감염: <span id="di-infect">0%</span><br>
         경과: <span id="di-time">0s</span>
       </div>
+
+      <div class="dev-section">EVENT LOG</div>
+      <div id="dev-log"></div>
     </div>
   </div>
 </div>

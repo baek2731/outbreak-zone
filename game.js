@@ -389,6 +389,26 @@ let devInvincible  = false;
 let devRevealAll   = false;
 let devNoiseMarker = null;   // DEV 소음 발원지 마커 {wx, wy, timer}
 let devZombieFov   = false;
+
+// ── DEV 이벤트 로그 ──────────────────────────────────────────────
+const DEV_LOG_MAX = 30;
+const devLogEntries = [];   // { time, msg, cls }
+
+function devLog(msg, cls = '') {
+  if (!document.getElementById('dev-panel').classList.contains('open')) return;
+  const elapsed = ((Date.now() - stats.startTime) / 1000).toFixed(1);
+  devLogEntries.unshift({ time: elapsed, msg, cls });
+  if (devLogEntries.length > DEV_LOG_MAX) devLogEntries.pop();
+  _renderDevLog();
+}
+
+function _renderDevLog() {
+  const el = document.getElementById('dev-log');
+  if (!el) return;
+  el.innerHTML = devLogEntries.map(e =>
+    `<div class="log-entry ${e.cls}">[${e.time}s] ${e.msg}</div>`
+  ).join('');
+}
 let zombies = [];
 const stats = { minesHit: 0, startTime: 0 };
 
@@ -437,6 +457,8 @@ function init() {
 
   stats.minesHit = 0; stats.startTime = Date.now();
   moveTimer = 0;
+  _prevOxyZone = 'safe'; _prevInfZone = 'low';
+  devLogEntries.length = 0; _renderDevLog();
   revealAround(1, 1, CONFIG.player.visionRad);
   camX = player.px + CONFIG.map.tileSize / 2 - W_px / 2;
   camY = player.py + CONFIG.map.tileSize / 2 - H_px / 2;
@@ -568,7 +590,9 @@ function onStep(tx, ty) {
     }
     stats.minesHit++;
     if (!devInvincible) {
-      applyOxygenDamage(CONFIG.oxygen.drainOnHit * 0.5); // 병원체 밟기: 산소 소폭 감소
+      const dmg = CONFIG.oxygen.drainOnHit * 0.5;
+      applyOxygenDamage(dmg);
+      devLog(`병원체 밟음 — 산소 -${dmg.toFixed(1)}% (현재 ${player.oxygen.toFixed(1)}%)`, 'warn');
     }
     triggerNoise(player.px + CONFIG.map.tileSize / 2,
                  player.py + CONFIG.map.tileSize / 2, CONFIG.zombie.hearRange);
@@ -580,7 +604,9 @@ function onStep(tx, ty) {
     MAP.tiles[tileIdx] = T.FLOOR;
     player.itemsFound++;
     // 산소 캡슐: 산소 33% 보충
+    const prevOxy = player.oxygen;
     player.oxygen = Math.min(CONFIG.oxygen.max, player.oxygen + CONFIG.oxygen.capsuleHeal);
+    devLog(`캡슐 수집 — 산소 +${(player.oxygen - prevOxy).toFixed(1)}% (${prevOxy.toFixed(1)}% → ${player.oxygen.toFixed(1)}%)`, 'good');
     triggerFlash('item');
     triggerFlash('oxygen');
     return;
@@ -1097,6 +1123,7 @@ function zombieContact(z, c, zcx, zcy) {
     triggerFlash('red');
     if (!devInvincible) {
       applyOxygenDamage(CONFIG.oxygen.drainOnHit);
+      devLog(`좀비 피격 — 산소 -${CONFIG.oxygen.drainOnHit.toFixed(1)}% (현재 ${player.oxygen.toFixed(1)}%)`, 'warn');
     }
   }
 }
@@ -1126,6 +1153,9 @@ function update(dt) {
 }
 
 // ── 산소 / 감염 업데이트 ─────────────────────────────────────────
+let _prevOxyZone = 'safe';   // 'safe' | 'warn' | 'empty' — 로그 중복 방지
+let _prevInfZone = 'low';    // 'low' | 'mid' | 'high'
+
 function updateOxygenInfection(dt) {
   if (player.dead) return;
   const cfg = CONFIG.oxygen;
@@ -1134,6 +1164,15 @@ function updateOxygenInfection(dt) {
   if (!devInvincible) {
     const drainRate = cfg.drainPerStage[Math.min(player.stage, cfg.drainPerStage.length - 1)];
     player.oxygen = Math.max(0, player.oxygen - drainRate * dt);
+  }
+
+  // 산소 구간 진입 로그
+  const oxyZone = player.oxygen <= 0 ? 'empty' : player.oxygen < cfg.infectThreshold ? 'warn' : 'safe';
+  if (oxyZone !== _prevOxyZone) {
+    if (oxyZone === 'warn')  devLog(`⚠ 산소 위험구간 진입 (${player.oxygen.toFixed(1)}%) — 감염 시작`, 'warn');
+    if (oxyZone === 'empty') devLog(`🔴 산소 고갈 — 감염 가속 시작`, 'danger');
+    if (oxyZone === 'safe')  devLog(`산소 안전구간 복귀 (${player.oxygen.toFixed(1)}%)`, 'good');
+    _prevOxyZone = oxyZone;
   }
 
   // 감염 증가 — 산소 60% 이하부터 시작
@@ -1145,8 +1184,18 @@ function updateOxygenInfection(dt) {
     }
   }
 
+  // 감염 구간 진입 로그
+  const infZone = player.infection >= 75 ? 'high' : player.infection >= 40 ? 'mid' : 'low';
+  if (infZone !== _prevInfZone) {
+    if (infZone === 'mid')  devLog(`⚠ 감염 40% 돌파 (${player.infection.toFixed(1)}%)`, 'warn');
+    if (infZone === 'high') devLog(`🔴 감염 75% 위험 (${player.infection.toFixed(1)}%)`, 'danger');
+    if (infZone === 'low')  devLog(`감염 감소 — 저위험 복귀`, 'good');
+    _prevInfZone = infZone;
+  }
+
   // 좀비화 판정
   if (player.infection >= 100 && !player.dead) {
+    devLog('💀 감염 100% — 좀비화', 'danger');
     showGameOver('infected');
   }
 }
