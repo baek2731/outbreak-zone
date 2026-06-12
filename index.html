@@ -239,10 +239,10 @@ function drawZombie(z, ts) {
     ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, fovR, z.facingAngle - fovHalf, z.facingAngle + fovHalf);
     ctx.closePath();
-    ctx.fillStyle = z.state === 'CHASE' ? '#ff3333' : '#888888';
+    ctx.fillStyle = z.state === 'CHASE' ? '#ff3333' : z.state === 'SEARCH' ? '#ff8800' : '#888888';
     ctx.fill();
     ctx.globalAlpha = 0.5;
-    ctx.strokeStyle = z.state === 'CHASE' ? '#ff6666' : '#444444';
+    ctx.strokeStyle = z.state === 'CHASE' ? '#ff6666' : z.state === 'SEARCH' ? '#ffaa44' : '#444444';
     ctx.lineWidth = 1; ctx.stroke();
     ctx.restore();
   }
@@ -552,6 +552,7 @@ let camX = 0, camY = 0, moveTimer = 0;
 let devRevealMines = false;
 let devInvincible  = false;
 let devRevealAll   = false;
+let devNoiseMarker = null;   // DEV 소음 발원지 마커 {wx, wy, timer}
 let devZombieFov   = false;
 let zombies = [];
 const stats = { minesHit: 0, startTime: 0 };
@@ -733,7 +734,7 @@ function onStep(tx, ty) {
     if (devInvincible) player.hp = Math.max(1, player.hp);
     stats.minesHit++;
     triggerNoise(player.px + CONFIG.map.tileSize / 2,
-                 player.py + CONFIG.map.tileSize / 2, 5);
+                 player.py + CONFIG.map.tileSize / 2, CONFIG.zombie.hearRange);
     triggerFlash('red');
     if (!devInvincible && player.hp <= 0) showGameOver();
     return;
@@ -807,7 +808,7 @@ function fireSonar(isPrecise) {
   // 소나 발동 소음 — 발원지 즉시 처리
   const noiseWx = player.px + ts / 2, noiseWy = player.py + ts / 2;
   player.noiseX = noiseWx; player.noiseY = noiseWy;  // lastSeen 좌표용 보존
-  triggerNoise(noiseWx, noiseWy, radius * 0.8);
+  triggerNoise(noiseWx, noiseWy, CONFIG.zombie.hearRange);
 
   sonar.pulseWx  = player.px + ts / 2;
   sonar.pulseWy  = player.py + ts / 2;
@@ -981,6 +982,7 @@ function zombieSeparate(z, c) {
 // 발생 시점에 호출. 범위 내 좀비에게 "목표 좌표"를 심어줌.
 // 상태는 직접 바꾸지 않고, target만 세팅 → 다음 zombieSense가 처리.
 function triggerNoise(sourceX, sourceY, radiusTiles) {
+  devNoiseMarker = { wx: sourceX, wy: sourceY, timer: 3.0 }; // DEV 마커 3초 표시
   const ts = CONFIG.map.tileSize;
   for (const z of zombies) {
     if (z.state === 'CHASE') continue;  // 추격 중엔 소음 무시
@@ -1289,6 +1291,29 @@ function render() {
   drawSonarPreciseMarks();
   drawSonarPulse();
   drawSonarCharging(ts);
+
+  // DEV 소음 발원지 마커
+  if (devNoiseMarker) {
+    devNoiseMarker.timer -= 1 / 60;
+    if (devNoiseMarker.timer <= 0) {
+      devNoiseMarker = null;
+    } else {
+      const { wx, wy } = devNoiseMarker;
+      const alpha = Math.min(1, devNoiseMarker.timer);
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.strokeStyle = '#ff8800';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(wx, wy, ts * CONFIG.zombie.hearRange, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = alpha * 0.5;
+      ctx.fillStyle = '#ff8800';
+      ctx.beginPath(); ctx.arc(wx, wy, ts * 0.18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
   for (const z of zombies) {
     if (VISIBLE[z.ty * MAP.width + z.tx]) drawZombie(z, ts);
   }
