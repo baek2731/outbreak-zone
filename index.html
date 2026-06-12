@@ -908,8 +908,8 @@ function spawnZombies() {
       facingAngle:  Math.random() * Math.PI * 2,
       lastSeenX:    null, lastSeenY: null,
       searchTimer:  0,
-      chaseTimer:   0,   // 인식 유예 타이머
-      stuckTimer:   0,   // 끼임 감지 타이머 — N초 이상 막히면 WANDER 전환
+      chaseTimer:   0,
+      stuckTimer:   0,
     });
   }
 }
@@ -941,11 +941,11 @@ function updateZombies(dt) {
     const zcy = z.py + ts / 2;
     const distToPlayer = Math.hypot(ctx2.pcx - zcx, ctx2.pcy - zcy);
 
-    zombieSense(z, ctx2, zcx, zcy, distToPlayer);          // 인식 + 상태 전환
-    let [mvx, mvy] = zombieMove(z, ctx2, zcx, zcy, distToPlayer); // 상태별 이동 벡터
-    [mvx, mvy] = zombieSeparate(z, ctx2, zcx, zcy, mvx, mvy);     // 분리 벡터
-    zombieApplyMove(z, ctx2, mvx, mvy);                   // 벽 슬라이딩 + 좌표 동기화
-    zombieContact(z, ctx2);                               // 접촉 피해
+    zombieSense(z, ctx2, zcx, zcy, distToPlayer);
+    let [mvx, mvy] = zombieMove(z, ctx2, zcx, zcy, distToPlayer);
+    [mvx, mvy] = zombieSeparate(z, ctx2, zcx, zcy, mvx, mvy);
+    zombieApplyMove(z, ctx2, mvx, mvy);
+    zombieContact(z, ctx2);
   }
 }
 
@@ -954,16 +954,23 @@ function updateZombies(dt) {
 function triggerNoise(sourceX, sourceY, radiusTiles) {
   const ts = CONFIG.map.tileSize;
   for (const z of zombies) {
-    if (z.state === 'CHASE') continue; // 이미 추격 중이면 무시
     const zcx = z.px + ts / 2, zcy = z.py + ts / 2;
-    const dist = Math.hypot(sourceX - zcx, sourceY - zcy) / ts;
-    if (dist <= radiusTiles) {
-      z.state = 'SEARCH';
-      z.searchTimer = 99;  // 발원지 도착 전까지 유지
-      z.wanderTimer = 0;
-      z.lastSeenX = sourceX;
-      z.lastSeenY = sourceY;
+    const distToSource = Math.hypot(sourceX - zcx, sourceY - zcy) / ts;
+    if (distToSource > radiusTiles) continue;
+
+    if (z.state === 'CHASE') continue; // 추격 중이면 소음 무시
+
+    if (z.state === 'SEARCH' && z.lastSeenX !== null) {
+      // 현재 목적지보다 새 소음이 더 가까울 때만 교체
+      const distToCurrent = Math.hypot(z.lastSeenX - zcx, z.lastSeenY - zcy) / ts;
+      if (distToSource >= distToCurrent) continue;
     }
+
+    z.state = 'SEARCH';
+    z.searchTimer = 99;
+    z.wanderTimer = 0;
+    z.lastSeenX = sourceX;
+    z.lastSeenY = sourceY;
   }
 }
 
