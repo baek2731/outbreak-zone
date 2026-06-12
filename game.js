@@ -268,31 +268,60 @@ function drawMinigame(ts) {
     return;
   }
 
-  // 방향 아이콘 키캡
-  const dirSymbol = { up:'▲', down:'▼', left:'◀', right:'▶' };
-  const startX = bx + 8;
-  const iconY  = by + boxH - 10;
-  for (let i = 0; i < minigame.pattern.length; i++) {
-    const ix = startX + i * 28;
-    const iy = by + 14;
-    const done    = i < minigame.current;
-    const current = i === minigame.current;
-
-    // 키캡 배경
-    ctx.fillStyle = done ? '#003322' : current ? '#223300' : '#1a1a1a';
-    ctx.strokeStyle = done ? '#00ff88' : current ? '#aaff00' : '#333';
-    ctx.lineWidth = 1;
-    roundRect(ctx, ix, iy, 22, 18, 3);
-    ctx.fill(); ctx.stroke();
-
-    // 방향 심볼
-    ctx.fillStyle = done ? '#00ff88' : current ? '#ccff44' : '#444';
-    ctx.font = `${ts * 0.18}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText(dirSymbol[minigame.pattern[i]], ix + 11, iy + 13);
+  // ── 병원체 회수: WASD 키캡 패턴 ──
+  if (minigame.type === 'mine') {
+    const dirSymbol = { up:'▲', down:'▼', left:'◀', right:'▶' };
+    const startX = bx + 8;
+    for (let i = 0; i < minigame.pattern.length; i++) {
+      const ix = startX + i * 28;
+      const iy = by + 14;
+      const done    = i < minigame.current;
+      const current = i === minigame.current;
+      ctx.fillStyle = done ? '#003322' : current ? '#223300' : '#1a1a1a';
+      ctx.strokeStyle = done ? '#00ff88' : current ? '#aaff00' : '#333';
+      ctx.lineWidth = 1;
+      roundRect(ctx, ix, iy, 22, 18, 3);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = done ? '#00ff88' : current ? '#ccff44' : '#444';
+      ctx.font = `${ts * 0.18}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(dirSymbol[minigame.pattern[i]], ix + 11, iy + 13);
+    }
   }
 
-  // [E키 프롬프트는 병원체 위 서 있을 때 별도 표시]
+  // ── 전투: 게이지 힘싸움 ──
+  if (minigame.type === 'combat') {
+    const gw = boxW - 16, gh = 16;
+    const gx = bx + 8, gy = by + 13;
+    const gaugeRatio  = minigame.combatGauge / MG.combatGaugeMax;
+    const timeRatio   = minigame.mashTimer / MG.combatMashTime;
+
+    // 배경 (어두운 바)
+    ctx.fillStyle = '#1a0000';
+    roundRect(ctx, gx, gy, gw, gh, 3); ctx.fill();
+
+    // 시간 게이지 (하단 얇은 바 — 빨강으로 줄어듦)
+    ctx.fillStyle = `hsl(${timeRatio * 30},90%,35%)`;
+    roundRect(ctx, gx, gy + gh - 4, gw * timeRatio, 4, 2); ctx.fill();
+
+    // 플레이어 게이지 (주황 → 초록)
+    const gColor = gaugeRatio > 0.7 ? '#00ff88' : gaugeRatio > 0.4 ? '#ffaa00' : '#ff4400';
+    ctx.fillStyle = gColor;
+    roundRect(ctx, gx, gy, gw * gaugeRatio, gh - 4, 3); ctx.fill();
+
+    // 테두리
+    ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 1;
+    roundRect(ctx, gx, gy, gw, gh, 3); ctx.stroke();
+
+    // F키 힌트
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${ts * 0.17}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = 0.7;
+    ctx.fillText('< F 연타 >', wx, gy + 11);
+    ctx.globalAlpha = 1;
+  }
+
   ctx.restore();
 }
 
@@ -506,6 +535,10 @@ const minigame = {
   combatZombie: null,       // 전투 대상 좀비 참조
   interruptedMine: false,   // 회수 중 급습 여부
   postCooldown: 0,          // 전투 종료 후 무적 쿨타임
+  // 전투 게이지 전용
+  combatGauge:  0,          // 현재 게이지 (0~100)
+  combatDrain:  0,          // 좀비가 초당 깎는 양 (상태 기반)
+  mashTimer:    0,          // 전투 제한 시간 잔여
 };
 
 // 미니게임 config (game.js 내부 상수)
@@ -525,6 +558,12 @@ const MG = {
   postCooldown:     1.8,   // 전투 후 무적 시간 (초)
   resultShowTime:   1.0,   // 결과 표시 후 자동 닫힘 (초)
   visionRadMine:    2,     // 회수 중 시야 반경
+  // 전투 게이지 힘싸움
+  combatGaugeMax:      100,  // 게이지 최대값
+  combatPlayerPower:    18,  // F키 1회당 게이지 증가량
+  combatZombieDrainByState: { CHASE: 12, SEARCH: 7, WANDER: 4 }, // 좀비가 초당 깎는 양
+  combatMashTime:      4.0,  // 전투 제한 시간 (초)
+  combatWinThreshold: 100,   // 이 값 이상이면 성공
 };
 
 // ── DEV 이벤트 로그 ──────────────────────────────────────────────
@@ -599,6 +638,7 @@ function init() {
     active:false, type:null, pattern:[], current:0, result:null,
     resultTimer:0, flashTimer:0, mineTileIdx:-1, combatZombie:null,
     interruptedMine:false, postCooldown:0,
+    combatGauge:0, combatDrain:0, mashTimer:0,
   });
   revealAround(1, 1, CONFIG.player.visionRad);
   camX = player.px + CONFIG.map.tileSize / 2 - W_px / 2;
@@ -650,7 +690,8 @@ window.addEventListener('keydown', e => {
   if (minigame.active && !minigame.result) {
     const dir = MG.keyToDir[e.code];
     if (dir) { minigameInput(dir); return; }
-    return; // 미니게임 중 다른 키 차단
+    // F키는 전투 연타로 아래에서 처리 — 차단하지 않음
+    if (e.code !== 'KeyF') return;
   }
 
   if (e.code === 'KeyE') {
@@ -664,6 +705,13 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (e.code === 'KeyF') {
+    // 전투 미니게임 중 — 연타 입력 (게이지 증가)
+    if (minigame.active && minigame.type === 'combat' && !minigame.result) {
+      minigame.combatGauge = Math.min(MG.combatGaugeMax,
+        minigame.combatGauge + MG.combatPlayerPower);
+      if (minigame.combatGauge >= MG.combatWinThreshold) endMinigame(true);
+      return;
+    }
     if (!e.repeat && !sonar.charging && !player.dead && !minigame.active) {
       sonar.charging = true; sonar.chargeTime = 0;
     }
@@ -737,12 +785,8 @@ function onStep(tx, ty) {
       // 탐지된 병원체 — E키 프롬프트 (타일 유지)
       devLog('병원체 위에 섬 — [E] 회수 시도', '');
     } else {
-      // 미탐지 병원체 밟기 — 놀람 패널티 (감염 소폭 증가)
-      const penalty = 8;
-      player.infection = Math.min(100, player.infection + penalty);
-      triggerFlash('red');
-      devLog(`미탐지 병원체 밟음 — 감염 +${penalty}% (소나로 먼저 탐지하세요)`, 'danger');
-      if (player.infection >= 100 && !player.dead) showGameOver('infected');
+      // 미탐지 병원체 — 아무 일도 없음 (소나로 탐지해야 회수 가능)
+      devLog('미탐지 병원체 위에 섬 — 소나로 탐지하세요', '');
     }
     return;
   }
@@ -829,22 +873,31 @@ function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
   }
   const stageIdx = Math.min(player.stage, MG.patternLengthByStage.length - 1);
   const len = MG.patternLengthByStage[stageIdx];
+
+  const zState = zombieRef ? zombieRef.state : 'WANDER';
+  const drain = type === 'combat'
+    ? (MG.combatZombieDrainByState[zState] ?? 7) : 0;
+
   Object.assign(minigame, {
-    active: true, type, pattern: makePattern(len), current: 0,
+    active: true, type,
+    pattern: type === 'mine' ? makePattern(len) : [],
+    current: 0,
     result: null, resultTimer: 0, flashTimer: 0,
     mineTileIdx: mineTileIdx ?? -1,
     combatZombie: zombieRef ?? null,
     interruptedMine: interrupted || false,
     postCooldown: 0,
+    combatGauge: 0, combatDrain: drain, mashTimer: MG.combatMashTime,
   });
-  // 회수 중 시야 축소
   if (type === 'mine') revealAround(player.tx, player.ty, MG.visionRadMine);
   triggerFlash('red');
-  devLog(`미니게임 시작 [${type}] 패턴: ${minigame.pattern.join('-')}`, 'warn');
+  if (type === 'mine') devLog(`병원체 회수 시작 — 패턴: ${minigame.pattern.join('-')}`, 'warn');
+  else devLog(`전투 시작 [${zState}] — F키 연타로 게이지 채우기 (좀비 drain: ${drain}/s)`, 'warn');
 }
 
 function minigameInput(dir) {
   if (!minigame.active || minigame.result) return;
+  if (minigame.type !== 'mine') return; // WASD는 병원체 회수만
   const expected = minigame.pattern[minigame.current];
   if (dir === expected) {
     minigame.current++;
@@ -908,13 +961,25 @@ function updateMinigame(dt) {
   if (minigame.flashTimer > 0) minigame.flashTimer -= dt;
   if (minigame.postCooldown > 0) minigame.postCooldown -= dt;
 
+  // 전투 게이지 힘싸움
+  if (minigame.type === 'combat' && !minigame.result) {
+    // 좀비가 게이지를 지속적으로 깎음
+    minigame.combatGauge = Math.max(0, minigame.combatGauge - minigame.combatDrain * dt);
+    // 제한 시간
+    minigame.mashTimer -= dt;
+    if (minigame.mashTimer <= 0) {
+      devLog('전투 시간 초과 — 실패', 'danger');
+      endMinigame(false);
+    }
+  }
+
   if (minigame.result) {
     minigame.resultTimer -= dt;
     if (minigame.resultTimer <= 0) {
       // 미니게임 종료 — 시야 복구
       minigame.active = false;
       minigame.type   = null;
-      if (!minigame.active) revealAround(player.tx, player.ty, CONFIG.player.visionRad);
+      revealAround(player.tx, player.ty, CONFIG.player.visionRad);
     }
   }
 }
@@ -1395,10 +1460,8 @@ function zombieContact(z, c, zcx, zcy) {
   if (minigame.postCooldown > 0) return; // 무적 쿨타임 중
   if (minigame.active) return;           // 이미 미니게임 중
   const dist = Math.hypot(zcx - c.pcx, zcy - c.pcy);
-  if (dist < c.ts * 0.6 && player.damageCooldown <= 0) {
-    player.damageCooldown = CONFIG.zombie.damageCool;
+  if (dist < c.ts * 0.6) {
     if (!devInvincible) {
-      // 회수 중 급습이면 interruptedMine 플래그
       const interrupted = minigame.type === 'mine';
       startMinigame('combat', -1, z, interrupted);
     } else {
