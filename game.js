@@ -237,34 +237,43 @@ function drawMinigame(ts) {
   const wx = player.px + ts / 2;
   const wy = player.py - ts * 0.3;
 
-  const boxW = minigame.pattern.length * 28 + 12;
-  const boxH = 36;
+  // 타입별 박스 크기
+  const boxW = minigame.type === 'mine'
+    ? Math.max(minigame.pattern.length * 28 + 16, 80)
+    : 120; // 전투는 고정 너비
+  const boxH = 44;
   const bx   = wx - boxW / 2;
   const by   = wy - boxH - 8;
 
   // 배경
   ctx.save();
   ctx.globalAlpha = 0.88;
-  ctx.fillStyle = minigame.flashTimer > 0 ? '#3a0000' : '#0d0d0d';
+  ctx.fillStyle   = minigame.flashTimer > 0 ? '#3a0000' : '#0d0d0d';
   ctx.strokeStyle = minigame.type === 'mine' ? '#ff4444' : '#ff8800';
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth   = 1.5;
   roundRect(ctx, bx, by, boxW, boxH, 4);
   ctx.fill(); ctx.stroke();
-  ctx.globalAlpha = 1;
+  ctx.restore();
 
   // 타입 레이블
-  const label = minigame.type === 'mine' ? '회수' : '전투';
-  ctx.fillStyle = minigame.type === 'mine' ? '#ff4444' : '#ff8800';
-  ctx.font = `bold ${ts * 0.22}px monospace`;
-  ctx.textAlign = 'center';
-  ctx.fillText(label, wx, by + 11);
+  ctx.save();
+  ctx.fillStyle    = minigame.type === 'mine' ? '#ff4444' : '#ff8800';
+  ctx.font         = `bold ${ts * 0.2}px monospace`;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(minigame.type === 'mine' ? '회수' : '전투', wx, by + 4);
+  ctx.restore();
 
   // 결과 표시
   if (minigame.result) {
-    ctx.fillStyle = minigame.result === 'success' ? '#00ff88' : '#ff3333';
-    ctx.font = `bold ${ts * 0.3}px monospace`;
-    ctx.fillText(minigame.result === 'success' ? '✓ OK' : '✗ FAIL', wx, by + boxH * 0.72);
+    ctx.save();
+    ctx.fillStyle    = minigame.result === 'success' ? '#00ff88' : '#ff3333';
+    ctx.font         = `bold ${ts * 0.3}px monospace`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(minigame.result === 'success' ? '✓ OK' : '✗ FAIL', wx, by + boxH * 0.6);
     ctx.restore();
+    ctx.restore(); // 최상위 restore
     return;
   }
 
@@ -276,53 +285,73 @@ function drawMinigame(ts) {
       const ix = startX + i * 28;
       const iy = by + 14;
       const done    = i < minigame.current;
-      const current = i === minigame.current;
-      ctx.fillStyle = done ? '#003322' : current ? '#223300' : '#1a1a1a';
-      ctx.strokeStyle = done ? '#00ff88' : current ? '#aaff00' : '#333';
+      const isCur   = i === minigame.current;
+      // 키캡 배경
+      ctx.save();
+      ctx.fillStyle   = done ? '#003322' : isCur ? '#223300' : '#1a1a1a';
+      ctx.strokeStyle = done ? '#00ff88'  : isCur ? '#aaff00' : '#333';
       ctx.lineWidth = 1;
       roundRect(ctx, ix, iy, 22, 18, 3);
       ctx.fill(); ctx.stroke();
-      ctx.fillStyle = done ? '#00ff88' : current ? '#ccff44' : '#444';
-      ctx.font = `${ts * 0.18}px monospace`;
-      ctx.textAlign = 'center';
-      ctx.fillText(dirSymbol[minigame.pattern[i]], ix + 11, iy + 13);
+      ctx.restore();
+      // 방향 심볼
+      ctx.save();
+      ctx.fillStyle  = done ? '#00ff88' : isCur ? '#ccff44' : '#444';
+      ctx.font       = `${ts * 0.18}px monospace`;
+      ctx.textAlign  = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(dirSymbol[minigame.pattern[i]], ix + 11, iy + 10);
+      ctx.restore();
     }
   }
 
   // ── 전투: 게이지 힘싸움 ──
   if (minigame.type === 'combat') {
-    const gw = boxW - 16, gh = 16;
-    const gx = bx + 8, gy = by + 13;
-    const gaugeRatio  = minigame.combatGauge / MG.combatGaugeMax;
-    const timeRatio   = minigame.mashTimer / MG.combatMashTime;
+    const gw = boxW - 16, gh = 14;
+    const gx = bx + 8, gy = by + 15;
+    const gaugeRatio = Math.min(1, minigame.combatGauge / MG.combatGaugeMax);
+    const timeRatio  = Math.max(0, minigame.mashTimer / MG.combatMashTime);
 
-    // 배경 (어두운 바)
+    // 배경
+    ctx.save();
     ctx.fillStyle = '#1a0000';
-    roundRect(ctx, gx, gy, gw, gh, 3); ctx.fill();
+    roundRect(ctx, gx, gy, gw, gh, 3);
+    ctx.fill();
+    ctx.restore();
 
-    // 시간 게이지 (하단 얇은 바 — 빨강으로 줄어듦)
-    ctx.fillStyle = `hsl(${timeRatio * 30},90%,35%)`;
-    roundRect(ctx, gx, gy + gh - 4, gw * timeRatio, 4, 2); ctx.fill();
+    // 플레이어 게이지
+    if (gaugeRatio > 0) {
+      ctx.save();
+      ctx.fillStyle = gaugeRatio > 0.7 ? '#00ff88' : gaugeRatio > 0.4 ? '#ffaa00' : '#ff4400';
+      roundRect(ctx, gx, gy, gw * gaugeRatio, gh, 3);
+      ctx.fill();
+      ctx.restore();
+    }
 
-    // 플레이어 게이지 (주황 → 초록)
-    const gColor = gaugeRatio > 0.7 ? '#00ff88' : gaugeRatio > 0.4 ? '#ffaa00' : '#ff4400';
-    ctx.fillStyle = gColor;
-    roundRect(ctx, gx, gy, gw * gaugeRatio, gh - 4, 3); ctx.fill();
+    // 시간 게이지 (하단 2px)
+    ctx.save();
+    ctx.fillStyle = `hsl(${timeRatio * 30},90%,40%)`;
+    ctx.fillRect(gx, gy + gh - 2, gw * timeRatio, 2);
+    ctx.restore();
 
     // 테두리
-    ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 1;
-    roundRect(ctx, gx, gy, gw, gh, 3); ctx.stroke();
+    ctx.save();
+    ctx.strokeStyle = '#ff8800';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, gx, gy, gw, gh, 3);
+    ctx.stroke();
+    ctx.restore();
 
-    // F키 힌트
-    ctx.fillStyle = '#fff';
+    // F키 힌트 텍스트
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
     ctx.font = `bold ${ts * 0.17}px monospace`;
     ctx.textAlign = 'center';
-    ctx.globalAlpha = 0.7;
-    ctx.fillText('< F 연타 >', wx, gy + 11);
-    ctx.globalAlpha = 1;
+    ctx.textBaseline = 'middle';
+    ctx.fillText('< F 연타 >', wx, gy + gh / 2);
+    ctx.restore();
   }
 
-  ctx.restore();
 }
 
 // E키 프롬프트 — 병원체 위에 서 있을 때
@@ -957,9 +986,10 @@ function endMinigame(success) {
 }
 
 function updateMinigame(dt) {
+  // postCooldown은 active 여부와 무관하게 항상 감소
+  if (minigame.postCooldown > 0) minigame.postCooldown -= dt;
   if (!minigame.active) return;
   if (minigame.flashTimer > 0) minigame.flashTimer -= dt;
-  if (minigame.postCooldown > 0) minigame.postCooldown -= dt;
 
   // 전투 게이지 힘싸움
   if (minigame.type === 'combat' && !minigame.result) {
