@@ -228,6 +228,105 @@ function drawSonarPreciseMarks() {
   }
 }
 
+function drawMinigame(ts) {
+  if (!minigame.active) return;
+  const cx = player.px + ts / 2 - camX;
+  const cy = player.py - camX * 0 - camY;  // camX/Y는 ctx.translate로 이미 적용됨
+
+  // ctx는 이미 translate(-camX,-camY) 상태 → 월드 좌표 사용
+  const wx = player.px + ts / 2;
+  const wy = player.py - ts * 0.3;
+
+  const boxW = minigame.pattern.length * 28 + 12;
+  const boxH = 36;
+  const bx   = wx - boxW / 2;
+  const by   = wy - boxH - 8;
+
+  // 배경
+  ctx.save();
+  ctx.globalAlpha = 0.88;
+  ctx.fillStyle = minigame.flashTimer > 0 ? '#3a0000' : '#0d0d0d';
+  ctx.strokeStyle = minigame.type === 'mine' ? '#ff4444' : '#ff8800';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, bx, by, boxW, boxH, 4);
+  ctx.fill(); ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // 타입 레이블
+  const label = minigame.type === 'mine' ? '회수' : '전투';
+  ctx.fillStyle = minigame.type === 'mine' ? '#ff4444' : '#ff8800';
+  ctx.font = `bold ${ts * 0.22}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText(label, wx, by + 11);
+
+  // 결과 표시
+  if (minigame.result) {
+    ctx.fillStyle = minigame.result === 'success' ? '#00ff88' : '#ff3333';
+    ctx.font = `bold ${ts * 0.3}px monospace`;
+    ctx.fillText(minigame.result === 'success' ? '✓ OK' : '✗ FAIL', wx, by + boxH * 0.72);
+    ctx.restore();
+    return;
+  }
+
+  // 방향 아이콘 키캡
+  const dirSymbol = { up:'▲', down:'▼', left:'◀', right:'▶' };
+  const startX = bx + 8;
+  const iconY  = by + boxH - 10;
+  for (let i = 0; i < minigame.pattern.length; i++) {
+    const ix = startX + i * 28;
+    const iy = by + 14;
+    const done    = i < minigame.current;
+    const current = i === minigame.current;
+
+    // 키캡 배경
+    ctx.fillStyle = done ? '#003322' : current ? '#223300' : '#1a1a1a';
+    ctx.strokeStyle = done ? '#00ff88' : current ? '#aaff00' : '#333';
+    ctx.lineWidth = 1;
+    roundRect(ctx, ix, iy, 22, 18, 3);
+    ctx.fill(); ctx.stroke();
+
+    // 방향 심볼
+    ctx.fillStyle = done ? '#00ff88' : current ? '#ccff44' : '#444';
+    ctx.font = `${ts * 0.18}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(dirSymbol[minigame.pattern[i]], ix + 11, iy + 13);
+  }
+
+  // [E키 프롬프트는 병원체 위 서 있을 때 별도 표시]
+  ctx.restore();
+}
+
+// E키 프롬프트 — 병원체 위에 서 있을 때
+function drawMinePrompt(ts) {
+  const tileIdx = player.ty * MAP.width + player.tx;
+  if (MAP.tiles[tileIdx] !== T.MINE) return;
+  if (minigame.active) return;
+
+  const wx = player.px + ts / 2;
+  const wy = player.py - ts * 0.1;
+  ctx.save();
+  ctx.fillStyle = '#ffdd00';
+  ctx.font = `bold ${ts * 0.22}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.globalAlpha = 0.9;
+  ctx.fillText('[E] 회수', wx, wy - ts * 0.6);
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
 // ================================================================
 //  END RESOURCE LAYER
 // ================================================================
@@ -391,6 +490,41 @@ let devRevealAll   = false;
 let devNoiseMarker = null;   // DEV 소음 발원지 마커 {wx, wy, timer}
 let devZombieFov   = false;
 
+// ── 미니게임 상태 ────────────────────────────────────────────────
+// type: 'mine' (병원체 회수) | 'combat' (좀비 전투) | null
+const minigame = {
+  active:       false,
+  type:         null,       // 'mine' | 'combat'
+  pattern:      [],         // 입력해야 할 방향 시퀀스 ['up','down','left','right',...]
+  current:      0,          // 현재 입력 인덱스
+  result:       null,       // null | 'success' | 'fail'
+  resultTimer:  0,          // 결과 표시 후 자동 종료 타이머
+  flashTimer:   0,          // 틀렸을 때 빨간 플래시
+  mineTileIdx:  -1,         // 회수 대상 병원체 타일 인덱스
+  combatZombie: null,       // 전투 대상 좀비 참조
+  interruptedMine: false,   // 회수 중 급습 여부
+  postCooldown: 0,          // 전투 종료 후 무적 쿨타임
+};
+
+// 미니게임 config (game.js 내부 상수)
+const MG = {
+  patternLengthByStage: [3, 4, 5],  // 스테이지별 패턴 길이
+  dirs: ['up','down','left','right'],
+  keyToDir: { KeyW:'up', KeyS:'down', KeyA:'left', KeyD:'right',
+              ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right' },
+  // 병원체 회수
+  mineSuccessInfect:  3,    // 성공 시 감염도 증가
+  mineFailInfect:    15,    // 실패 시 감염도 증가
+  // 좀비 전투
+  combatSuccessOxy: -10,   // 성공 시 산소 소모
+  combatFailOxy:    -25,   // 실패 시 산소 소모
+  combatFailInfect:   8,   // 실패 시 감염도 증가
+  // 기타
+  postCooldown:     1.8,   // 전투 후 무적 시간 (초)
+  resultShowTime:   1.0,   // 결과 표시 후 자동 닫힘 (초)
+  visionRadMine:    2,     // 회수 중 시야 반경
+};
+
 // ── DEV 이벤트 로그 ──────────────────────────────────────────────
 const DEV_LOG_MAX = 30;
 const devLogEntries = [];   // { time, msg, cls }
@@ -459,6 +593,11 @@ function init() {
   moveTimer = 0;
   _prevOxyZone = 'safe'; _prevInfZone = 'low';
   devLogEntries.length = 0; _renderDevLog();
+  Object.assign(minigame, {
+    active:false, type:null, pattern:[], current:0, result:null,
+    resultTimer:0, flashTimer:0, mineTileIdx:-1, combatZombie:null,
+    interruptedMine:false, postCooldown:0,
+  });
   revealAround(1, 1, CONFIG.player.visionRad);
   camX = player.px + CONFIG.map.tileSize / 2 - W_px / 2;
   camY = player.py + CONFIG.map.tileSize / 2 - H_px / 2;
@@ -499,19 +638,35 @@ function hasLOS(x0, y0, x1, y1) {
 const KEYS = {};
 const GAME_KEYS = new Set([
   'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
-  'KeyW','KeyA','KeyS','KeyD','KeyF','KeyG','Space',
+  'KeyW','KeyA','KeyS','KeyD','KeyF','KeyG','KeyE','Space',
 ]);
 
 window.addEventListener('keydown', e => {
   if (GAME_KEYS.has(e.code)) e.preventDefault();
+
+  // 미니게임 진행 중 입력 처리
+  if (minigame.active && !minigame.result) {
+    const dir = MG.keyToDir[e.code];
+    if (dir) { minigameInput(dir); return; }
+    return; // 미니게임 중 다른 키 차단
+  }
+
+  if (e.code === 'KeyE') {
+    // 병원체 위에 서 있을 때 회수 시도
+    if (!e.repeat && !player.dead && !minigame.active) {
+      const tileIdx = player.ty * MAP.width + player.tx;
+      if (MAP.tiles[tileIdx] === T.MINE) startMinigame('mine', tileIdx);
+    }
+    return;
+  }
   if (e.code === 'KeyF') {
-    if (!e.repeat && !sonar.charging && !player.dead) {
+    if (!e.repeat && !sonar.charging && !player.dead && !minigame.active) {
       sonar.charging = true; sonar.chargeTime = 0;
     }
     return;
   }
   if (e.code === 'KeyG') {
-    if (!e.repeat && !sonar.chargingPrecise && sonar.precise > 0 && !player.dead) {
+    if (!e.repeat && !sonar.chargingPrecise && sonar.precise > 0 && !player.dead && !minigame.active) {
       sonar.chargingPrecise = true; sonar.chargeTimePrecise = 0;
     }
     return;
@@ -562,7 +717,7 @@ function tryMove(dx, dy) {
 function handleInput(dt) {
   moveTimer = Math.max(0, moveTimer - dt);
   processKeys();
-  if (player.moving || moveTimer > 0 || player.dead) return;
+  if (player.moving || moveTimer > 0 || player.dead || minigame.active) return;
   const dir = getHeldDir();
   if (dir) { updateFacing(dir.dx, dir.dy); tryMove(dir.dx, dir.dy); }
 }
@@ -573,30 +728,8 @@ function onStep(tx, ty) {
   const tile    = MAP.tiles[tileIdx];
 
   if (tile === T.MINE) {
-    MAP.tiles[tileIdx] = T.FLOOR;
-    // 주변 numbers 재계산
-    const { tiles, numbers, width, height } = MAP;
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const nx = tx + dx, ny = ty + dy;
-      if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-      if (tiles[ny * width + nx] === T.WALL) continue;
-      let cnt = 0;
-      for (let dy2 = -1; dy2 <= 1; dy2++) for (let dx2 = -1; dx2 <= 1; dx2++) {
-        if (dx2 === 0 && dy2 === 0) continue;
-        const mx = nx + dx2, my = ny + dy2;
-        if (mx >= 0 && mx < width && my >= 0 && my < height && tiles[my * width + mx] === T.MINE) cnt++;
-      }
-      numbers[ny * width + nx] = cnt;
-    }
-    stats.minesHit++;
-    if (!devInvincible) {
-      const dmg = CONFIG.oxygen.drainOnHit * 0.5;
-      applyOxygenDamage(dmg);
-      devLog(`병원체 밟음 — 산소 -${dmg.toFixed(1)}% (현재 ${player.oxygen.toFixed(1)}%)`, 'warn');
-    }
-    triggerNoise(player.px + CONFIG.map.tileSize / 2,
-                 player.py + CONFIG.map.tileSize / 2, CONFIG.zombie.hearRange);
-    triggerFlash('red');
+    // 병원체 위에 섬 — 타일 유지, E키로 선택적 회수
+    devLog('병원체 위에 섬 — [E] 회수 시도', '');
     return;
   }
 
@@ -665,6 +798,128 @@ function showGameOver(reason) {
 // 산소 감소 공통 함수
 function applyOxygenDamage(amount) {
   player.oxygen = Math.max(0, player.oxygen - amount);
+}
+
+// ================================================================
+//  미니게임 시스템
+// ================================================================
+
+function makePattern(len) {
+  return Array.from({ length: len }, () => MG.dirs[Math.floor(Math.random() * 4)]);
+}
+
+function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
+  // 회수 중 급습이면 기존 mine 미니게임 강제 종료
+  if (minigame.active && type === 'combat') {
+    minigame.interruptedMine = interrupted || false;
+  }
+  const stageIdx = Math.min(player.stage, MG.patternLengthByStage.length - 1);
+  const len = MG.patternLengthByStage[stageIdx];
+  Object.assign(minigame, {
+    active: true, type, pattern: makePattern(len), current: 0,
+    result: null, resultTimer: 0, flashTimer: 0,
+    mineTileIdx: mineTileIdx ?? -1,
+    combatZombie: zombieRef ?? null,
+    interruptedMine: interrupted || false,
+    postCooldown: 0,
+  });
+  // 회수 중 시야 축소
+  if (type === 'mine') revealAround(player.tx, player.ty, MG.visionRadMine);
+  triggerFlash('red');
+  devLog(`미니게임 시작 [${type}] 패턴: ${minigame.pattern.join('-')}`, 'warn');
+}
+
+function minigameInput(dir) {
+  if (!minigame.active || minigame.result) return;
+  const expected = minigame.pattern[minigame.current];
+  if (dir === expected) {
+    minigame.current++;
+    if (minigame.current >= minigame.pattern.length) {
+      endMinigame(true);
+    }
+  } else {
+    // 틀림 → 즉시 실패
+    minigame.flashTimer = 0.3;
+    endMinigame(false);
+  }
+}
+
+function endMinigame(success) {
+  minigame.result = success ? 'success' : 'fail';
+  minigame.resultTimer = MG.resultShowTime;
+
+  if (minigame.type === 'mine') {
+    if (success) {
+      // 병원체 회수 성공
+      if (minigame.mineTileIdx >= 0) {
+        MAP.tiles[minigame.mineTileIdx] = T.FLOOR;
+        // 주변 numbers 재계산
+        const tx = minigame.mineTileIdx % MAP.width;
+        const ty = Math.floor(minigame.mineTileIdx / MAP.width);
+        recalcNumbers(tx, ty);
+      }
+      player.infection = Math.min(100, player.infection + MG.mineSuccessInfect);
+      devLog(`병원체 회수 성공 — 감염 +${MG.mineSuccessInfect}%`, 'good');
+    } else {
+      // 실패 — 감염 대폭 증가 + 소음
+      player.infection = Math.min(100, player.infection + MG.mineFailInfect);
+      triggerNoise(player.px + CONFIG.map.tileSize / 2,
+                   player.py + CONFIG.map.tileSize / 2, CONFIG.zombie.hearRange);
+      devLog(`병원체 회수 실패 — 감염 +${MG.mineFailInfect}%`, 'danger');
+    }
+  } else {
+    // 전투
+    const interrupted = minigame.interruptedMine;
+    if (success) {
+      const oxyLoss = Math.abs(MG.combatSuccessOxy) + (interrupted ? 5 : 0);
+      applyOxygenDamage(oxyLoss);
+      if (interrupted) player.infection = Math.min(100, player.infection + 5);
+      devLog(`전투 성공 — 산소 -${oxyLoss}%${interrupted ? ' (급습 패널티)' : ''}`, 'warn');
+    } else {
+      applyOxygenDamage(Math.abs(MG.combatFailOxy) + (interrupted ? 10 : 0));
+      player.infection = Math.min(100, player.infection + MG.combatFailInfect + (interrupted ? 5 : 0));
+      devLog(`전투 실패 — 산소 대량 소모, 감염 증가${interrupted ? ' (급습 패널티)' : ''}`, 'danger');
+    }
+    triggerFlash('red');
+    minigame.postCooldown = MG.postCooldown;
+    devLog('방호복 재밀봉 중... 무적 1.8초', '');
+  }
+
+  // 감염 100% 체크
+  if (player.infection >= 100 && !player.dead) showGameOver('infected');
+}
+
+function updateMinigame(dt) {
+  if (!minigame.active) return;
+  if (minigame.flashTimer > 0) minigame.flashTimer -= dt;
+  if (minigame.postCooldown > 0) minigame.postCooldown -= dt;
+
+  if (minigame.result) {
+    minigame.resultTimer -= dt;
+    if (minigame.resultTimer <= 0) {
+      // 미니게임 종료 — 시야 복구
+      minigame.active = false;
+      minigame.type   = null;
+      if (!minigame.active) revealAround(player.tx, player.ty, CONFIG.player.visionRad);
+    }
+  }
+}
+
+// 주변 numbers 재계산 (병원체 제거 후)
+function recalcNumbers(tx, ty) {
+  const { tiles, numbers, width, height } = MAP;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const nx = tx + dx, ny = ty + dy;
+    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+    if (tiles[ny * width + nx] === T.WALL) continue;
+    let cnt = 0;
+    for (let dy2 = -1; dy2 <= 1; dy2++) for (let dx2 = -1; dx2 <= 1; dx2++) {
+      if (dx2 === 0 && dy2 === 0) continue;
+      const mx = nx + dx2, my = ny + dy2;
+      if (mx >= 0 && mx < width && my >= 0 && my < height && tiles[my * width + mx] === T.MINE) cnt++;
+    }
+    numbers[ny * width + nx] = cnt;
+  }
 }
 
 function showEscaped() {
@@ -1116,15 +1371,19 @@ function circleWallCollide(cx, cy, r, ts, width, height, tiles) {
   return false;
 }
 
-// ── ③ 접촉 피해 ─────────────────────────────────────────────────
+// ── ③ 접촉 → 전투 미니게임 진입 ───────────────────────────────
 function zombieContact(z, c, zcx, zcy) {
+  if (minigame.postCooldown > 0) return; // 무적 쿨타임 중
+  if (minigame.active) return;           // 이미 미니게임 중
   const dist = Math.hypot(zcx - c.pcx, zcy - c.pcy);
   if (dist < c.ts * 0.6 && player.damageCooldown <= 0) {
     player.damageCooldown = CONFIG.zombie.damageCool;
-    triggerFlash('red');
     if (!devInvincible) {
-      applyOxygenDamage(CONFIG.oxygen.drainOnHit);
-      devLog(`좀비 피격 — 산소 -${CONFIG.oxygen.drainOnHit.toFixed(1)}% (현재 ${player.oxygen.toFixed(1)}%)`, 'warn');
+      // 회수 중 급습이면 interruptedMine 플래그
+      const interrupted = minigame.type === 'mine';
+      startMinigame('combat', -1, z, interrupted);
+    } else {
+      triggerFlash('red');
     }
   }
 }
@@ -1147,6 +1406,7 @@ function update(dt) {
     else { player.px += dx / dist * spd; player.py += dy / dist * spd; }
   }
   updateZombies(dt);
+  updateMinigame(dt);
   updateOxygenInfection(dt);
   const ts = CONFIG.map.tileSize;
   camX += (player.px + ts / 2 - W_px / 2 - camX) * CONFIG.camera.smooth;
@@ -1287,6 +1547,8 @@ function render() {
     if (VISIBLE[z.ty * MAP.width + z.tx]) drawZombie(z, ts);
   }
   drawPlayer(ts);
+  drawMinePrompt(ts);
+  drawMinigame(ts);
   // END RESOURCE LAYER
 
   ctx.restore();
