@@ -65,6 +65,11 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 .ov-btn.red:hover   { background:rgba(255,50,50,0.1); }
 .ov-btn.green { border:1px solid #00ff88; color:#00ff88; }
 .ov-btn.green:hover { background:rgba(0,255,136,0.1); }
+.ov-stage { font-size:0.85rem; color:#00ff88; letter-spacing:0.15em; margin-top:-6px; }
+.intro-location { font-size:0.78rem; color:#555; letter-spacing:0.2em; margin-top:-4px; margin-bottom:4px; }
+.intro-stats { display:flex; flex-direction:column; gap:8px; margin:6px 0; }
+.intro-row { display:flex; align-items:center; gap:10px; font-size:0.75rem; color:#aaa; }
+.intro-icon { font-size:1rem; width:20px; text-align:center; }
 
 /* ── DEV 패널 (넓게) ── */
 #dev-panel {
@@ -193,12 +198,25 @@ canvas#minimap { display:block; image-rendering:pixelated; }
     <!-- 탈출 성공 -->
     <div id="escaped" class="overlay">
       <div class="ov-title green">✓ ESCAPED</div>
+      <div class="ov-stage" id="esc-stage">1층 클리어</div>
       <div class="ov-stats">
-        수집 부품: <span class="g" id="esc-items">0</span>개<br>
-        밟은 지뢰: <span id="esc-mines">0</span>개<br>
+        회수 병원체: <span class="g" id="esc-items">0/0</span>개<br>
+        접촉 병원체: <span id="esc-mines">0</span>개<br>
         생존 시간: <span class="g" id="esc-time">0초</span>
       </div>
-      <button class="ov-btn green" id="esc-btn">RETRY</button>
+      <button class="ov-btn green" id="esc-btn">NEXT STAGE ▶</button>
+    </div>
+
+    <!-- 스테이지 인트로 -->
+    <div id="stage-intro" class="overlay">
+      <div class="ov-title green" id="intro-stage">STAGE 1</div>
+      <div class="intro-location" id="intro-location">외곽 병동</div>
+      <div class="intro-stats">
+        <div class="intro-row"><span class="intro-icon">☣</span><span id="intro-mines">병원체 5개</span></div>
+        <div class="intro-row"><span class="intro-icon">👁</span><span id="intro-zombies">좀비 1마리</span></div>
+        <div class="intro-row"><span class="intro-icon">💨</span><span id="intro-capsules">산소 캡슐 3개</span></div>
+      </div>
+      <button class="ov-btn green" id="intro-btn">시작 ▶</button>
     </div>
   </div>
 

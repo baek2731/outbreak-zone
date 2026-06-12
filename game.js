@@ -458,18 +458,32 @@ function _buildMap(W, H, force = false) {
   const safeSet = new Set();
   for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) safeSet.add(`${1+dx},${1+dy}`);
 
-  // 병원체 배치 — 스테이지별 고정 개수, 랜덤 셔플 후 앞에서 N개 배치
+  // 병원체 배치 — 스테이지별 고정 개수, 격자 구역 분산 배치
   const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
   const targetMineCount = CONFIG.stages[stageIdx].mineCount;
   const mineCandidates = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     if (get(x, y) === T.FLOOR && !safeSet.has(`${x},${y}`)) mineCandidates.push([x, y]);
   }
-  shuffle(mineCandidates);
-  let mineCount = 0;
+
+  // 맵을 NxN 구역으로 나눠 각 구역에서 1개씩 배치 → 고른 분산
+  const gridN = Math.ceil(Math.sqrt(targetMineCount * 1.5)); // 여유있게 구역 수 설정
+  const cellW = W / gridN, cellH = H / gridN;
+  const zones = Array.from({ length: gridN * gridN }, () => []);
   for (const [x, y] of mineCandidates) {
-    if (mineCount >= targetMineCount) break;
-    set(x, y, T.MINE); mineCount++;
+    const zi = Math.min(Math.floor(x / cellW), gridN - 1);
+    const zj = Math.min(Math.floor(y / cellH), gridN - 1);
+    zones[zj * gridN + zi].push([x, y]);
+  }
+  // 각 구역 셔플 후 비어있지 않은 구역부터 순환하며 배치
+  const zoneOrder = shuffle(zones.map((_, i) => i).filter(i => zones[i].length > 0));
+  let mineCount = 0;
+  for (let attempt = 0; mineCount < targetMineCount && attempt < targetMineCount * 3; attempt++) {
+    const zi = zoneOrder[mineCount % zoneOrder.length];
+    const zone = zones[zi];
+    if (zone.length === 0) continue;
+    const pick = zone.splice(Math.floor(Math.random() * zone.length), 1)[0];
+    set(pick[0], pick[1], T.MINE); mineCount++;
   }
 
   // 아이템 배치 — 스폰 거리 기준 구간 분할, 각 구간에서 1개씩
@@ -656,7 +670,7 @@ function init() {
     moving: false, facing: 'down',
     dead: false, itemsFound: 0, damageCooldown: 0, noiseRadius: 0,
     noiseX: 0, noiseY: 0,
-    oxygen: CONFIG.oxygen.max, infection: 0, stage: 0,
+    oxygen: CONFIG.oxygen.max, infection: 0,
   });
 
   Object.assign(sonar, {
@@ -684,6 +698,7 @@ function init() {
   spawnZombies();
   document.getElementById('gameover').classList.remove('show');
   document.getElementById('escaped').classList.remove('show');
+  document.getElementById('stage-intro').classList.remove('show');
 }
 
 // ── 시야 ─────────────────────────────────────────────────────────
@@ -1046,12 +1061,38 @@ function recalcNumbers(tx, ty) {
 }
 
 function showEscaped() {
-  player.dead = true; // 입력 차단
+  player.dead = true;
   const elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
-  document.getElementById('esc-items').textContent = player.itemsFound;
+  const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
+  const totalMines = CONFIG.stages[stageIdx].mineCount;
+  let remaining = 0;
+  for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remaining++;
+  const collected = totalMines - remaining;
+
+  document.getElementById('esc-stage').textContent = `${stageIdx + 1}층 클리어`;
+  document.getElementById('esc-items').textContent = `${collected} / ${totalMines}`;
   document.getElementById('esc-mines').textContent = stats.minesHit;
   document.getElementById('esc-time').textContent  = elapsed + '초';
+
+  const isLast = player.stage >= CONFIG.stages.length - 1;
+  const btn = document.getElementById('esc-btn');
+  btn.textContent = isLast ? 'ALL CLEAR' : 'NEXT STAGE ▶';
+
   document.getElementById('escaped').classList.add('show');
+}
+
+// ── 스테이지 인트로 ──────────────────────────────────────────────
+const STAGE_NAMES = ['외곽 병동', '일반 병동', '중환자실', '바이러스 연구소', '발원지'];
+
+function showStageIntro() {
+  const s = Math.min(player.stage, CONFIG.stages.length - 1);
+  const st = CONFIG.stages[s];
+  document.getElementById('intro-stage').textContent    = `STAGE ${s + 1}`;
+  document.getElementById('intro-location').textContent = STAGE_NAMES[s] || '';
+  document.getElementById('intro-mines').textContent    = `병원체 ${st.mineCount}개`;
+  document.getElementById('intro-zombies').textContent  = `좀비 ${st.zombieCount}마리`;
+  document.getElementById('intro-capsules').textContent = `산소 캡슐 ${st.capsuleCount}개`;
+  document.getElementById('stage-intro').classList.add('show');
 }
 
 // ── 소나 ─────────────────────────────────────────────────────────
@@ -1854,10 +1895,20 @@ document.getElementById('d-zombiefov').addEventListener('click', () => {
   devZombieFov = !devZombieFov;
   document.getElementById('d-zombiefov').textContent = '👁 좀비 시야 표시 ' + (devZombieFov ? 'ON' : 'OFF');
 });
-document.getElementById('go-btn').addEventListener('click', () => init());
-document.getElementById('esc-btn').addEventListener('click', () => init());
+document.getElementById('go-btn').addEventListener('click', () => {
+  player.stage = 0; // 게임오버 시 1층부터
+  init();
+});
+document.getElementById('esc-btn').addEventListener('click', () => {
+  const isLast = player.stage >= CONFIG.stages.length - 1;
+  if (!isLast) player.stage++;
+  init();
+});
 document.getElementById('log-clear').addEventListener('click', () => {
   devLogEntries.length = 0; _renderDevLog();
+});
+document.getElementById('intro-btn').addEventListener('click', () => {
+  document.getElementById('stage-intro').classList.remove('show');
 });
 
 // ── 메인 루프 ────────────────────────────────────────────────────
@@ -1869,6 +1920,7 @@ function loop(ts) {
   if (fpsTimer >= 1) { fps = frameCount; frameCount = 0; fpsTimer = 0; }
   handleInput(dt); updateSonar(dt); update(dt);
   render(); renderMinimap(); updateHUD(); updateDevInfo();
+  showStageIntro();
   requestAnimationFrame(loop);
 }
 
