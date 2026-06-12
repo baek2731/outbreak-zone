@@ -87,6 +87,23 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 .dev-btn:hover { border-color:#00ff88; color:#00ff88; }
 .dev-info { font-size:0.63rem; color:#444; line-height:2.0; margin-top:10px; border-top:1px solid #1a1a1a; padding-top:8px; }
 .dev-info span { color:#00ff88; }
+
+/* ── 산소/감염 게이지 ── */
+.hud-gauge-wrap { min-width:80px; }
+.hud-gauge-bg {
+  position:relative; width:80px; height:6px;
+  background:#1a1a1a; border:1px solid #333; border-radius:2px; overflow:visible;
+}
+.hud-gauge-fill {
+  height:100%; border-radius:2px;
+  transition:width 0.3s, background 0.5s;
+}
+/* 산소 60% 위험선 마커 */
+.hud-gauge-threshold {
+  position:absolute; top:-2px; bottom:-2px; width:1px;
+  background:#ff8800; opacity:0.7;
+  left:60%; /* infectThreshold=60 */
+}
 </style>
 </head>
 <body>
@@ -95,10 +112,24 @@ canvas#minimap { display:block; image-rendering:pixelated; }
   <div id="title">OUTBREAK ZONE</div>
   <div id="hud">
     <div class="hud-item"><div class="hud-label">POS</div><div class="hud-val" id="hud-pos">1,1</div></div>
-    <div class="hud-item"><div class="hud-label">HP</div><div class="hud-val" id="hud-hp">❤❤❤</div></div>
+    <div class="hud-item hud-gauge-wrap">
+      <div class="hud-label">산소</div>
+      <div class="hud-gauge-bg">
+        <div class="hud-gauge-fill" id="hud-oxygen-fill" style="width:100%;background:#44aaff"></div>
+        <div class="hud-gauge-threshold" id="hud-oxygen-threshold"></div>
+      </div>
+      <div class="hud-val" id="hud-oxygen">100%</div>
+    </div>
+    <div class="hud-item hud-gauge-wrap">
+      <div class="hud-label">감염</div>
+      <div class="hud-gauge-bg">
+        <div class="hud-gauge-fill" id="hud-infection-fill" style="width:0%;background:#00ff88"></div>
+      </div>
+      <div class="hud-val" id="hud-infection">0%</div>
+    </div>
     <div class="hud-item"><div class="hud-label">탐지기[F]</div><div class="hud-val" id="hud-basic">READY</div></div>
     <div class="hud-item"><div class="hud-label">정밀탐지[G]</div><div class="hud-val" id="hud-precise">📡 2</div></div>
-    <div class="hud-item"><div class="hud-label">ITEMS</div><div class="hud-val" id="hud-items">0/3</div></div>
+    <div class="hud-item"><div class="hud-label">캡슐</div><div class="hud-val" id="hud-items">0/3</div></div>
     <div class="hud-item"><div class="hud-label">EXPLORED</div><div class="hud-val" id="hud-explored">0%</div></div>
   </div>
   <button id="dev-toggle">⚙ DEV</button>
@@ -113,9 +144,9 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 
     <!-- 게임오버 -->
     <div id="gameover" class="overlay">
-      <div class="ov-title red">☣ OUTBREAK</div>
+      <div class="ov-title red" id="go-reason">☣ OUTBREAK</div>
       <div class="ov-stats">
-        밟은 지뢰: <span id="go-mines">0</span>개<br>
+        밟은 병원체: <span id="go-mines">0</span>개<br>
         생존 시간: <span id="go-time">0초</span>
       </div>
       <button class="ov-btn red" id="go-btn">RETRY</button>
@@ -145,7 +176,10 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       <div class="dev-section">PLAYER</div>
       <div class="dev-row"><label>이동 딜레이</label><input type="range" id="d-delay" min="0.10" max="0.40" step="0.01" value="0.25"><span class="dev-val" id="d-delay-v">0.25</span></div>
       <div class="dev-row"><label>시야 반경</label><input type="range" id="d-vision" min="2" max="8" step="1" value="4"><span class="dev-val" id="d-vision-v">4</span></div>
-      <div class="dev-row"><label>최대 HP</label><input type="range" id="d-hp" min="1" max="5" step="1" value="3"><span class="dev-val" id="d-hp-v">3</span></div>
+
+      <div class="dev-section">OXYGEN / INFECTION</div>
+      <div class="dev-row"><label>산소 감소 속도</label><input type="range" id="d-oxydrain" min="1" max="20" step="0.5" value="4"><span class="dev-val" id="d-oxydrain-v">4</span></div>
+      <div class="dev-row"><label>감염 기준 산소%</label><input type="range" id="d-infthresh" min="20" max="80" step="5" value="60"><span class="dev-val" id="d-infthresh-v">60</span></div>
 
       <div class="dev-section">MINE</div>
       <div class="dev-row"><label>지뢰 밀도 %</label><input type="range" id="d-mine" min="5" max="35" step="5" value="8"><span class="dev-val" id="d-mine-v">8</span></div>
@@ -165,7 +199,8 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 
       <button class="dev-btn" id="d-regen">🔄 맵 재생성</button>
       <button class="dev-btn" id="d-reveal">💣 지뢰 표시 OFF</button>
-      <button class="dev-btn" id="d-fullhp">❤ HP 전부 회복</button>
+      <button class="dev-btn" id="d-fulloxy">💨 산소 전부 회복</button>
+      <button class="dev-btn" id="d-clearinf">🧬 감염도 초기화</button>
       <button class="dev-btn" id="d-addprecise">📡 정밀 소나 +1</button>
       <button class="dev-btn" id="d-additem">🔑 아이템 +1 획득</button>
       <button class="dev-btn" id="d-invincible">🛡 무적 모드 OFF</button>
@@ -176,10 +211,12 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       <div class="dev-info">
         FPS: <span id="di-fps">0</span><br>
         타일: <span id="di-tile">FLOOR</span><br>
-        지뢰 수: <span id="di-mines">0</span>개<br>
-        아이템: <span id="di-items">0/3</span><br>
+        병원체 수: <span id="di-mines">0</span>개<br>
+        캡슐: <span id="di-items">0/3</span><br>
         좀비: <span id="di-zombies">0</span>마리<br>
         막다른 길: <span id="di-dead">0%</span><br>
+        산소: <span id="di-oxygen">100%</span><br>
+        감염: <span id="di-infect">0%</span><br>
         경과: <span id="di-time">0s</span>
       </div>
     </div>

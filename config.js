@@ -12,13 +12,22 @@ const CONFIG = {
   },
 
   mine: {
-    density: 8,   // A3 지뢰 밀도 (%)
+    density: 8,   // 병원체 밀도 (%)
   },
 
   player: {
     moveDelay: 0.25,
     visionRad:  4,
-    maxHp:      3,
+  },
+
+  oxygen: {
+    max:              100,         // 산소 최대치
+    drainPerStage:    [4, 7, 11], // 스테이지별 자연 감소 속도 (%/초)
+    drainOnHit:        15,         // 좀비 피격 시 산소 감소량
+    infectThreshold:   60,         // 산소 이 % 이하부터 감염 시작
+    infectRate:         2.5,       // 감염 증가 속도 (%/초) — 위험구간
+    infectRateEmpty:    6.0,       // 감염 증가 속도 (%/초) — 산소 0일 때
+    capsuleHeal:       33,         // 산소 캡슐 1개당 회복량 (%)
   },
 
   sonar: {
@@ -33,7 +42,7 @@ const CONFIG = {
   },
 
   escape: {
-    itemCount: 3,          // 탈출에 필요한 부품 수
+    itemCount: 3,          // 산소 캡슐 수
   },
 
   camera: { smooth: 0.12 },
@@ -43,17 +52,16 @@ const CONFIG = {
     opacity: 0.80,
   },
 
-  // 좀비 (Step 4 봉인)
   zombie: {
-    count:        2,     // 스폰 수
-    speed:        0.30,  // 플레이어 대비 속도 비율
-    spawnDist:    6,     // 스폰 최소 거리 (타일)
-    damageCool:   1.5,   // 접촉 피해 쿨타임 (초)
-    fovAngle:     90,    // 시야각 (도)
-    fovRange:     2,     // 시야 거리 (타일)
-    hearRange:    4,     // 청각 범위 (타일) — 소나/지뢰 소음 도달 범위
-    chaseMemory:  2.5,   // 플레이어 시야 잃은 후 추격 유지 시간 (초)
-    noiseMemory:  6.0,   // 소음 인지 후 발원지 탐색 유지 시간 (초)
+    count:        2,
+    speed:        0.30,
+    spawnDist:    6,
+    damageCool:   1.5,
+    fovAngle:     90,
+    fovRange:     2,
+    hearRange:    4,
+    chaseMemory:  2.5,
+    noiseMemory:  6.0,
   },
 
 };

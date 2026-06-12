@@ -363,11 +363,15 @@ let vignetteGradient = null;
 const player = {
   tx:1, ty:1, px:0, py:0, targetX:0, targetY:0,
   moving:false, facing:'down',
-  hp:3, maxHp:3, dead:false,
+  dead:false,
   itemsFound: 0,
   damageCooldown: 0,
   noiseRadius: 0,
   noiseX: 0, noiseY: 0,
+  // 산소 / 감염 시스템
+  oxygen:    100,
+  infection:   0,
+  stage:       0,
 };
 
 const sonar = {
@@ -417,9 +421,9 @@ function init() {
     px: CONFIG.map.tileSize, py: CONFIG.map.tileSize,
     targetX: CONFIG.map.tileSize, targetY: CONFIG.map.tileSize,
     moving: false, facing: 'down',
-    hp: CONFIG.player.maxHp, maxHp: CONFIG.player.maxHp,
     dead: false, itemsFound: 0, damageCooldown: 0, noiseRadius: 0,
     noiseX: 0, noiseY: 0,
+    oxygen: CONFIG.oxygen.max, infection: 0, stage: 0,
   });
 
   Object.assign(sonar, {
@@ -562,28 +566,31 @@ function onStep(tx, ty) {
       }
       numbers[ny * width + nx] = cnt;
     }
-    player.hp--;
-    if (devInvincible) player.hp = Math.max(1, player.hp);
     stats.minesHit++;
+    if (!devInvincible) {
+      applyOxygenDamage(CONFIG.oxygen.drainOnHit * 0.5); // 병원체 밟기: 산소 소폭 감소
+    }
     triggerNoise(player.px + CONFIG.map.tileSize / 2,
                  player.py + CONFIG.map.tileSize / 2, CONFIG.zombie.hearRange);
     triggerFlash('red');
-    if (!devInvincible && player.hp <= 0) showGameOver();
     return;
   }
 
   if (tile === T.ITEM) {
     MAP.tiles[tileIdx] = T.FLOOR;
     player.itemsFound++;
+    // 산소 캡슐: 산소 33% 보충
+    player.oxygen = Math.min(CONFIG.oxygen.max, player.oxygen + CONFIG.oxygen.capsuleHeal);
     triggerFlash('item');
+    triggerFlash('oxygen');
     return;
   }
 
   if (tile === T.EXIT) {
+    // TODO: 스테이지 시스템 추가 시 병원체 전부 회수 조건으로 교체
     if (player.itemsFound >= CONFIG.escape.itemCount) {
       showEscaped();
     }
-    // 조건 미충족이면 출구 타일 유지 (아무것도 안 함)
   }
 }
 
@@ -593,7 +600,6 @@ function triggerFlash(color) {
     fl.style.opacity = '1';
     setTimeout(() => { fl.style.opacity = '0'; }, 150);
   } else if (color === 'item') {
-    // 아이템 수집: 초록 vignette + HUD ITEMS 숫자 팝
     const fl = document.getElementById('item-flash');
     fl.style.opacity = '1';
     setTimeout(() => { fl.style.opacity = '0'; }, 220);
@@ -606,15 +612,33 @@ function triggerFlash(color) {
       el.style.color = '';
       el.style.transition = 'transform 0.2s, color 0.2s';
     }, 200);
+  } else if (color === 'oxygen') {
+    // 산소 캡슐 수집: 파란 HUD 산소 팝
+    const el = document.getElementById('hud-oxygen');
+    if (el) {
+      el.style.transform = 'scale(1.5)';
+      el.style.transition = 'transform 0.12s';
+      setTimeout(() => {
+        el.style.transform = 'scale(1)';
+        el.style.transition = 'transform 0.2s';
+      }, 200);
+    }
   }
 }
 
-function showGameOver() {
+function showGameOver(reason) {
   player.dead = true;
   const elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
-  document.getElementById('go-mines').textContent = stats.minesHit;
-  document.getElementById('go-time').textContent  = elapsed + '초';
+  document.getElementById('go-mines').textContent  = stats.minesHit;
+  document.getElementById('go-time').textContent   = elapsed + '초';
+  const reasonEl = document.getElementById('go-reason');
+  if (reasonEl) reasonEl.textContent = reason === 'infected' ? '☣ 감염 전환' : '☠ 사망';
   document.getElementById('gameover').classList.add('show');
+}
+
+// 산소 감소 공통 함수
+function applyOxygenDamage(amount) {
+  player.oxygen = Math.max(0, player.oxygen - amount);
 }
 
 function showEscaped() {
@@ -1070,13 +1094,9 @@ function zombieContact(z, c, zcx, zcy) {
   const dist = Math.hypot(zcx - c.pcx, zcy - c.pcy);
   if (dist < c.ts * 0.6 && player.damageCooldown <= 0) {
     player.damageCooldown = CONFIG.zombie.damageCool;
+    triggerFlash('red');
     if (!devInvincible) {
-      player.hp--;
-      triggerFlash('red');
-      if (player.hp <= 0) showGameOver();
-    } else {
-      player.hp = Math.max(1, player.hp);
-      triggerFlash('red');
+      applyOxygenDamage(CONFIG.oxygen.drainOnHit);
     }
   }
 }
@@ -1099,9 +1119,36 @@ function update(dt) {
     else { player.px += dx / dist * spd; player.py += dy / dist * spd; }
   }
   updateZombies(dt);
+  updateOxygenInfection(dt);
   const ts = CONFIG.map.tileSize;
   camX += (player.px + ts / 2 - W_px / 2 - camX) * CONFIG.camera.smooth;
   camY += (player.py + ts / 2 - H_px / 2 - camY) * CONFIG.camera.smooth;
+}
+
+// ── 산소 / 감염 업데이트 ─────────────────────────────────────────
+function updateOxygenInfection(dt) {
+  if (player.dead) return;
+  const cfg = CONFIG.oxygen;
+
+  // 산소 자연 감소 (스테이지별 속도)
+  if (!devInvincible) {
+    const drainRate = cfg.drainPerStage[Math.min(player.stage, cfg.drainPerStage.length - 1)];
+    player.oxygen = Math.max(0, player.oxygen - drainRate * dt);
+  }
+
+  // 감염 증가 — 산소 60% 이하부터 시작
+  if (!devInvincible) {
+    if (player.oxygen <= 0) {
+      player.infection = Math.min(100, player.infection + cfg.infectRateEmpty * dt);
+    } else if (player.oxygen < cfg.infectThreshold) {
+      player.infection = Math.min(100, player.infection + cfg.infectRate * dt);
+    }
+  }
+
+  // 좀비화 판정
+  if (player.infection >= 100 && !player.dead) {
+    showGameOver('infected');
+  }
 }
 
 // ── 렌더링 ───────────────────────────────────────────────────────
@@ -1247,18 +1294,46 @@ function renderMinimap() {
 
 // ── HUD & DEV ────────────────────────────────────────────────────
 function updateHUD() {
-  const hp = Math.max(0, player.hp);
+  const cfg    = CONFIG.oxygen;
   const needed = CONFIG.escape.itemCount;
+  const oxy    = Math.max(0, player.oxygen);
+  const inf    = Math.max(0, player.infection);
+
   document.getElementById('hud-pos').textContent     = `${player.tx},${player.ty}`;
-  document.getElementById('hud-hp').textContent      = '❤'.repeat(hp) + '🖤'.repeat(Math.max(0, player.maxHp - hp));
   document.getElementById('hud-basic').textContent   = sonar.charging ? 'CHARGE' : 'READY';
   document.getElementById('hud-precise').textContent = '📡 ' + sonar.precise;
-  document.getElementById('hud-items').textContent   = `${player.itemsFound}/${needed}`;
 
+  // 산소 게이지
+  const oxyFill = document.getElementById('hud-oxygen-fill');
+  const oxyVal  = document.getElementById('hud-oxygen');
+  if (oxyFill) {
+    oxyFill.style.width = oxy + '%';
+    // 색상: 안전(파랑) → 위험구간(주황) → 위급(빨강)
+    if (oxy > cfg.infectThreshold)      oxyFill.style.background = '#44aaff';
+    else if (oxy > cfg.infectThreshold * 0.4) oxyFill.style.background = '#ff8800';
+    else                                 oxyFill.style.background = '#ff3333';
+  }
+  if (oxyVal) oxyVal.textContent = Math.ceil(oxy) + '%';
+
+  // 감염 게이지
+  const infFill = document.getElementById('hud-infection-fill');
+  const infVal  = document.getElementById('hud-infection');
+  if (infFill) {
+    infFill.style.width = inf + '%';
+    // 색상: 낮음(초록) → 중간(주황) → 위험(빨강)
+    if (inf < 40)      infFill.style.background = '#00ff88';
+    else if (inf < 75) infFill.style.background = '#ff8800';
+    else               infFill.style.background = '#ff3333';
+  }
+  if (infVal) {
+    infVal.textContent = Math.ceil(inf) + '%';
+    infVal.style.color = inf >= 75 ? '#ff3333' : inf >= 40 ? '#ff8800' : '#00ff88';
+  }
+
+  // 산소 캡슐 카운터
   const itemEl = document.getElementById('hud-items');
-  itemEl.className = 'hud-val' + (player.itemsFound >= needed ? '' : '');
-  if (player.itemsFound >= needed) itemEl.style.color = '#00ff88';
-  else itemEl.style.color = '#ffdd00';
+  itemEl.textContent = `${player.itemsFound}/${needed}`;
+  itemEl.style.color = player.itemsFound >= needed ? '#00ff88' : '#44aaff';
 
   let visited = 0;
   for (let i = 0; i < VISITED.length; i++) if (VISITED[i]) visited++;
@@ -1268,13 +1343,15 @@ function updateHUD() {
 function updateDevInfo() {
   if (!document.getElementById('dev-panel').classList.contains('open')) return;
   const t = MAP.tiles[player.ty * MAP.width + player.tx];
-  document.getElementById('di-fps').textContent   = fps;
-  document.getElementById('di-tile').textContent  = t === T.WALL ? 'WALL' : t === T.MINE ? 'MINE' : t === T.ITEM ? 'ITEM' : t === T.EXIT ? 'EXIT' : 'FLOOR';
-  document.getElementById('di-mines').textContent = MAP.mineCount;
-  document.getElementById('di-items').textContent = `${player.itemsFound}/${CONFIG.escape.itemCount}`;
+  document.getElementById('di-fps').textContent     = fps;
+  document.getElementById('di-tile').textContent    = t === T.WALL ? 'WALL' : t === T.MINE ? 'MINE' : t === T.ITEM ? 'ITEM' : t === T.EXIT ? 'EXIT' : 'FLOOR';
+  document.getElementById('di-mines').textContent   = MAP.mineCount;
+  document.getElementById('di-items').textContent   = `${player.itemsFound}/${CONFIG.escape.itemCount}`;
   document.getElementById('di-zombies').textContent = zombies.length;
-  document.getElementById('di-dead').textContent  = Math.floor(MAP.deadEndRatio * 100) + '%';
-  document.getElementById('di-time').textContent  = Math.floor((Date.now() - stats.startTime) / 1000) + 's';
+  document.getElementById('di-dead').textContent    = Math.floor(MAP.deadEndRatio * 100) + '%';
+  document.getElementById('di-time').textContent    = Math.floor((Date.now() - stats.startTime) / 1000) + 's';
+  document.getElementById('di-oxygen').textContent  = Math.ceil(player.oxygen) + '%';
+  document.getElementById('di-infect').textContent  = Math.ceil(player.infection) + '%';
 }
 
 // ── DEV 패널 ─────────────────────────────────────────────────────
@@ -1290,7 +1367,6 @@ const SLIDERS = [
   ['d-loops',     v => CONFIG.map.loopPaths        = parseInt(v)],
   ['d-delay',     v => CONFIG.player.moveDelay     = parseFloat(v)],
   ['d-vision',    v => CONFIG.player.visionRad     = parseInt(v)],
-  ['d-hp',        v => CONFIG.player.maxHp         = parseInt(v)],
   ['d-mine',      v => CONFIG.mine.density         = parseInt(v)],
   ['d-maxcharge', v => CONFIG.sonar.maxCharge      = parseFloat(v)],
   ['d-radius',    v => CONFIG.sonar.maxRadius      = parseInt(v)],
@@ -1299,6 +1375,8 @@ const SLIDERS = [
   ['d-items',     v => CONFIG.escape.itemCount     = parseInt(v)],
   ['d-zcount',    v => CONFIG.zombie.count         = parseInt(v)],
   ['d-zspeed',    v => CONFIG.zombie.speed         = parseFloat(v)],
+  ['d-oxydrain',  v => { CONFIG.oxygen.drainPerStage[0] = parseFloat(v); }],
+  ['d-infthresh', v => CONFIG.oxygen.infectThreshold = parseInt(v)],
 ];
 SLIDERS.forEach(([id, fn]) => {
   const el  = document.getElementById(id);
@@ -1311,10 +1389,13 @@ document.getElementById('d-reveal').addEventListener('click', () => {
   devRevealMines = !devRevealMines;
   document.getElementById('d-reveal').textContent = '💣 지뢰 표시 ' + (devRevealMines ? 'ON' : 'OFF');
 });
-document.getElementById('d-fullhp').addEventListener('click', () => {
-  player.hp = player.maxHp; player.dead = false;
+document.getElementById('d-fulloxy').addEventListener('click', () => {
+  player.oxygen = CONFIG.oxygen.max; player.dead = false;
   document.getElementById('gameover').classList.remove('show');
   document.getElementById('escaped').classList.remove('show');
+});
+document.getElementById('d-clearinf').addEventListener('click', () => {
+  player.infection = 0;
 });
 document.getElementById('d-addprecise').addEventListener('click', () => { sonar.precise++; });
 document.getElementById('d-additem').addEventListener('click', () => {
