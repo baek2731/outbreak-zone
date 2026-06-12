@@ -392,7 +392,8 @@ function roundRect(ctx, x, y, w, h, r) {
 
 // ── 맵 생성 ──────────────────────────────────────────────────────
 function generateMap() {
-  let sz = CONFIG.map.size;
+  const sIdx = Math.min(player.stage, CONFIG.stages.length - 1);
+  let sz = CONFIG.stages[sIdx].mapSize;
   if (sz % 2 === 0) sz++;
   const W = sz, H = sz;
   for (let i = 0; i < 10; i++) {
@@ -457,16 +458,24 @@ function _buildMap(W, H, force = false) {
   const safeSet = new Set();
   for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) safeSet.add(`${1+dx},${1+dy}`);
 
-  // 지뢰 배치
-  let mineCount = 0;
+  // 병원체 배치 — 스테이지별 고정 개수, 랜덤 셔플 후 앞에서 N개 배치
+  const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
+  const targetMineCount = CONFIG.stages[stageIdx].mineCount;
+  const mineCandidates = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    if (get(x, y) !== T.FLOOR || safeSet.has(`${x},${y}`)) continue;
-    if (Math.random() * 100 < CONFIG.mine.density) { set(x, y, T.MINE); mineCount++; }
+    if (get(x, y) === T.FLOOR && !safeSet.has(`${x},${y}`)) mineCandidates.push([x, y]);
+  }
+  shuffle(mineCandidates);
+  let mineCount = 0;
+  for (const [x, y] of mineCandidates) {
+    if (mineCount >= targetMineCount) break;
+    set(x, y, T.MINE); mineCount++;
   }
 
   // 아이템 배치 — 스폰 거리 기준 구간 분할, 각 구간에서 1개씩
   const itemCandidates = floorTiles.filter(([x, y]) => !safeSet.has(`${x},${y}`) && get(x, y) === T.FLOOR);
-  const needed = Math.min(CONFIG.escape.itemCount, itemCandidates.length);
+  const sIdxItem = Math.min(player.stage, CONFIG.stages.length - 1);
+  const needed = Math.min(CONFIG.stages[sIdxItem].capsuleCount, itemCandidates.length);
   // 각 후보의 스폰 거리 계산
   const withDist = itemCandidates.map(([x, y]) => ({ x, y, d: Math.hypot(x - 1, y - 1) }));
   withDist.sort((a, b) => a.d - b.d);
@@ -667,7 +676,7 @@ function init() {
     active:false, type:null, pattern:[], current:0, result:null,
     resultTimer:0, flashTimer:0, mineTileIdx:-1, combatZombie:null,
     interruptedMine:false, postCooldown:0,
-    combatGauge:0, combatDrain:0, mashTimer:0,
+    combatGauge:0, combatDrain:0, playerPower: MG.combatPlayerPower, mashTimer:0,
   });
   revealAround(1, 1, CONFIG.player.visionRad);
   camX = player.px + CONFIG.map.tileSize / 2 - W_px / 2;
@@ -737,7 +746,7 @@ window.addEventListener('keydown', e => {
     // 전투 미니게임 중 — 연타 입력 (게이지 증가)
     if (minigame.active && minigame.type === 'combat' && !minigame.result) {
       minigame.combatGauge = Math.min(MG.combatGaugeMax,
-        minigame.combatGauge + MG.combatPlayerPower);
+        minigame.combatGauge + minigame.playerPower);
       if (minigame.combatGauge >= MG.combatWinThreshold) endMinigame(true);
       return;
     }
@@ -898,12 +907,15 @@ function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
   if (minigame.active && type === 'combat') {
     minigame.interruptedMine = interrupted || false;
   }
-  const stageIdx = Math.min(player.stage, MG.patternLengthByStage.length - 1);
-  const len = MG.patternLengthByStage[stageIdx];
+  const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
+  const len = CONFIG.stages[stageIdx].patternLen;
 
   const zState = zombieRef ? zombieRef.state : 'WANDER';
   const drain = type === 'combat'
     ? (MG.combatZombieDrainByState[zState] ?? 7) : 0;
+  // 스테이지별 전투 연타 게이지 증가량 보정
+  const stageCombatMash = CONFIG.stages[Math.min(player.stage, CONFIG.stages.length - 1)].combatMash;
+  const stagePlayerPower = Math.max(8, MG.combatPlayerPower - (player.stage * 1.5)); // 스테이지 오를수록 연타당 게이지 소폭 감소
 
   Object.assign(minigame, {
     active: true, type,
@@ -914,7 +926,9 @@ function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
     combatZombie: zombieRef ?? null,
     interruptedMine: interrupted || false,
     postCooldown: 0,
-    combatGauge: 0, combatDrain: drain, mashTimer: MG.combatMashTime,
+    combatGauge: 0, combatDrain: drain,
+    playerPower: stagePlayerPower,
+    mashTimer: MG.combatMashTime,
   });
   if (type === 'mine') revealAround(player.tx, player.ty, MG.visionRadMine);
   triggerFlash('red');
@@ -1172,7 +1186,8 @@ function spawnZombies() {
   zombies = [];
   const { tiles, width, height } = MAP;
   const ts    = CONFIG.map.tileSize;
-  const count = CONFIG.zombie.count;
+  const sIdxZ = Math.min(player.stage, CONFIG.stages.length - 1);
+  const count = CONFIG.stages[sIdxZ].zombieCount;
   const minD  = CONFIG.zombie.spawnDist;
 
   // 후보: 바닥 타일, 스폰 거리 이상
@@ -1791,7 +1806,7 @@ const SLIDERS = [
   ['d-loops',     v => CONFIG.map.loopPaths        = parseInt(v)],
   ['d-delay',     v => CONFIG.player.moveDelay     = parseFloat(v)],
   ['d-vision',    v => CONFIG.player.visionRad     = parseInt(v)],
-  ['d-mine',      v => CONFIG.mine.density         = parseInt(v)],
+  ['d-mine',      v => { const s = Math.min(player.stage, CONFIG.stages.length-1); CONFIG.stages[s].mineCount = parseInt(v); }],
   ['d-maxcharge', v => CONFIG.sonar.maxCharge      = parseFloat(v)],
   ['d-radius',    v => CONFIG.sonar.maxRadius      = parseInt(v)],
   ['d-pingdur',   v => CONFIG.sonar.pingDuration   = parseFloat(v)],

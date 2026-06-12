@@ -12,7 +12,7 @@ const CONFIG = {
   },
 
   mine: {
-    density: 8,   // 병원체 밀도 (%)
+    countPerStage: [5, 7, 9, 11, 13], // 스테이지별 병원체 고정 개수
   },
 
   player: {
@@ -42,8 +42,21 @@ const CONFIG = {
   },
 
   escape: {
-    itemCount: 3,          // 산소 캡슐 수
+    itemCount: 3,          // 산소 캡슐 수 (스테이지 0 기준, 아래 stages로 대체)
   },
+
+  stages: [
+    // 1층: 외곽 병동
+    { mapSize:15, mineCount:5,  zombieCount:1, capsuleCount:3, patternLen:3, combatMash:{ CHASE:6,  SEARCH:4, WANDER:2 } },
+    // 2층: 일반 병동
+    { mapSize:17, mineCount:7,  zombieCount:2, capsuleCount:3, patternLen:3, combatMash:{ CHASE:7,  SEARCH:5, WANDER:3 } },
+    // 3층: 중환자실
+    { mapSize:19, mineCount:9,  zombieCount:3, capsuleCount:4, patternLen:4, combatMash:{ CHASE:8,  SEARCH:5, WANDER:3 } },
+    // 4층: 바이러스 연구소
+    { mapSize:21, mineCount:11, zombieCount:4, capsuleCount:4, patternLen:4, combatMash:{ CHASE:9,  SEARCH:6, WANDER:4 } },
+    // 5층: 발원지
+    { mapSize:23, mineCount:13, zombieCount:5, capsuleCount:5, patternLen:5, combatMash:{ CHASE:10, SEARCH:7, WANDER:4 } },
+  ],
 
   camera: { smooth: 0.12 },
 
