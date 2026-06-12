@@ -739,6 +739,12 @@ const GAME_KEYS = new Set([
 window.addEventListener('keydown', e => {
   if (GAME_KEYS.has(e.code)) e.preventDefault();
 
+  // 인트로 화면 중 스페이스로 닫기
+  if (e.code === 'Space') {
+    const intro = document.getElementById('stage-intro');
+    if (intro.classList.contains('show')) { closeIntro(); return; }
+  }
+
   // 미니게임 진행 중 입력 처리
   if (minigame.active && !minigame.result) {
     const dir = MG.keyToDir[e.code];
@@ -823,6 +829,7 @@ function handleInput(dt) {
   moveTimer = Math.max(0, moveTimer - dt);
   processKeys();
   if (player.moving || moveTimer > 0 || player.dead || minigame.active) return;
+  if (document.getElementById('stage-intro').classList.contains('show')) return;
   const dir = getHeldDir();
   if (dir) { updateFacing(dir.dx, dir.dy); tryMove(dir.dx, dir.dy); }
 }
@@ -1075,8 +1082,8 @@ function showEscaped() {
   document.getElementById('esc-time').textContent  = elapsed + '초';
 
   const isLast = player.stage >= CONFIG.stages.length - 1;
-  const btn = document.getElementById('esc-btn');
-  btn.textContent = isLast ? 'ALL CLEAR' : 'NEXT STAGE ▶';
+  document.getElementById('esc-choices').style.display = isLast ? 'none' : 'flex';
+  document.getElementById('esc-final').style.display   = isLast ? 'block' : 'none';
 
   document.getElementById('escaped').classList.add('show');
 }
@@ -1587,6 +1594,7 @@ let _prevInfZone = 'low';    // 'low' | 'mid' | 'high'
 
 function updateOxygenInfection(dt) {
   if (player.dead) return;
+  if (document.getElementById('stage-intro').classList.contains('show')) return;
   const cfg = CONFIG.oxygen;
 
   // 산소 자연 감소 (스테이지별 속도)
@@ -1899,17 +1907,28 @@ document.getElementById('go-btn').addEventListener('click', () => {
   player.stage = 0; // 게임오버 시 1층부터
   init();
 });
+// 다음 스테이지
 document.getElementById('esc-btn').addEventListener('click', () => {
-  const isLast = player.stage >= CONFIG.stages.length - 1;
-  if (!isLast) player.stage++;
+  if (player.stage < CONFIG.stages.length - 1) player.stage++;
+  init();
+});
+// 기지 복귀 — 1층부터 재시작
+document.getElementById('esc-retire').addEventListener('click', () => {
+  player.stage = 0;
+  init();
+});
+// ALL CLEAR 복귀
+document.getElementById('esc-clear').addEventListener('click', () => {
+  player.stage = 0;
   init();
 });
 document.getElementById('log-clear').addEventListener('click', () => {
   devLogEntries.length = 0; _renderDevLog();
 });
-document.getElementById('intro-btn').addEventListener('click', () => {
+function closeIntro() {
   document.getElementById('stage-intro').classList.remove('show');
-});
+}
+document.getElementById('intro-btn').addEventListener('click', closeIntro);
 
 // ── 메인 루프 ────────────────────────────────────────────────────
 let lastTs = 0, fps = 0, frameCount = 0, fpsTimer = 0;

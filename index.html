@@ -204,7 +204,13 @@ canvas#minimap { display:block; image-rendering:pixelated; }
         접촉 병원체: <span id="esc-mines">0</span>개<br>
         생존 시간: <span class="g" id="esc-time">0초</span>
       </div>
-      <button class="ov-btn green" id="esc-btn">NEXT STAGE ▶</button>
+      <div id="esc-choices" style="display:flex; gap:12px; margin-top:4px;">
+        <button class="ov-btn red" id="esc-retire">기지 복귀</button>
+        <button class="ov-btn green" id="esc-btn">다음 스테이지 ▶</button>
+      </div>
+      <div id="esc-final" style="display:none;">
+        <button class="ov-btn green" id="esc-clear">ALL CLEAR — 복귀</button>
+      </div>
     </div>
 
     <!-- 스테이지 인트로 -->
