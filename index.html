@@ -805,10 +805,10 @@ function fireSonar(isPrecise) {
   if (isPrecise) { sonar.chargingPrecise = false; sonar.chargeTimePrecise = 0; sonar.precise--; }
   else           { sonar.charging = false; sonar.chargeTime = 0; }
 
-  // 소나 발동 소음 — 발원지 즉시 처리
+  // 소나 발동 소음 — 소나 반경과 좀비 청력 중 작은 값
   const noiseWx = player.px + ts / 2, noiseWy = player.py + ts / 2;
-  player.noiseX = noiseWx; player.noiseY = noiseWy;  // lastSeen 좌표용 보존
-  triggerNoise(noiseWx, noiseWy, CONFIG.zombie.hearRange);
+  player.noiseX = noiseWx; player.noiseY = noiseWy;
+  triggerNoise(noiseWx, noiseWy, Math.min(radius, CONFIG.zombie.hearRange));
 
   sonar.pulseWx  = player.px + ts / 2;
   sonar.pulseWy  = player.py + ts / 2;
@@ -982,7 +982,7 @@ function zombieSeparate(z, c) {
 // 발생 시점에 호출. 범위 내 좀비에게 "목표 좌표"를 심어줌.
 // 상태는 직접 바꾸지 않고, target만 세팅 → 다음 zombieSense가 처리.
 function triggerNoise(sourceX, sourceY, radiusTiles) {
-  devNoiseMarker = { wx: sourceX, wy: sourceY, timer: 3.0 }; // DEV 마커 3초 표시
+  devNoiseMarker = { wx: sourceX, wy: sourceY, timer: 3.0, r: radiusTiles };
   const ts = CONFIG.map.tileSize;
   for (const z of zombies) {
     if (z.state === 'CHASE') continue;  // 추격 중엔 소음 무시
@@ -1304,7 +1304,7 @@ function render() {
       ctx.globalAlpha = alpha * 0.8;
       ctx.strokeStyle = '#ff8800';
       ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(wx, wy, ts * CONFIG.zombie.hearRange, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(wx, wy, ts * devNoiseMarker.r, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = alpha * 0.5;
       ctx.fillStyle = '#ff8800';
