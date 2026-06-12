@@ -733,9 +733,8 @@ function onStep(tx, ty) {
     player.hp--;
     if (devInvincible) player.hp = Math.max(1, player.hp);
     stats.minesHit++;
-    player.noiseRadius = 5;
-    player.noiseX = player.px + CONFIG.map.tileSize / 2;
-    player.noiseY = player.py + CONFIG.map.tileSize / 2;
+    triggerNoise(player.px + CONFIG.map.tileSize / 2,
+                 player.py + CONFIG.map.tileSize / 2, 5);
     triggerFlash('red');
     if (!devInvincible && player.hp <= 0) showGameOver();
     return;
@@ -806,10 +805,10 @@ function fireSonar(isPrecise) {
   if (isPrecise) { sonar.chargingPrecise = false; sonar.chargeTimePrecise = 0; sonar.precise--; }
   else           { sonar.charging = false; sonar.chargeTime = 0; }
 
-  // 소나 발동 소음 — 반경만큼 좀비 인식 유발
-  player.noiseRadius = radius * 0.8;
-  player.noiseX = player.px + ts / 2;
-  player.noiseY = player.py + ts / 2;
+  // 소나 발동 소음 — 발원지 즉시 처리
+  const noiseWx = player.px + ts / 2, noiseWy = player.py + ts / 2;
+  player.noiseX = noiseWx; player.noiseY = noiseWy;  // lastSeen 좌표용 보존
+  triggerNoise(noiseWx, noiseWy, radius * 0.8);
 
   sonar.pulseWx  = player.px + ts / 2;
   sonar.pulseWy  = player.py + ts / 2;
@@ -909,6 +908,7 @@ function spawnZombies() {
       facingAngle:  Math.random() * Math.PI * 2,
       lastSeenX:    null, lastSeenY: null,
       searchTimer:  0,
+      chaseTimer:   0,   // 인식 유예 타이머 — 0이 될 때까지 CHASE 유지 (스탭4)
     });
   }
 }
@@ -921,19 +921,15 @@ function updateZombies(dt) {
   const pcy  = player.py + ts / 2;
 
   // 플레이어 소음/피해 쿨타임 감소
-  if (player.noiseRadius   > 0) player.noiseRadius   = Math.max(0, player.noiseRadius - dt * 3);
   if (player.damageCooldown > 0) player.damageCooldown -= dt;
 
   // 매 프레임 공유 컨텍스트
   const ctx2 = {
     dt, ts, spd,
-    wSpd:        spd * 0.45,           // 배회 속도 = 추적의 45%
+    wSpd:        spd * 0.45,
     pcx, pcy,
     fovHalf:     (CONFIG.zombie.fovAngle / 2) * Math.PI / 180,
     sightTiles:  CONFIG.zombie.fovRange,
-    noiseTiles:  player.noiseRadius,
-    noiseX:      player.noiseX,
-    noiseY:      player.noiseY,
     margin:      ts * 0.15,
     sepRadius:   ts * 1.1,
     sepStrength: spd * 1.6,
@@ -952,8 +948,26 @@ function updateZombies(dt) {
   }
 }
 
+// 소음 이벤트 즉시 처리 — 발생 시점에 호출, 범위 내 좀비를 발원지로 SEARCH 유인
+// sourceX/Y: 소음 발원지 월드 좌표(px), radiusTiles: 소음 도달 반경(타일)
+function triggerNoise(sourceX, sourceY, radiusTiles) {
+  const ts = CONFIG.map.tileSize;
+  for (const z of zombies) {
+    if (z.state === 'CHASE') continue; // 이미 추격 중이면 무시
+    const zcx = z.px + ts / 2, zcy = z.py + ts / 2;
+    const dist = Math.hypot(sourceX - zcx, sourceY - zcy) / ts;
+    if (dist <= radiusTiles) {
+      z.state = 'SEARCH';
+      z.searchTimer = 99;  // 발원지 도착 전까지 유지
+      z.wanderTimer = 0;
+      z.lastSeenX = sourceX;
+      z.lastSeenY = sourceY;
+    }
+  }
+}
+
 // 인식 판정 + 상태 전환
-// 우선순위: 시야·근접(실위치 CHASE) > 소음(발원지 SEARCH 유인)
+// 우선순위: 시야·근접(실위치 CHASE) > chaseTimer 유예 > SEARCH
 function zombieSense(z, c, zcx, zcy, distToPlayer) {
   const distTiles = distToPlayer / c.ts;
 
@@ -968,30 +982,22 @@ function zombieSense(z, c, zcx, zcy, distToPlayer) {
   // 2) 근접: 0.6타일 이내 무조건 인식
   const inProximity = distTiles <= 0.6;
 
-  // 3) 소음: 발원지로부터 좀비까지 거리 판정 (낚시 기반)
-  let inNoise = false;
-  if (c.noiseTiles > 0) {
-    const nDist = Math.hypot(c.noiseX - zcx, c.noiseY - zcy) / c.ts;
-    inNoise = nDist <= c.noiseTiles;
-  }
-
   if (inSight || inProximity) {
-    // 직접 인지 → 플레이어 실위치 CHASE
+    // 직접 인지 → CHASE + chaseTimer 충전
     z.state = 'CHASE';
+    z.chaseTimer = 2.5;   // 2.5초간 인식 유예
     z.lastSeenX = c.pcx;
     z.lastSeenY = c.pcy;
-  } else if (inNoise && z.state !== 'CHASE') {
-    // 소음 일회성 트리거 → 발원지로 SEARCH 유인
-    // 소음이 꺼져도 발원지까지 이동 → 두리번 → 복귀
-    z.state = 'SEARCH';
-    z.searchTimer = 99;
-    z.wanderTimer = 0;
-    z.lastSeenX = c.noiseX;
-    z.lastSeenY = c.noiseY;
   } else if (z.state === 'CHASE') {
-    z.state = 'SEARCH';
-    z.searchTimer = 2.0;
-    z.wanderTimer = 0;
+    z.chaseTimer -= c.dt;
+    if (z.chaseTimer > 0) {
+      // 유예 중 — lastSeen 유지하며 계속 추격
+    } else {
+      // 유예 만료 → SEARCH
+      z.state = 'SEARCH';
+      z.searchTimer = 2.0;
+      z.wanderTimer = 0;
+    }
   } else if (z.state === 'SEARCH') {
     z.searchTimer -= c.dt;
     if (z.searchTimer <= 0) z.state = 'WANDER';
