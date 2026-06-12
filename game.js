@@ -202,12 +202,28 @@ function drawSonarPreciseMarks() {
     const wx = m.tx * ts, wy = m.ty * ts;
     ctx.save();
     ctx.globalAlpha = m.alpha;
-    ctx.fillStyle = 'rgba(255,50,50,0.15)'; ctx.fillRect(wx, wy, ts, ts);
-    ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(wx + 10, wy + 10); ctx.lineTo(wx + ts - 10, wy + ts - 10);
-    ctx.moveTo(wx + ts - 10, wy + 10); ctx.lineTo(wx + 10, wy + ts - 10);
-    ctx.stroke();
+
+    if (m.kind === 'mine') {
+      // 병원체: 빨간 X 표시
+      ctx.fillStyle = 'rgba(255,50,50,0.15)'; ctx.fillRect(wx, wy, ts, ts);
+      ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(wx + 10, wy + 10); ctx.lineTo(wx + ts - 10, wy + ts - 10);
+      ctx.moveTo(wx + ts - 10, wy + 10); ctx.lineTo(wx + 10, wy + ts - 10);
+      ctx.stroke();
+    } else {
+      // 좀비: 주황 눈 아이콘 (타원 + 동공)
+      const cx = wx + ts / 2, cy = wy + ts / 2;
+      ctx.fillStyle = 'rgba(255,140,0,0.12)'; ctx.fillRect(wx, wy, ts, ts);
+      ctx.strokeStyle = '#ff8c00'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, ts * 0.28, ts * 0.18, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy, ts * 0.08, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff8c00'; ctx.fill();
+    }
+
     ctx.restore();
   }
 }
@@ -360,6 +376,7 @@ const sonar = {
   firing: false, pulseR: 0, pulseMaxR: 0, pulseWx: 0, pulseWy: 0,
   pings: [], preciseMarks: [],
   precise: 2,
+  radarTimer: 0,   // 소나 발동 후 미니맵 좀비 표시 잔여 시간
 };
 
 let camX = 0, camY = 0, moveTimer = 0;
@@ -411,6 +428,7 @@ function init() {
     firing:false, pulseR:0, pulseMaxR:0,
     pings:[], preciseMarks:[],
     precise: CONFIG.sonar.preciseCount,
+    radarTimer: 0,
   });
 
   stats.minesHit = 0; stats.startTime = Date.now();
@@ -624,33 +642,72 @@ function fireSonar(isPrecise) {
   player.noiseX = noiseWx; player.noiseY = noiseWy;
   triggerNoise(noiseWx, noiseWy, Math.min(radius, CONFIG.zombie.hearRange));
 
-  sonar.pulseWx  = player.px + ts / 2;
-  sonar.pulseWy  = player.py + ts / 2;
-  sonar.pulseR   = 0;
+  sonar.pulseWx   = player.px + ts / 2;
+  sonar.pulseWy   = player.py + ts / 2;
+  sonar.pulseR    = 0;
   sonar.pulseMaxR = radius * ts;
-  sonar.firing   = true;
+  sonar.firing    = true;
+  sonar.radarTimer = CONFIG.sonar.radarDuration;  // 미니맵 레이더 활성화
 
   const { tiles, numbers, width, height } = MAP;
   const newPings = [], newMarks = [];
 
-  for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
-    if (dx === 0 && dy === 0) continue;
-    const nx = player.tx + dx, ny = player.ty + dy;
-    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-    if (Math.hypot(dx, dy) > radius + 0.5) continue;
-    const tile = tiles[ny * width + nx];
-    if (tile === T.WALL) continue;
-    const dist = Math.hypot(dx, dy) * ts;
-
-    if (isPrecise) {
-      if (tile === T.MINE)
-        newMarks.push({ tx:nx, ty:ny, dist, lit:false, alpha:0, timer:cfg.pingDuration*1.5 });
-    } else {
+  // ── 기본 소나: 병원체 + 좀비 통합 탐지 (종류 구분 없음) ─────────
+  // 핑 위험도: 인접 병원체 수 기반 (기존) + 좀비 근접 시 추가
+  if (!isPrecise) {
+    // 타일 기반 병원체 핑
+    for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = player.tx + dx, ny = player.ty + dy;
+      if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+      if (Math.hypot(dx, dy) > radius + 0.5) continue;
+      const tile = tiles[ny * width + nx];
+      if (tile === T.WALL) continue;
+      const dist = Math.hypot(dx, dy) * ts;
+      // 병원체 인접 타일은 위험도 핑 (기존 동일)
       if (tile !== T.MINE) {
         const danger = numbers[ny * width + nx];
         if (danger > 0)
           newPings.push({ tx:nx, ty:ny, dist, danger, lit:false, alpha:0, timer:cfg.pingDuration });
       }
+    }
+
+    // 좀비 위치 핑 — 좀비를 병원체와 구분 불가능한 동일한 핑으로 표시
+    for (const z of zombies) {
+      const zdx = z.tx - player.tx, zdy = z.ty - player.ty;
+      if (Math.hypot(zdx, zdy) > radius + 0.5) continue;
+      const dist = Math.hypot(zdx, zdy) * ts;
+      // 좀비 자체를 위험도 3 (최고) 핑으로 표시 — 병원체 인접 핑과 구별 불가
+      // 단, 이미 같은 타일에 핑이 있으면 위험도만 올림
+      const existing = newPings.find(p => p.tx === z.tx && p.ty === z.ty);
+      if (existing) {
+        existing.danger = Math.max(existing.danger, 3);
+      } else {
+        newPings.push({ tx:z.tx, ty:z.ty, dist, danger:3, lit:false, alpha:0, timer:cfg.pingDuration });
+      }
+    }
+
+  // ── 정밀 소나: 병원체 X 표시 + 좀비 눈 표시 (종류 구분) ────────
+  } else {
+    for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = player.tx + dx, ny = player.ty + dy;
+      if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+      if (Math.hypot(dx, dy) > radius + 0.5) continue;
+      const tile = tiles[ny * width + nx];
+      if (tile === T.WALL) continue;
+      const dist = Math.hypot(dx, dy) * ts;
+      if (tile === T.MINE)
+        newMarks.push({ tx:nx, ty:ny, dist, kind:'mine', lit:false, alpha:0, timer:cfg.pingDuration * 1.5 });
+    }
+    // 정밀 소나: 좀비 위치 눈 표시
+    for (const z of zombies) {
+      const zdx = z.tx - player.tx, zdy = z.ty - player.ty;
+      if (Math.hypot(zdx, zdy) > radius + 0.5) continue;
+      const dist = Math.hypot(zdx, zdy) * ts;
+      const existing = newMarks.find(m => m.tx === z.tx && m.ty === z.ty);
+      if (!existing)
+        newMarks.push({ tx:z.tx, ty:z.ty, dist, kind:'zombie', lit:false, alpha:0, timer:cfg.pingDuration * 1.5 });
     }
   }
 
@@ -662,6 +719,7 @@ function updateSonar(dt) {
   const cfg = CONFIG.sonar;
   if (sonar.charging)        sonar.chargeTime        = Math.min(sonar.chargeTime + dt, cfg.maxCharge);
   if (sonar.chargingPrecise) sonar.chargeTimePrecise = Math.min(sonar.chargeTimePrecise + dt, cfg.maxCharge);
+  if (sonar.radarTimer > 0)  sonar.radarTimer        = Math.max(0, sonar.radarTimer - dt);
 
   if (sonar.firing) {
     sonar.pulseR += cfg.pulseSpeed * dt;
@@ -1169,6 +1227,22 @@ function renderMinimap() {
   const ps = Math.max(s, 3);
   mmCtx.fillStyle = '#00ff88';
   mmCtx.fillRect(player.tx * s - ps/2 + s/2, player.ty * s - ps/2 + s/2, ps, ps);
+
+  // 레이더: 소나 발동 후 radarTimer 동안 좀비 위치 표시
+  if (sonar.radarTimer > 0) {
+    const alpha = Math.min(1, sonar.radarTimer / CONFIG.sonar.radarDuration);
+    mmCtx.save();
+    mmCtx.globalAlpha = alpha * 0.85;
+    for (const z of zombies) {
+      const zs = Math.max(s, 2.5);
+      const col = z.state === 'CHASE' ? '#ff3333' : z.state === 'SEARCH' ? '#ff8800' : '#ff6644';
+      mmCtx.fillStyle = col;
+      mmCtx.beginPath();
+      mmCtx.arc(z.tx * s + s / 2, z.ty * s + s / 2, zs, 0, Math.PI * 2);
+      mmCtx.fill();
+    }
+    mmCtx.restore();
+  }
 }
 
 // ── HUD & DEV ────────────────────────────────────────────────────

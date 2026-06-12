@@ -29,6 +29,7 @@ const CONFIG = {
     pingDuration:   1.2,   // 핑 표시 지속 (초)
     pulseSpeed:     160,   // 파장 속도 (px/초)
     preciseCount:   2,     // 시작 시 정밀 소나 지급 수
+    radarDuration:  4.0,   // 소나 발동 후 미니맵 레이더 표시 지속 (초)
   },
 
   escape: {
