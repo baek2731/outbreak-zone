@@ -1105,7 +1105,7 @@ function zombieSearch(z, c, zcx, zcy) {
       ang = Math.atan2(sdy, sdx);
     }
     z.facingAngle = ang;
-    return [Math.cos(ang) * c.spd * 0.7, Math.sin(ang) * c.spd * 0.7];
+    return [Math.cos(ang) * c.spd * 0.85, Math.sin(ang) * c.spd * 0.85];
   } else {
     // 발원지 도달 → 두리번
     z.facingAngle += c.dt * 1.8;

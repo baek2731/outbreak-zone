@@ -45,7 +45,7 @@ const CONFIG = {
   // 좀비 (Step 3 적용 중)
   zombie: {
     count:      2,     // 스폰 수
-    speed:      0.30,  // 플레이어 대비 속도 비율
+    speed:      0.42,  // 플레이어 대비 속도 비율
     spawnDist:  6,     // 스폰 최소 거리 (스폰 지점에서, 타일)
     damageCool: 1.5,   // 접촉 피해 쿨타임 (초)
     fovAngle:   90,    // 시야각 (도)
