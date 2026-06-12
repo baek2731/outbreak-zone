@@ -381,6 +381,7 @@ const sonar = {
   pings: [], preciseMarks: [],
   precise: 2,
   radarTimer: 0,   // 소나 발동 후 미니맵 좀비 표시 잔여 시간
+  radarRadius: 0,  // 탐지된 소나 반경 (타일) — 미니맵 범위 필터용
 };
 
 let camX = 0, camY = 0, moveTimer = 0;
@@ -395,8 +396,7 @@ const DEV_LOG_MAX = 30;
 const devLogEntries = [];   // { time, msg, cls }
 
 function devLog(msg, cls = '') {
-  if (!document.getElementById('dev-panel').classList.contains('open')) return;
-  const elapsed = ((Date.now() - stats.startTime) / 1000).toFixed(1);
+  const elapsed = ((Date.now() - (stats.startTime || Date.now())) / 1000).toFixed(1);
   devLogEntries.unshift({ time: elapsed, msg, cls });
   if (devLogEntries.length > DEV_LOG_MAX) devLogEntries.pop();
   _renderDevLog();
@@ -452,7 +452,7 @@ function init() {
     firing:false, pulseR:0, pulseMaxR:0,
     pings:[], preciseMarks:[],
     precise: CONFIG.sonar.preciseCount,
-    radarTimer: 0,
+    radarTimer: 0, radarRadius: 0,
   });
 
   stats.minesHit = 0; stats.startTime = Date.now();
@@ -697,7 +697,8 @@ function fireSonar(isPrecise) {
   sonar.pulseR    = 0;
   sonar.pulseMaxR = radius * ts;
   sonar.firing    = true;
-  sonar.radarTimer = CONFIG.sonar.radarDuration;  // 미니맵 레이더 활성화
+  sonar.radarTimer  = CONFIG.sonar.radarDuration;  // 미니맵 레이더 활성화
+  sonar.radarRadius = radius;                       // 탐지 반경 저장
 
   const { tiles, numbers, width, height } = MAP;
   const newPings = [], newMarks = [];
@@ -1324,12 +1325,14 @@ function renderMinimap() {
   mmCtx.fillStyle = '#00ff88';
   mmCtx.fillRect(player.tx * s - ps/2 + s/2, player.ty * s - ps/2 + s/2, ps, ps);
 
-  // 레이더: 소나 발동 후 radarTimer 동안 좀비 위치 표시
+  // 레이더: 소나 발동 후 radarTimer 동안 — 소나 반경 안에 있던 좀비만 표시
   if (sonar.radarTimer > 0) {
     const alpha = Math.min(1, sonar.radarTimer / CONFIG.sonar.radarDuration);
     mmCtx.save();
     mmCtx.globalAlpha = alpha * 0.85;
     for (const z of zombies) {
+      const distTiles = Math.hypot(z.tx - player.tx, z.ty - player.ty);
+      if (distTiles > sonar.radarRadius + 0.5) continue;  // 반경 밖 좀비 제외
       const zs = Math.max(s, 2.5);
       const col = z.state === 'CHASE' ? '#ff3333' : z.state === 'SEARCH' ? '#ff8800' : '#ff6644';
       mmCtx.fillStyle = col;
