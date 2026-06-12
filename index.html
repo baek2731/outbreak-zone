@@ -931,7 +931,6 @@ function updateZombies(dt) {
     pcx, pcy,
     fovHalf:     (CONFIG.zombie.fovAngle / 2) * Math.PI / 180,
     sightTiles:  CONFIG.zombie.fovRange,
-    margin:      ts * 0.05,
     sepRadius:   ts * 1.1,
     sepStrength: spd * 1.6,
   };
@@ -1164,41 +1163,46 @@ function zombieSeparate(z, c, zcx, zcy, mvx, mvy) {
   return [mvx, mvy];
 }
 
-// 벽 슬라이딩 이동 + 타일 좌표 동기화
+// 원형 충돌체 이동 + 타일 좌표 동기화
+// 좀비를 원으로 취급 — 코너에서 자연스럽게 슬라이딩
 function zombieApplyMove(z, c, mvx, mvy) {
-  const { tiles, width } = MAP;
-  const ts = c.ts, margin = c.margin;
+  const { tiles, width, height } = MAP;
+  const ts = c.ts;
+  const r  = ts * 0.4;  // 충돌 반경 (렌더링 반경과 일치)
   let blocked = false;
 
+  // X 이동
   if (mvx !== 0) {
-    const newPx = z.px + mvx;
-    const canX  = !isWallAt(newPx + margin,     z.py + margin,      width, ts, tiles)
-               && !isWallAt(newPx + ts - margin, z.py + margin,      width, ts, tiles)
-               && !isWallAt(newPx + margin,      z.py + ts - margin, width, ts, tiles)
-               && !isWallAt(newPx + ts - margin, z.py + ts - margin, width, ts, tiles);
-    if (canX) z.px = newPx;
-    else { z.wanderAngle += Math.PI * (0.5 + Math.random() * 0.5); z.wanderTimer = 0; blocked = true; }
+    const nx = z.px + mvx;
+    if (!circleWallCollide(nx + r, z.py + r, r, ts, width, height, tiles)) {
+      z.px = nx;
+    } else {
+      z.wanderAngle += Math.PI * (0.5 + Math.random() * 0.5);
+      z.wanderTimer = 0;
+      blocked = true;
+    }
   }
+  // Y 이동
   if (mvy !== 0) {
-    const newPy = z.py + mvy;
-    const canY  = !isWallAt(z.px + margin,      newPy + margin,      width, ts, tiles)
-               && !isWallAt(z.px + ts - margin,  newPy + margin,      width, ts, tiles)
-               && !isWallAt(z.px + margin,       newPy + ts - margin, width, ts, tiles)
-               && !isWallAt(z.px + ts - margin,  newPy + ts - margin, width, ts, tiles);
-    if (canY) z.py = newPy;
-    else { z.wanderAngle += Math.PI * (0.5 + Math.random() * 0.5); z.wanderTimer = 0; blocked = true; }
+    const ny = z.py + mvy;
+    if (!circleWallCollide(z.px + r, ny + r, r, ts, width, height, tiles)) {
+      z.py = ny;
+    } else {
+      z.wanderAngle += Math.PI * (0.5 + Math.random() * 0.5);
+      z.wanderTimer = 0;
+      blocked = true;
+    }
   }
 
-  // 끼임 감지: SEARCH/CHASE 중 벽에 막히면 stuckTimer 증가
+  // 끼임 감지
   if (blocked && (z.state === 'SEARCH' || z.state === 'CHASE')) {
     z.stuckTimer += c.dt;
     if (z.stuckTimer >= 1.5) {
-      // 막히면 포기 대신 SEARCH로 우회 시도 (chaseTimer 남아있으면 lastSeen 유지)
       if (z.state === 'CHASE') {
         z.state = 'SEARCH';
         z.searchTimer = z.chaseTimer > 0 ? z.chaseTimer : 2.0;
       } else {
-        z.state = 'WANDER'; // SEARCH도 막히면 진짜 포기
+        z.state = 'WANDER';
       }
       z.stuckTimer = 0;
       z.wanderTimer = 0;
@@ -1209,6 +1213,24 @@ function zombieApplyMove(z, c, mvx, mvy) {
 
   z.tx = Math.round(z.px / ts);
   z.ty = Math.round(z.py / ts);
+}
+
+// 원형 충돌 판정 — 중심(cx,cy), 반경 r 의 원이 벽과 겹치는지 검사
+function circleWallCollide(cx, cy, r, ts, width, height, tiles) {
+  // 원이 닿을 수 있는 타일 범위만 검사
+  const x0 = Math.floor((cx - r) / ts), x1 = Math.floor((cx + r) / ts);
+  const y0 = Math.floor((cy - r) / ts), y1 = Math.floor((cy + r) / ts);
+  for (let ty = y0; ty <= y1; ty++) {
+    for (let tx = x0; tx <= x1; tx++) {
+      if (tx < 0 || ty < 0 || tx >= width || ty >= height) continue;
+      if (tiles[ty * width + tx] !== T.WALL) continue;
+      // 타일과 원의 최근접점 계산
+      const nearX = Math.max(tx * ts, Math.min(cx, tx * ts + ts));
+      const nearY = Math.max(ty * ts, Math.min(cy, ty * ts + ts));
+      if (Math.hypot(cx - nearX, cy - nearY) < r) return true;
+    }
+  }
+  return false;
 }
 
 // 플레이어 접촉 피해
