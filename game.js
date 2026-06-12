@@ -584,7 +584,7 @@ const MG = {
   combatFailOxy:    -25,   // 실패 시 산소 소모
   combatFailInfect:   8,   // 실패 시 감염도 증가
   // 기타
-  postCooldown:     1.8,   // 전투 후 무적 시간 (초)
+  postCooldown:     3.0,   // 전투 후 무적 시간 (초)
   resultShowTime:   1.0,   // 결과 표시 후 자동 닫힘 (초)
   visionRadMine:    2,     // 회수 중 시야 반경
   // 전투 게이지 힘싸움
@@ -955,6 +955,7 @@ function endMinigame(success) {
         recalcNumbers(tx, ty);
       }
       player.infection = Math.min(100, player.infection + MG.mineSuccessInfect);
+      revealAround(player.tx, player.ty, CONFIG.player.visionRad); // 시야 즉시 복구
       devLog(`병원체 회수 성공 — 감염 +${MG.mineSuccessInfect}%`, 'good');
     } else {
       // 실패 — 감염 대폭 증가 + 소음
@@ -978,7 +979,7 @@ function endMinigame(success) {
     }
     triggerFlash('red');
     minigame.postCooldown = MG.postCooldown;
-    devLog('방호복 재밀봉 중... 무적 1.8초', '');
+    devLog(`방호복 재밀봉 중... 무적 ${MG.postCooldown}초`, '');
   }
 
   // 감염 100% 체크
@@ -1487,12 +1488,13 @@ function circleWallCollide(cx, cy, r, ts, width, height, tiles) {
 
 // ── ③ 접촉 → 전투 미니게임 진입 ───────────────────────────────
 function zombieContact(z, c, zcx, zcy) {
-  if (minigame.postCooldown > 0) return; // 무적 쿨타임 중
-  if (minigame.active) return;           // 이미 미니게임 중
+  if (minigame.postCooldown > 0) return;          // 무적 쿨타임 중
+  if (minigame.active && minigame.type === 'combat') return; // 전투 중엔 중복 차단
+  // mine 진행 중 or 결과 표시 중엔 전투로 강제 전환 허용
   const dist = Math.hypot(zcx - c.pcx, zcy - c.pcy);
   if (dist < c.ts * 0.6) {
     if (!devInvincible) {
-      const interrupted = minigame.type === 'mine';
+      const interrupted = minigame.active && minigame.type === 'mine';
       startMinigame('combat', -1, z, interrupted);
     } else {
       triggerFlash('red');

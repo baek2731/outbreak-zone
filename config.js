@@ -16,7 +16,7 @@ const CONFIG = {
   },
 
   player: {
-    moveDelay: 0.25,
+    moveDelay: 0.35,
     visionRad:  4,
   },
 
