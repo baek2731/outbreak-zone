@@ -42,15 +42,17 @@ const CONFIG = {
     opacity: 0.80,
   },
 
-  // 좀비 (Step 3 적용 중)
+  // 좀비 (Step 4 봉인)
   zombie: {
-    count:      2,     // 스폰 수
-    speed:      0.42,  // 플레이어 대비 속도 비율
-    spawnDist:  6,     // 스폰 최소 거리 (스폰 지점에서, 타일)
-    damageCool: 1.5,   // 접촉 피해 쿨타임 (초)
-    fovAngle:   90,    // 시야각 (도)
-    fovRange:   2,     // 시야 거리 (타일)
-    hearRange:  4,     // 청각 범위 (예약 — Step 4 소나 패널티)
+    count:        2,     // 스폰 수
+    speed:        0.30,  // 플레이어 대비 속도 비율
+    spawnDist:    6,     // 스폰 최소 거리 (타일)
+    damageCool:   1.5,   // 접촉 피해 쿨타임 (초)
+    fovAngle:     90,    // 시야각 (도)
+    fovRange:     2,     // 시야 거리 (타일)
+    hearRange:    4,     // 청각 범위 (타일) — 소나/지뢰 소음 도달 범위
+    chaseMemory:  2.5,   // 플레이어 시야 잃은 후 추격 유지 시간 (초)
+    noiseMemory:  6.0,   // 소음 인지 후 발원지 탐색 유지 시간 (초)
   },
 
 };
