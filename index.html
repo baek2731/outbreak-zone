@@ -945,9 +945,35 @@ function updateZombies(dt) {
     const zcy = z.py + ts / 2;
     const distTiles = Math.hypot(pcx - zcx, pcy - zcy) / ts;
 
-    zombieSense(z, c, zcx, zcy, distTiles);  // ① 상태 결정 (유일한 전환 지점)
-    zombieStep(z, c, zcx, zcy);              // ② 목표로 한 발 이동
-    zombieContact(z, c, zcx, zcy);           // ③ 접촉 피해
+    zombieSense(z, c, zcx, zcy, distTiles);  // ① 상태 결정
+    zombieStep(z, c, zcx, zcy);              // ② 이동
+    zombieSeparate(z, c);                    // ③ 좀비 간 분리
+    zombieContact(z, c, zcx, zcy);           // ④ 접촉 피해
+  }
+}
+
+// 좀비 간 분리 — 순수 밀어내기 벡터만 (wanderAngle 없음, 이동 방향 간섭 안 함)
+function zombieSeparate(z, c) {
+  const ts = c.ts;
+  const sepRadius = ts * 1.1;
+  let sepX = 0, sepY = 0;
+
+  for (const other of zombies) {
+    if (other === z) continue;
+    const zcx = z.px + ts / 2, zcy = z.py + ts / 2;
+    const ocx = other.px + ts / 2, ocy = other.py + ts / 2;
+    const dx = zcx - ocx, dy = zcy - ocy;
+    const d  = Math.hypot(dx, dy);
+    if (d < sepRadius && d > 0) {
+      const force = (sepRadius - d) / sepRadius;
+      sepX += (dx / d) * force;
+      sepY += (dy / d) * force;
+    }
+  }
+
+  if (sepX !== 0 || sepY !== 0) {
+    const strength = c.spd * 1.2;
+    zombieMoveWithSlide(z, c, sepX * strength, sepY * strength);
   }
 }
 
