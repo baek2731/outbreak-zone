@@ -823,7 +823,7 @@ function onStep(tx, ty) {
   if (tile === T.ITEM) {
     MAP.tiles[tileIdx] = T.FLOOR;
     player.itemsFound++;
-    // 산소 캡슐: 산소 33% 보충
+    // 산소 캡슐: 산소 보충만, 탈출 조건 아님
     const prevOxy = player.oxygen;
     player.oxygen = Math.min(CONFIG.oxygen.max, player.oxygen + CONFIG.oxygen.capsuleHeal);
     devLog(`캡슐 수집 — 산소 +${(player.oxygen - prevOxy).toFixed(1)}% (${prevOxy.toFixed(1)}% → ${player.oxygen.toFixed(1)}%)`, 'good');
@@ -833,10 +833,8 @@ function onStep(tx, ty) {
   }
 
   if (tile === T.EXIT) {
-    // TODO: 스테이지 시스템 추가 시 병원체 전부 회수 조건으로 교체
-    if (player.itemsFound >= CONFIG.escape.itemCount) {
-      showEscaped();
-    }
+    // 출구 = 클리어 조건 (스테이지 시스템 전까지 무조건 탈출)
+    showEscaped();
   }
 }
 
@@ -1587,8 +1585,6 @@ function render() {
   const tx1 = Math.min(MAP.width,  Math.ceil((camX + W_px) / ts) + 1);
   const ty1 = Math.min(MAP.height, Math.ceil((camY + H_px) / ts) + 1);
 
-  const unlocked = player.itemsFound >= CONFIG.escape.itemCount;
-
   for (let ty = ty0; ty < ty1; ty++) for (let tx = tx0; tx < tx1; tx++) {
     const sx   = tx * ts, sy = ty * ts;
     const vis  = VISITED[ty * MAP.width + tx];
@@ -1627,7 +1623,7 @@ function render() {
 
       // 아이템 / 출구 (RESOURCE LAYER)
       if (tile === T.ITEM && vis2) drawItem(tx, ty, ts);
-      if (tile === T.EXIT && vis2) drawExit(tx, ty, ts, unlocked);
+      if (tile === T.EXIT && vis2) drawExit(tx, ty, ts, true); // 출구 항상 열림
     }
   }
 
@@ -1678,8 +1674,6 @@ function renderMinimap() {
   const { tiles, width, height } = MAP;
   const sz = CONFIG.minimap.size;
   const s  = sz / Math.max(width, height);
-  const unlocked = player.itemsFound >= CONFIG.escape.itemCount;
-
   mmCtx.fillStyle = '#000'; mmCtx.fillRect(0, 0, sz, sz);
 
   for (let ty = 0; ty < height; ty++) for (let tx = 0; tx < width; tx++) {
@@ -1689,9 +1683,9 @@ function renderMinimap() {
     if (tile === T.WALL) {
       mmCtx.fillStyle = '#1a1a1a';
     } else if (tile === T.ITEM) {
-      mmCtx.fillStyle = '#ccaa00'; // 발견한 아이템 — 노란 점
+      mmCtx.fillStyle = '#44aaff'; // 산소 캡슐 — 파란 점
     } else if (tile === T.EXIT) {
-      mmCtx.fillStyle = unlocked ? '#00ff88' : '#004422'; // 잠금 상태에 따라
+      mmCtx.fillStyle = '#00ff88'; // 출구 항상 열림
     } else {
       mmCtx.fillStyle = '#303030';
     }
@@ -1763,7 +1757,7 @@ function updateHUD() {
   // 산소 캡슐 카운터
   const itemEl = document.getElementById('hud-items');
   itemEl.textContent = `${player.itemsFound}/${needed}`;
-  itemEl.style.color = player.itemsFound >= needed ? '#00ff88' : '#44aaff';
+  itemEl.style.color = '#44aaff'; // 산소 캡슐 카운터 — 파란색 고정
 
   let visited = 0;
   for (let i = 0; i < VISITED.length; i++) if (VISITED[i]) visited++;
