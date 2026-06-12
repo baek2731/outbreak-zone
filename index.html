@@ -931,7 +931,7 @@ function updateZombies(dt) {
     pcx, pcy,
     fovHalf:     (CONFIG.zombie.fovAngle / 2) * Math.PI / 180,
     sightTiles:  CONFIG.zombie.fovRange,
-    margin:      ts * 0.15,
+    margin:      ts * 0.05,
     sepRadius:   ts * 1.1,
     sepStrength: spd * 1.6,
   };
@@ -1186,8 +1186,13 @@ function zombieApplyMove(z, c, mvx, mvy) {
   if (blocked && (z.state === 'SEARCH' || z.state === 'CHASE')) {
     z.stuckTimer += c.dt;
     if (z.stuckTimer >= 1.5) {
-      // 1.5초 이상 막히면 WANDER로 탈출
-      z.state = 'WANDER';
+      // 막히면 포기 대신 SEARCH로 우회 시도 (chaseTimer 남아있으면 lastSeen 유지)
+      if (z.state === 'CHASE') {
+        z.state = 'SEARCH';
+        z.searchTimer = z.chaseTimer > 0 ? z.chaseTimer : 2.0;
+      } else {
+        z.state = 'WANDER'; // SEARCH도 막히면 진짜 포기
+      }
       z.stuckTimer = 0;
       z.wanderTimer = 0;
     }
