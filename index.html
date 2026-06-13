@@ -200,7 +200,8 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       <div class="ov-title green">✓ ESCAPED</div>
       <div class="ov-stage" id="esc-stage">1층 클리어</div>
       <div class="ov-stats">
-        회수 병원체: <span class="g" id="esc-items">0/0</span>개<br>
+        이번 층 회수: <span class="g" id="esc-items">0/0</span>개<br>
+        누적 회수: <span class="g" id="esc-total">0</span>개<br>
         접촉 병원체: <span id="esc-mines">0</span>개<br>
         생존 시간: <span class="g" id="esc-time">0초</span>
       </div>
@@ -210,6 +211,21 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       </div>
       <div id="esc-final" style="display:none;">
         <button class="ov-btn green" id="esc-clear">ALL CLEAR — 복귀</button>
+      </div>
+    </div>
+
+    <!-- 조기 탈출 선택지 -->
+    <div id="early-exit" class="overlay">
+      <div class="ov-title" style="color:#ffaa00; text-shadow:0 0 20px #ffaa00;">⚠ 미회수 병원체</div>
+      <div class="ov-stats">
+        회수 완료: <span class="g" id="early-collected">0</span>개<br>
+        미회수: <span id="early-remain" style="color:#ff8800;">0</span>개
+        <span style="color:#444"> / </span><span id="early-total">0</span>개<br>
+        <span style="color:#555; font-size:0.68rem;">지금 탈출하면 회수한 병원체만 가져갑니다</span>
+      </div>
+      <div style="display:flex; gap:12px; margin-top:4px;">
+        <button class="ov-btn red" id="early-leave">탈출</button>
+        <button class="ov-btn green" id="early-continue">계속 탐색</button>
       </div>
     </div>
 
@@ -238,8 +254,10 @@ canvas#minimap { display:block; image-rendering:pixelated; }
     <div id="dev-inner">
       <div class="dev-title">⚙ DEV — STEP 3</div>
 
+      <div class="dev-section">STAGE (즉시 점프)</div>
+      <div class="dev-row"><label>스테이지</label><input type="range" id="d-stage" min="1" max="5" step="1" value="1"><span class="dev-val" id="d-stage-v">1</span></div>
+
       <div class="dev-section">MAP</div>
-      <div class="dev-row"><label>맵 크기</label><input type="range" id="d-mapsize" min="9" max="31" step="2" value="17"><span class="dev-val" id="d-mapsize-v">17</span></div>
       <div class="dev-row"><label>타일 크기</label><input type="range" id="d-tilesize" min="24" max="64" step="4" value="48"><span class="dev-val" id="d-tilesize-v">48</span></div>
       <div class="dev-row"><label>루프 경로</label><input type="range" id="d-loops" min="0" max="12" step="1" value="6"><span class="dev-val" id="d-loops-v">6</span></div>
 
@@ -248,23 +266,16 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       <div class="dev-row"><label>시야 반경</label><input type="range" id="d-vision" min="2" max="8" step="1" value="4"><span class="dev-val" id="d-vision-v">4</span></div>
 
       <div class="dev-section">OXYGEN / INFECTION</div>
-      <div class="dev-row"><label>산소 감소 속도</label><input type="range" id="d-oxydrain" min="1" max="20" step="0.5" value="4"><span class="dev-val" id="d-oxydrain-v">4</span></div>
+      <div class="dev-row"><label>산소 감소(현재층)</label><input type="range" id="d-oxydrain" min="0.5" max="20" step="0.5" value="2"><span class="dev-val" id="d-oxydrain-v">2</span></div>
       <div class="dev-row"><label>감염 기준 산소%</label><input type="range" id="d-infthresh" min="20" max="80" step="5" value="60"><span class="dev-val" id="d-infthresh-v">60</span></div>
 
-      <div class="dev-section">MINE</div>
-      <div class="dev-row"><label>병원체 수 (현재층)</label><input type="range" id="d-mine" min="1" max="20" step="1" value="5"><span class="dev-val" id="d-mine-v">5</span></div>
-
       <div class="dev-section">SONAR</div>
-      <div class="dev-row"><label>최대 차징 C2</label><input type="range" id="d-maxcharge" min="0.5" max="3.0" step="0.1" value="1.5"><span class="dev-val" id="d-maxcharge-v">1.5</span></div>
-      <div class="dev-row"><label>스캔 반경 C4</label><input type="range" id="d-radius" min="2" max="6" step="1" value="4"><span class="dev-val" id="d-radius-v">4</span></div>
+      <div class="dev-row"><label>최대 차징</label><input type="range" id="d-maxcharge" min="0.5" max="3.0" step="0.1" value="1.5"><span class="dev-val" id="d-maxcharge-v">1.5</span></div>
+      <div class="dev-row"><label>스캔 반경</label><input type="range" id="d-radius" min="2" max="6" step="1" value="4"><span class="dev-val" id="d-radius-v">4</span></div>
       <div class="dev-row"><label>핑 지속 시간</label><input type="range" id="d-pingdur" min="0.5" max="3.0" step="0.1" value="1.2"><span class="dev-val" id="d-pingdur-v">1.2</span></div>
       <div class="dev-row"><label>정밀 소나 수</label><input type="range" id="d-precise" min="0" max="5" step="1" value="2"><span class="dev-val" id="d-precise-v">2</span></div>
 
-      <div class="dev-section">ESCAPE</div>
-      <div class="dev-row"><label>필요 아이템 수</label><input type="range" id="d-items" min="1" max="6" step="1" value="3"><span class="dev-val" id="d-items-v">3</span></div>
-
       <div class="dev-section">ZOMBIE</div>
-      <div class="dev-row"><label>좀비 수</label><input type="range" id="d-zcount" min="0" max="8" step="1" value="2"><span class="dev-val" id="d-zcount-v">2</span></div>
       <div class="dev-row"><label>좀비 속도</label><input type="range" id="d-zspeed" min="0.1" max="1.5" step="0.05" value="0.30"><span class="dev-val" id="d-zspeed-v">0.30</span></div>
 
       <button class="dev-btn" id="d-regen">🔄 맵 재생성</button>
@@ -279,6 +290,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       <button class="dev-btn" id="d-zombiefov">👁 좀비 시야 표시 OFF</button>
 
       <div class="dev-info">
+        스테이지: <span id="di-stage">1층</span><br>
         FPS: <span id="di-fps">0</span><br>
         타일: <span id="di-tile">FLOOR</span><br>
         병원체 수: <span id="di-mines">0</span>개<br>

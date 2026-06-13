@@ -546,8 +546,8 @@ const player = {
   tx:1, ty:1, px:0, py:0, targetX:0, targetY:0,
   moving:false, facing:'down',
   dead:false,
-  itemsFound: 0,
-  damageCooldown: 0,
+  itemsFound:     0,   // 현재 스테이지 수집량
+  totalCollected: 0,   // 런 전체 누적 수집량
   noiseRadius: 0,
   noiseX: 0, noiseY: 0,
   // 산소 / 감염 시스템
@@ -668,9 +668,10 @@ function init() {
     px: CONFIG.map.tileSize, py: CONFIG.map.tileSize,
     targetX: CONFIG.map.tileSize, targetY: CONFIG.map.tileSize,
     moving: false, facing: 'down',
-    dead: false, itemsFound: 0, damageCooldown: 0, noiseRadius: 0,
+    dead: false, itemsFound: 0, noiseRadius: 0,
+    // totalCollected는 런 전체 누적이라 init에서 리셋 안 함
     noiseX: 0, noiseY: 0,
-    oxygen: CONFIG.oxygen.max, infection: 0,
+    // oxygen/infection은 init 밖에서 관리 (스테이지 전환 시 유지, 신규/재시작 시만 초기화)
   });
 
   Object.assign(sonar, {
@@ -698,7 +699,9 @@ function init() {
   spawnZombies();
   document.getElementById('gameover').classList.remove('show');
   document.getElementById('escaped').classList.remove('show');
+  document.getElementById('early-exit').classList.remove('show');
   document.getElementById('stage-intro').classList.remove('show');
+  showStageIntro();
 }
 
 // ── 시야 ─────────────────────────────────────────────────────────
@@ -736,25 +739,31 @@ const GAME_KEYS = new Set([
   'KeyW','KeyA','KeyS','KeyD','KeyF','KeyG','KeyE','Space',
 ]);
 
+// ── 게임 상태 머신 ──────────────────────────────────────────────
+// 'LOBBY' | 'INTRO' | 'PLAYING' | 'ESCAPED' | 'GAMEOVER'
+let GAME_STATE = 'INTRO';
+
 window.addEventListener('keydown', e => {
   if (GAME_KEYS.has(e.code)) e.preventDefault();
 
-  // 인트로 화면 중 스페이스로 닫기
-  if (e.code === 'Space') {
-    const intro = document.getElementById('stage-intro');
-    if (intro.classList.contains('show')) { closeIntro(); return; }
+  // ── INTRO 상태: 스페이스/엔터만 허용 ──────────────────────────
+  if (GAME_STATE === 'INTRO') {
+    if (e.code === 'Space' || e.code === 'Enter') closeIntro();
+    return;
   }
 
-  // 미니게임 진행 중 입력 처리
+  // ── ESCAPED / GAMEOVER 상태: 키 차단 ──────────────────────────
+  if (GAME_STATE === 'ESCAPED' || GAME_STATE === 'GAMEOVER') return;
+
+  // ── PLAYING 상태 ──────────────────────────────────────────────
+  // 미니게임 중 입력
   if (minigame.active && !minigame.result) {
     const dir = MG.keyToDir[e.code];
     if (dir) { minigameInput(dir); return; }
-    // F키는 전투 연타로 아래에서 처리 — 차단하지 않음
-    if (e.code !== 'KeyF') return;
+    if (e.code !== 'KeyF') return; // F키만 통과
   }
 
   if (e.code === 'KeyE') {
-    // 탐지된 병원체 위에 서 있을 때만 회수 시도
     if (!e.repeat && !player.dead && !minigame.active) {
       const tileIdx = player.ty * MAP.width + player.tx;
       if (MAP.tiles[tileIdx] === T.MINE && MAP.detected[tileIdx]) {
@@ -764,7 +773,6 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (e.code === 'KeyF') {
-    // 전투 미니게임 중 — 연타 입력 (게이지 증가)
     if (minigame.active && minigame.type === 'combat' && !minigame.result) {
       minigame.combatGauge = Math.min(MG.combatGaugeMax,
         minigame.combatGauge + minigame.playerPower);
@@ -786,6 +794,7 @@ window.addEventListener('keydown', e => {
 });
 
 window.addEventListener('keyup', e => {
+  if (GAME_STATE !== 'PLAYING') { KEYS[e.code] = false; return; }
   if (e.code === 'KeyF') { if (sonar.charging)        fireSonar(false); return; }
   if (e.code === 'KeyG') { if (sonar.chargingPrecise) fireSonar(true);  return; }
   KEYS[e.code] = false;
@@ -828,8 +837,8 @@ function tryMove(dx, dy) {
 function handleInput(dt) {
   moveTimer = Math.max(0, moveTimer - dt);
   processKeys();
+  if (GAME_STATE !== 'PLAYING') return;
   if (player.moving || moveTimer > 0 || player.dead || minigame.active) return;
-  if (document.getElementById('stage-intro').classList.contains('show')) return;
   const dir = getHeldDir();
   if (dir) { updateFacing(dir.dx, dir.dy); tryMove(dir.dx, dir.dy); }
 }
@@ -864,8 +873,16 @@ function onStep(tx, ty) {
   }
 
   if (tile === T.EXIT) {
-    // 출구 = 클리어 조건 (스테이지 시스템 전까지 무조건 탈출)
-    showEscaped();
+    // 잔여 병원체 확인
+    let remaining = 0;
+    for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remaining++;
+    if (remaining === 0) {
+      // 전부 회수 → 바로 탈출
+      showEscaped();
+    } else {
+      // 미회수 병원체 있음 → 선택지 팝업
+      showEarlyExit(remaining);
+    }
   }
 }
 
@@ -903,6 +920,7 @@ function triggerFlash(color) {
 
 function showGameOver(reason) {
   player.dead = true;
+  GAME_STATE = 'GAMEOVER';
   const elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
   document.getElementById('go-mines').textContent  = stats.minesHit;
   document.getElementById('go-time').textContent   = elapsed + '초';
@@ -983,10 +1001,10 @@ function endMinigame(success) {
       // 병원체 회수 성공
       if (minigame.mineTileIdx >= 0) {
         MAP.tiles[minigame.mineTileIdx] = T.FLOOR;
-        // 주변 numbers 재계산
         const tx = minigame.mineTileIdx % MAP.width;
         const ty = Math.floor(minigame.mineTileIdx / MAP.width);
         recalcNumbers(tx, ty);
+        player.totalCollected++; // 런 전체 누적
       }
       player.infection = Math.min(100, player.infection + MG.mineSuccessInfect);
       revealAround(player.tx, player.ty, CONFIG.player.visionRad); // 시야 즉시 복구
@@ -1067,8 +1085,28 @@ function recalcNumbers(tx, ty) {
   }
 }
 
+function showEarlyExit(remaining) {
+  GAME_STATE = 'ESCAPED'; // 키 입력 차단
+  const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
+  const total = CONFIG.stages[stageIdx].mineCount;
+  const collected = total - remaining;
+  document.getElementById('early-collected').textContent = collected;
+  document.getElementById('early-total').textContent     = total;
+  document.getElementById('early-remain').textContent    = remaining;
+  document.getElementById('early-exit').classList.add('show');
+}
+
+function applyStageTransition() {
+  // 층 이동 시: 산소 +30% 보충 (최대치 초과 불가), 감염 누적 유지
+  const healAmt = 30;
+  player.oxygen   = Math.min(CONFIG.oxygen.max, player.oxygen + healAmt);
+  // 감염은 그대로 — 누적 유지
+  devLog(`층 이동 — 산소 +${healAmt}% 보충 (현재 ${player.oxygen.toFixed(1)}%), 감염 ${player.infection.toFixed(1)}% 누적`, 'good');
+}
+
 function showEscaped() {
   player.dead = true;
+  GAME_STATE = 'ESCAPED';
   const elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
   const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
   const totalMines = CONFIG.stages[stageIdx].mineCount;
@@ -1078,6 +1116,9 @@ function showEscaped() {
 
   document.getElementById('esc-stage').textContent = `${stageIdx + 1}층 클리어`;
   document.getElementById('esc-items').textContent = `${collected} / ${totalMines}`;
+  // 누적 수집량 표시 (있으면)
+  const totalEl = document.getElementById('esc-total');
+  if (totalEl) totalEl.textContent = player.totalCollected;
   document.getElementById('esc-mines').textContent = stats.minesHit;
   document.getElementById('esc-time').textContent  = elapsed + '초';
 
@@ -1089,13 +1130,12 @@ function showEscaped() {
 }
 
 // ── 스테이지 인트로 ──────────────────────────────────────────────
-const STAGE_NAMES = ['외곽 병동', '일반 병동', '중환자실', '바이러스 연구소', '발원지'];
-
 function showStageIntro() {
+  GAME_STATE = 'INTRO';
   const s = Math.min(player.stage, CONFIG.stages.length - 1);
   const st = CONFIG.stages[s];
   document.getElementById('intro-stage').textContent    = `STAGE ${s + 1}`;
-  document.getElementById('intro-location').textContent = STAGE_NAMES[s] || '';
+  document.getElementById('intro-location').textContent = st.name || '';
   document.getElementById('intro-mines').textContent    = `병원체 ${st.mineCount}개`;
   document.getElementById('intro-zombies').textContent  = `좀비 ${st.zombieCount}마리`;
   document.getElementById('intro-capsules').textContent = `산소 캡슐 ${st.capsuleCount}개`;
@@ -1284,7 +1324,6 @@ function updateZombies(dt) {
   const pcx = player.px + ts / 2;
   const pcy = player.py + ts / 2;
 
-  if (player.damageCooldown > 0) player.damageCooldown -= dt;
 
   const c = {
     dt, ts, pcx, pcy,
@@ -1594,7 +1633,7 @@ let _prevInfZone = 'low';    // 'low' | 'mid' | 'high'
 
 function updateOxygenInfection(dt) {
   if (player.dead) return;
-  if (document.getElementById('stage-intro').classList.contains('show')) return;
+  if (GAME_STATE !== 'PLAYING') return;
   const cfg = CONFIG.oxygen;
 
   // 산소 자연 감소 (스테이지별 속도)
@@ -1783,7 +1822,7 @@ function renderMinimap() {
 // ── HUD & DEV ────────────────────────────────────────────────────
 function updateHUD() {
   const cfg    = CONFIG.oxygen;
-  const needed = CONFIG.escape.itemCount;
+  const needed = CONFIG.stages[Math.min(player.stage, CONFIG.stages.length-1)].capsuleCount;
   const oxy    = Math.max(0, player.oxygen);
   const inf    = Math.max(0, player.infection);
 
@@ -1834,12 +1873,14 @@ function updateDevInfo() {
   document.getElementById('di-fps').textContent     = fps;
   document.getElementById('di-tile').textContent    = t === T.WALL ? 'WALL' : t === T.MINE ? 'MINE' : t === T.ITEM ? 'ITEM' : t === T.EXIT ? 'EXIT' : 'FLOOR';
   document.getElementById('di-mines').textContent   = MAP.mineCount;
-  document.getElementById('di-items').textContent   = `${player.itemsFound}/${CONFIG.escape.itemCount}`;
+  document.getElementById('di-items').textContent   = `${player.itemsFound}/${CONFIG.stages[Math.min(player.stage, CONFIG.stages.length-1)].capsuleCount}`;
   document.getElementById('di-zombies').textContent = zombies.length;
   document.getElementById('di-dead').textContent    = Math.floor(MAP.deadEndRatio * 100) + '%';
   document.getElementById('di-time').textContent    = Math.floor((Date.now() - stats.startTime) / 1000) + 's';
   document.getElementById('di-oxygen').textContent  = Math.ceil(player.oxygen) + '%';
   document.getElementById('di-infect').textContent  = Math.ceil(player.infection) + '%';
+  const stEl = document.getElementById('di-stage');
+  if (stEl) stEl.textContent = `${player.stage + 1}층 (${CONFIG.stages[Math.min(player.stage, CONFIG.stages.length-1)].name})`;
 }
 
 // ── DEV 패널 ─────────────────────────────────────────────────────
@@ -1850,20 +1891,17 @@ document.getElementById('dev-toggle').addEventListener('click', () => {
 });
 
 const SLIDERS = [
-  ['d-mapsize',   v => CONFIG.map.size             = parseInt(v)],
+  ['d-stage',     v => { player.stage = parseInt(v) - 1; init(); }],
   ['d-tilesize',  v => CONFIG.map.tileSize         = parseInt(v)],
   ['d-loops',     v => CONFIG.map.loopPaths        = parseInt(v)],
   ['d-delay',     v => CONFIG.player.moveDelay     = parseFloat(v)],
   ['d-vision',    v => CONFIG.player.visionRad     = parseInt(v)],
-  ['d-mine',      v => { const s = Math.min(player.stage, CONFIG.stages.length-1); CONFIG.stages[s].mineCount = parseInt(v); }],
   ['d-maxcharge', v => CONFIG.sonar.maxCharge      = parseFloat(v)],
   ['d-radius',    v => CONFIG.sonar.maxRadius      = parseInt(v)],
   ['d-pingdur',   v => CONFIG.sonar.pingDuration   = parseFloat(v)],
   ['d-precise',   v => CONFIG.sonar.preciseCount   = parseInt(v)],
-  ['d-items',     v => CONFIG.escape.itemCount     = parseInt(v)],
-  ['d-zcount',    v => CONFIG.zombie.count         = parseInt(v)],
   ['d-zspeed',    v => CONFIG.zombie.speed         = parseFloat(v)],
-  ['d-oxydrain',  v => { CONFIG.oxygen.drainPerStage[0] = parseFloat(v); }],
+  ['d-oxydrain',  v => { const s = Math.min(player.stage, CONFIG.oxygen.drainPerStage.length-1); CONFIG.oxygen.drainPerStage[s] = parseFloat(v); }],
   ['d-infthresh', v => CONFIG.oxygen.infectThreshold = parseInt(v)],
 ];
 SLIDERS.forEach(([id, fn]) => {
@@ -1887,7 +1925,7 @@ document.getElementById('d-clearinf').addEventListener('click', () => {
 });
 document.getElementById('d-addprecise').addEventListener('click', () => { sonar.precise++; });
 document.getElementById('d-additem').addEventListener('click', () => {
-  if (player.itemsFound < CONFIG.escape.itemCount) player.itemsFound++;
+  player.itemsFound++;
 });
 document.getElementById('d-invincible').addEventListener('click', () => {
   devInvincible = !devInvincible;
@@ -1904,29 +1942,51 @@ document.getElementById('d-zombiefov').addEventListener('click', () => {
   document.getElementById('d-zombiefov').textContent = '👁 좀비 시야 표시 ' + (devZombieFov ? 'ON' : 'OFF');
 });
 document.getElementById('go-btn').addEventListener('click', () => {
-  player.stage = 0; // 게임오버 시 1층부터
+  player.stage          = 0;
+  player.oxygen         = CONFIG.oxygen.max;
+  player.infection      = 0;
+  player.totalCollected = 0;
   init();
 });
 // 다음 스테이지
 document.getElementById('esc-btn').addEventListener('click', () => {
-  if (player.stage < CONFIG.stages.length - 1) player.stage++;
+  if (player.stage < CONFIG.stages.length - 1) {
+    player.stage++;
+    applyStageTransition();
+  }
   init();
 });
 // 기지 복귀 — 1층부터 재시작
 document.getElementById('esc-retire').addEventListener('click', () => {
-  player.stage = 0;
+  player.stage          = 0;
+  player.oxygen         = CONFIG.oxygen.max;
+  player.infection      = 0;
+  player.totalCollected = 0;
   init();
 });
-// ALL CLEAR 복귀
 document.getElementById('esc-clear').addEventListener('click', () => {
-  player.stage = 0;
+  player.stage          = 0;
+  player.oxygen         = CONFIG.oxygen.max;
+  player.infection      = 0;
+  player.totalCollected = 0;
   init();
+});
+// 조기탈출 — 그냥 나가기
+document.getElementById('early-leave').addEventListener('click', () => {
+  document.getElementById('early-exit').classList.remove('show');
+  showEscaped();
+});
+// 조기탈출 — 계속 탐색
+document.getElementById('early-continue').addEventListener('click', () => {
+  document.getElementById('early-exit').classList.remove('show');
+  GAME_STATE = 'PLAYING';
 });
 document.getElementById('log-clear').addEventListener('click', () => {
   devLogEntries.length = 0; _renderDevLog();
 });
 function closeIntro() {
   document.getElementById('stage-intro').classList.remove('show');
+  GAME_STATE = 'PLAYING';
 }
 document.getElementById('intro-btn').addEventListener('click', closeIntro);
 
@@ -1939,10 +1999,14 @@ function loop(ts) {
   if (fpsTimer >= 1) { fps = frameCount; frameCount = 0; fpsTimer = 0; }
   handleInput(dt); updateSonar(dt); update(dt);
   render(); renderMinimap(); updateHUD(); updateDevInfo();
-  showStageIntro();
   requestAnimationFrame(loop);
 }
 
+// 최초 실행 — 산소/감염 초기화
+player.oxygen         = CONFIG.oxygen.max;
+player.infection      = 0;
+player.stage          = 0;
+player.totalCollected = 0;
 resize(); init();
 
 // 소나 JIT 워밍업 — 오프스크린에서 draw 함수 한 번 실행
