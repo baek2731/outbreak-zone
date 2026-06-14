@@ -503,15 +503,16 @@ function _buildMap(W, H, force = false) {
     set(pick.x, pick.y, T.ITEM);
   }
 
-  // 출구 배치 — 스폰(1,1)에서 최대한 먼 바닥 타일 1개
-  // 아이템/지뢰 배치 후 남은 FLOOR 타일 중 선택
-  let exitTile = null, maxDist = -1;
+  // 출구 배치 — 시작점에서 먼 상위 30% 타일 중 랜덤 선택
+  const exitCandidates = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     if (get(x, y) !== T.FLOOR) continue;
-    const d = Math.hypot(x - 1, y - 1);
-    if (d > maxDist) { maxDist = d; exitTile = [x, y]; }
+    exitCandidates.push({ x, y, d: Math.hypot(x - 1, y - 1) });
   }
-  if (exitTile) set(exitTile[0], exitTile[1], T.EXIT);
+  exitCandidates.sort((a, b) => b.d - a.d);
+  const exitPool = exitCandidates.slice(0, Math.max(1, Math.floor(exitCandidates.length * 0.3)));
+  const exitPick = exitPool[Math.floor(Math.random() * exitPool.length)];
+  if (exitPick) set(exitPick.x, exitPick.y, T.EXIT);
 
   // 인접 지뢰 수 계산 (ITEM/EXIT 타일도 포함해서 계산)
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -548,6 +549,9 @@ const player = {
   dead:false,
   itemsFound:     0,   // 현재 스테이지 수집량
   totalCollected: 0,   // 런 전체 누적 수집량
+  exitCooldown:   0,   // 재탐사 선택 후 출구 무시 쿨타임 (초)
+  recordSaved:    false, // 이번 런 기록 저장 여부 (중복 방지)
+  lastFinalCollected: 0, // 마지막 저장된 최종 획득량
   noiseRadius: 0,
   noiseX: 0, noiseY: 0,
   // 산소 / 감염 시스템
@@ -668,7 +672,7 @@ function init() {
     px: CONFIG.map.tileSize, py: CONFIG.map.tileSize,
     targetX: CONFIG.map.tileSize, targetY: CONFIG.map.tileSize,
     moving: false, facing: 'down',
-    dead: false, itemsFound: 0, noiseRadius: 0,
+    dead: false, itemsFound: 0, noiseRadius: 0, exitCooldown: 0,
     // totalCollected는 런 전체 누적이라 init에서 리셋 안 함
     noiseX: 0, noiseY: 0,
     // oxygen/infection은 init 밖에서 관리 (스테이지 전환 시 유지, 신규/재시작 시만 초기화)
@@ -873,15 +877,15 @@ function onStep(tx, ty) {
   }
 
   if (tile === T.EXIT) {
-    // 잔여 병원체 확인
+    if (player.exitCooldown > 0) return; // 재탐사 쿨타임 중 — 출구 무시
     let remaining = 0;
     for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remaining++;
     if (remaining === 0) {
-      // 전부 회수 → 바로 탈출
-      showEscaped('retire');
+      // 전부 회수 → 복귀 or 다음 스테이지 선택
+      showExitChoice('full');
     } else {
-      // 미회수 병원체 있음 → 선택지 팝업
-      showEarlyExit(remaining);
+      // 미회수 → 조기복귀 or 재탐사 선택
+      showExitChoice('partial', remaining);
     }
   }
 }
@@ -921,11 +925,15 @@ function triggerFlash(color) {
 function showGameOver(reason) {
   player.dead = true;
   GAME_STATE = 'GAMEOVER';
+  // 사망 시점에 즉시 기록 저장 (창 닫아도 남음)
+  const got = saveRunRecord(reason === 'infected' ? 'infected' : 'death');
   const elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
   document.getElementById('go-mines').textContent  = stats.minesHit;
   document.getElementById('go-time').textContent   = elapsed + '초';
   const reasonEl = document.getElementById('go-reason');
   if (reasonEl) reasonEl.textContent = reason === 'infected' ? '☣ 감염 전환' : '☠ 사망';
+  const gotEl = document.getElementById('go-got');
+  if (gotEl) gotEl.textContent = got;
   document.getElementById('gameover').classList.add('show');
 }
 
@@ -1085,20 +1093,43 @@ function recalcNumbers(tx, ty) {
   }
 }
 
-function showEarlyExit(remaining) {
-  GAME_STATE = 'ESCAPED'; // 키 입력 차단
+function showExitChoice(mode, remaining) {
+  GAME_STATE = 'ESCAPED';
   const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
-  const total = CONFIG.stages[stageIdx].mineCount;
-  const collected = total - remaining;
+  const total     = CONFIG.stages[stageIdx].mineCount;
+  const collected = total - (remaining || 0);
+  const isLast    = player.stage >= CONFIG.stages.length - 1;
+
   document.getElementById('early-collected').textContent = collected;
   document.getElementById('early-total').textContent     = total;
-  document.getElementById('early-remain').textContent    = remaining;
+  document.getElementById('early-remain').textContent    = remaining || 0;
+
+  if (mode === 'full') {
+    // 전부 회수 — 복귀 or 다음 스테이지
+    document.getElementById('exit-title').textContent      = '✓ 모든 병원체 회수 완료';
+    document.getElementById('exit-title').style.color      = '#00ff88';
+    document.getElementById('exit-desc').textContent       = '기지로 복귀하거나 다음 층으로 진행하세요.';
+    document.getElementById('exit-retire-btn').style.display = 'block';
+    document.getElementById('exit-next-btn').style.display   = isLast ? 'none' : 'block';
+    document.getElementById('exit-next-btn').textContent     = '다음 스테이지 ▶';
+    document.getElementById('exit-rescan-btn').style.display = 'none';
+    document.getElementById('early-stats').style.display    = 'none';
+  } else {
+    // 미회수 — 조기복귀 or 재탐사
+    document.getElementById('exit-title').textContent      = '⚠ 미회수 병원체';
+    document.getElementById('exit-title').style.color      = '#ffaa00';
+    document.getElementById('exit-desc').textContent       = `${remaining}개 미회수. 지금 나가면 수집한 것만 가져갑니다.`;
+    document.getElementById('exit-retire-btn').style.display = 'block';
+    document.getElementById('exit-next-btn').style.display   = 'none';
+    document.getElementById('exit-rescan-btn').style.display = 'block';
+    document.getElementById('early-stats').style.display    = 'flex';
+  }
   document.getElementById('early-exit').classList.add('show');
 }
 
 function applyStageTransition() {
-  // 층 이동 시: 산소 +30% 보충 (최대치 초과 불가), 감염 누적 유지
-  const healAmt = 30;
+  // 층 이동 시: 산소 보충 (최대치 초과 불가), 감염 누적 유지
+  const healAmt = CONFIG.oxygen.stageHeal;
   player.oxygen   = Math.min(CONFIG.oxygen.max, player.oxygen + healAmt);
   // 감염은 그대로 — 누적 유지
   devLog(`층 이동 — 산소 +${healAmt}% 보충 (현재 ${player.oxygen.toFixed(1)}%), 감염 ${player.infection.toFixed(1)}% 누적`, 'good');
@@ -1123,51 +1154,58 @@ function showEscaped(exitType) {
   document.getElementById('esc-mines').textContent = stats.minesHit;
   document.getElementById('esc-time').textContent  = elapsed + '초';
 
+  // ESCAPED는 항상 기지 복귀 (전부회수/ALL CLEAR 여부만 표시)
   const isLast = player.stage >= CONFIG.stages.length - 1;
-  // 탈출 = 항상 기지 복귀 (다음스테이지 없음)
-  document.getElementById('esc-choices').style.display = 'none';
-  document.getElementById('esc-final').style.display   = 'none';
-  document.getElementById('esc-retire-wrap').style.display = 'block';
-  document.getElementById('esc-allclear').style.display = isLast ? 'block' : 'none';
+  document.getElementById('esc-retire').style.display = isLast ? 'none' : 'block';
+  document.getElementById('esc-clear').style.display  = isLast ? 'block' : 'none';
+  document.getElementById('esc-btn').style.display    = 'none';
 
   document.getElementById('escaped').classList.add('show');
 }
 
 // ── 런 기록 저장 ─────────────────────────────────────────────────
+// exitType: 'retire'(전부회수) | 'early'(조기탈출) | 'death'(사망) | 'infected'(좀비화)
 function saveRunRecord(exitType) {
-  // exitType: 'retire' | 'death' | 'early'
-  const stageIdx  = Math.min(player.stage, CONFIG.stages.length - 1);
-  const elapsed   = Math.floor((Date.now() - stats.startTime) / 1000);
+  // 중복 저장 방지 — 한 런에서 1회만
+  if (player.recordSaved) return player.lastFinalCollected || 0;
+  player.recordSaved = true;
+
+  const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
+  const elapsed  = Math.floor((Date.now() - stats.startTime) / 1000);
 
   // 복귀 방식별 최종 회수량
   let finalCollected;
-  if (exitType === 'retire') {
-    finalCollected = player.totalCollected; // 전부
-  } else if (exitType === 'death') {
-    finalCollected = Math.floor(player.totalCollected / 2); // 절반
+  if (exitType === 'death' || exitType === 'infected') {
+    finalCollected = Math.floor(player.totalCollected / 2); // 사망/좀비화 = 절반
   } else {
-    finalCollected = player.totalCollected; // 조기탈출 = 모은 것만
+    finalCollected = player.totalCollected; // 복귀/조기탈출 = 모은 것 전부
   }
+  player.lastFinalCollected = finalCollected;
 
   const record = {
     date:      new Date().toLocaleString('ko-KR'),
     exitType,
     stage:     stageIdx + 1,
     stageName: CONFIG.stages[stageIdx].name,
-    collected: finalCollected,
+    rawCollected:   player.totalCollected, // 실제 회수량 (차감 전)
+    collected:      finalCollected,        // 최종 획득량 (차감 후)
     infection: Math.ceil(player.infection),
     elapsed,
   };
 
-  // localStorage에 기록 누적
   try {
     const key  = 'outbreak_records';
     const prev = JSON.parse(localStorage.getItem(key) || '[]');
     prev.push(record);
     localStorage.setItem(key, JSON.stringify(prev));
+    // 누적 DNA 총량도 별도 키로 관리
+    const dnaKey  = 'outbreak_total_dna';
+    const prevDna = parseInt(localStorage.getItem(dnaKey) || '0');
+    localStorage.setItem(dnaKey, String(prevDna + finalCollected));
   } catch(e) { console.warn('기록 저장 실패', e); }
 
-  devLog(`기록 저장 [${exitType}] ${stageIdx+1}층 / 회수 ${finalCollected}개`, 'good');
+  const label = { retire:'복귀', early:'조기탈출', death:'사망', infected:'좀비화' }[exitType] || exitType;
+  devLog(`기록 저장 [${label}] ${stageIdx+1}층 / 획득 ${finalCollected}개 (회수 ${player.totalCollected})`, 'good');
   return finalCollected;
 }
 
@@ -1664,6 +1702,7 @@ function update(dt) {
   updateZombies(dt);
   updateMinigame(dt);
   updateOxygenInfection(dt);
+  if (player.exitCooldown > 0) player.exitCooldown -= dt;
   const ts = CONFIG.map.tileSize;
   camX += (player.px + ts / 2 - W_px / 2 - camX) * CONFIG.camera.smooth;
   camY += (player.py + ts / 2 - H_px / 2 - camY) * CONFIG.camera.smooth;
@@ -1768,7 +1807,7 @@ function render() {
 
       // 아이템 / 출구 (RESOURCE LAYER)
       if (tile === T.ITEM && vis2) drawItem(tx, ty, ts);
-      if (tile === T.EXIT && vis2) drawExit(tx, ty, ts, true); // 출구 항상 열림
+      if (tile === T.EXIT && vis2) drawExit(tx, ty, ts, player.exitCooldown <= 0);
     }
   }
 
@@ -1830,7 +1869,7 @@ function renderMinimap() {
     } else if (tile === T.ITEM) {
       mmCtx.fillStyle = '#44aaff'; // 산소 캡슐 — 파란 점
     } else if (tile === T.EXIT) {
-      mmCtx.fillStyle = '#00ff88'; // 출구 항상 열림
+      mmCtx.fillStyle = player.exitCooldown > 0 ? '#115533' : '#00ff88'; // 쿨타임 중 어둡게
     } else {
       mmCtx.fillStyle = '#303030';
     }
@@ -1984,11 +2023,12 @@ document.getElementById('d-zombiefov').addEventListener('click', () => {
   document.getElementById('d-zombiefov').textContent = '👁 좀비 시야 표시 ' + (devZombieFov ? 'ON' : 'OFF');
 });
 document.getElementById('go-btn').addEventListener('click', () => {
-  saveRunRecord('death');
+  // 기록은 showGameOver에서 이미 저장됨 — 여기선 리셋만
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
   player.infection      = 0;
   player.totalCollected = 0;
+  player.recordSaved    = false;
   init();
 });
 // 다음 스테이지
@@ -2001,30 +2041,41 @@ document.getElementById('esc-btn').addEventListener('click', () => {
 });
 // 기지 복귀 — 1층부터 재시작
 document.getElementById('esc-retire').addEventListener('click', () => {
-  saveRunRecord('retire');
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
   player.infection      = 0;
   player.totalCollected = 0;
+  player.recordSaved    = false;
   init();
 });
 document.getElementById('esc-clear').addEventListener('click', () => {
-  saveRunRecord('retire');
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
   player.infection      = 0;
   player.totalCollected = 0;
+  player.recordSaved    = false;
   init();
 });
-// 조기탈출 — 그냥 나가기
-document.getElementById('early-leave').addEventListener('click', () => {
+// 출구 팝업 — 복귀 (조기 or 완전)
+document.getElementById('exit-retire-btn').addEventListener('click', () => {
   document.getElementById('early-exit').classList.remove('show');
   showEscaped('early');
 });
-// 조기탈출 — 계속 탐색
-document.getElementById('early-continue').addEventListener('click', () => {
+// 출구 팝업 — 다음 스테이지 (전부 회수 시)
+document.getElementById('exit-next-btn').addEventListener('click', () => {
   document.getElementById('early-exit').classList.remove('show');
+  if (player.stage < CONFIG.stages.length - 1) {
+    player.stage++;
+    applyStageTransition();
+  }
+  init();
+});
+// 출구 팝업 — 재탐사 (미회수 시, 쿨타임 부여)
+document.getElementById('exit-rescan-btn').addEventListener('click', () => {
+  document.getElementById('early-exit').classList.remove('show');
+  player.exitCooldown = 4.0; // 4초 쿨타임
   GAME_STATE = 'PLAYING';
+  devLog('재탐사 시작 — 출구 4초 쿨타임', '');
 });
 document.getElementById('log-clear').addEventListener('click', () => {
   devLogEntries.length = 0; _renderDevLog();
@@ -2034,6 +2085,26 @@ function closeIntro() {
   GAME_STATE = 'PLAYING';
 }
 document.getElementById('intro-btn').addEventListener('click', closeIntro);
+
+// DEV — 수집 기록 보기 (로그 패널에 출력)
+document.getElementById('d-records').addEventListener('click', () => {
+  try {
+    const records = JSON.parse(localStorage.getItem('outbreak_records') || '[]');
+    const totalDna = parseInt(localStorage.getItem('outbreak_total_dna') || '0');
+    devLog(`═══ 누적 DNA: ${totalDna}개 / 총 ${records.length}런 ═══`, 'good');
+    records.slice(-8).reverse().forEach(r => {
+      const label = { retire:'복귀', early:'조기', death:'사망', infected:'좀비화' }[r.exitType] || r.exitType;
+      devLog(`${r.stage}층 [${label}] 획득${r.collected} (회수${r.rawCollected}) 감염${r.infection}% ${r.elapsed}s`, '');
+    });
+  } catch(e) { devLog('기록 읽기 실패', 'danger'); }
+});
+
+// DEV — 기록 초기화
+document.getElementById('d-clearrecords').addEventListener('click', () => {
+  localStorage.removeItem('outbreak_records');
+  localStorage.removeItem('outbreak_total_dna');
+  devLog('수집 기록 전체 초기화됨', 'warn');
+});
 
 // ── 메인 루프 ────────────────────────────────────────────────────
 let lastTs = 0, fps = 0, frameCount = 0, fpsTimer = 0;
@@ -2052,6 +2123,7 @@ player.oxygen         = CONFIG.oxygen.max;
 player.infection      = 0;
 player.stage          = 0;
 player.totalCollected = 0;
+player.recordSaved    = false;
 resize(); init();
 
 // 소나 JIT 워밍업 — 오프스크린에서 draw 함수 한 번 실행

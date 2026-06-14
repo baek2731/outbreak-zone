@@ -189,6 +189,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
     <div id="gameover" class="overlay">
       <div class="ov-title red" id="go-reason">☣ OUTBREAK</div>
       <div class="ov-stats">
+        획득 병원체: <span class="g" id="go-got">0</span>개 <span style="color:#555;font-size:0.62rem;">(회수량 절반)</span><br>
         밟은 병원체: <span id="go-mines">0</span>개<br>
         생존 시간: <span id="go-time">0초</span>
       </div>
@@ -205,30 +206,26 @@ canvas#minimap { display:block; image-rendering:pixelated; }
         접촉 병원체: <span id="esc-mines">0</span>개<br>
         생존 시간: <span class="g" id="esc-time">0초</span>
       </div>
-      <div id="esc-choices" style="display:none;"></div>
-      <div id="esc-retire-wrap" style="display:none; margin-top:4px;">
+      <div style="display:flex; gap:10px; margin-top:6px;">
         <button class="ov-btn green" id="esc-retire">기지 복귀</button>
-      </div>
-      <div id="esc-allclear" style="display:none; margin-top:4px;">
-        <button class="ov-btn green" id="esc-clear">ALL CLEAR — 기지 복귀</button>
-      </div>
-      <div id="esc-final" style="display:none;">
-        <button class="ov-btn green" id="esc-btn">다음 스테이지 ▶</button>
+        <button class="ov-btn green" id="esc-clear" style="display:none;">ALL CLEAR ✓</button>
+        <button class="ov-btn green" id="esc-btn"   style="display:none;">다음 스테이지 ▶</button>
       </div>
     </div>
 
-    <!-- 조기 탈출 선택지 -->
+    <!-- 출구 선택지 (전부회수 / 미회수 공용) -->
     <div id="early-exit" class="overlay">
-      <div class="ov-title" style="color:#ffaa00; text-shadow:0 0 20px #ffaa00;">⚠ 미회수 병원체</div>
-      <div class="ov-stats">
-        회수 완료: <span class="g" id="early-collected">0</span>개<br>
+      <div class="ov-title" id="exit-title" style="font-size:1rem;">출구</div>
+      <div class="ov-stats" id="early-stats" style="display:none;">
+        회수 완료: <span class="g" id="early-collected">0</span> /
+        <span id="early-total">0</span>개<br>
         미회수: <span id="early-remain" style="color:#ff8800;">0</span>개
-        <span style="color:#444"> / </span><span id="early-total">0</span>개<br>
-        <span style="color:#555; font-size:0.68rem;">지금 탈출하면 회수한 병원체만 가져갑니다</span>
       </div>
-      <div style="display:flex; gap:12px; margin-top:4px;">
-        <button class="ov-btn red" id="early-leave">탈출</button>
-        <button class="ov-btn green" id="early-continue">계속 탐색</button>
+      <div id="exit-desc" style="font-size:0.68rem; color:#666; margin:4px 0;"></div>
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px; align-items:center;">
+        <button class="ov-btn green" id="exit-next-btn" style="display:none;">다음 스테이지 ▶</button>
+        <button class="ov-btn green" id="exit-retire-btn" style="display:none;">기지 복귀</button>
+        <button class="ov-btn red"   id="exit-rescan-btn" style="display:none;">재탐사</button>
       </div>
     </div>
 
@@ -291,6 +288,8 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       <button class="dev-btn" id="d-revealall">👁 전체 밝히기 OFF</button>
       <button class="dev-btn" id="d-killzombies">☠ 좀비 전체 제거</button>
       <button class="dev-btn" id="d-zombiefov">👁 좀비 시야 표시 OFF</button>
+      <button class="dev-btn" id="d-records">📋 수집 기록 보기</button>
+      <button class="dev-btn" id="d-clearrecords">🗑 기록 초기화</button>
 
       <div class="dev-info">
         스테이지: <span id="di-stage">1층</span><br>
