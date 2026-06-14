@@ -1013,6 +1013,10 @@ function endMinigame(success) {
         const ty = Math.floor(minigame.mineTileIdx / MAP.width);
         recalcNumbers(tx, ty);
         player.totalCollected++; // 런 전체 누적
+        // 마지막 병원체였는지 확인
+        let remain = 0;
+        for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remain++;
+        if (remain === 0) devLog('✓ 모든 병원체 회수 완료 — 출구로 이동하세요!', 'good');
       }
       player.infection = Math.min(100, player.infection + MG.mineSuccessInfect);
       revealAround(player.tx, player.ty, CONFIG.player.visionRad); // 시야 즉시 복구
@@ -1946,6 +1950,18 @@ function updateHUD() {
   let visited = 0;
   for (let i = 0; i < VISITED.length; i++) if (VISITED[i]) visited++;
   document.getElementById('hud-explored').textContent = Math.floor(visited / MAP.floorCount * 100) + '%';
+
+  // 남은 병원체 (회수 / 전체)
+  const mineEl = document.getElementById('hud-mines');
+  if (mineEl) {
+    const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
+    const total = CONFIG.stages[stageIdx].mineCount;
+    let remaining = 0;
+    for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remaining++;
+    const collected = total - remaining;
+    mineEl.textContent = `${collected}/${total}`;
+    mineEl.style.color = remaining === 0 ? '#00ff88' : '#ff6644'; // 전부 회수 시 초록
+  }
 
   // 누적 DNA (저장된 총량 + 이번 런 현재 회수량)
   const dnaEl = document.getElementById('hud-dna');
