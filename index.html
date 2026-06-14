@@ -17,10 +17,10 @@ body {
   border-bottom:1px solid #1a1a1a; flex-shrink:0; gap:12px;
 }
 #title { color:#ff3333; font-size:0.9rem; letter-spacing:0.2em; flex-shrink:0; }
-#hud { display:flex; gap:18px; font-size:0.65rem; align-items:center; }
+#hud { display:flex; gap:18px; font-size:0.75rem; align-items:center; }
 .hud-item { display:flex; flex-direction:column; align-items:center; gap:2px; }
-.hud-label { color:#444; font-size:0.52rem; letter-spacing:0.1em; text-transform:uppercase; }
-.hud-val { color:#00ff88; font-size:0.72rem; }
+.hud-label { color:#666; font-size:0.6rem; letter-spacing:0.1em; text-transform:uppercase; }
+.hud-val { color:#00ff88; font-size:0.85rem; }
 .hud-val.warn { color:#ffaa00; }
 .hud-val.dim  { color:#555; }
 #dev-toggle {
@@ -104,18 +104,18 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 
 /* ── 로그 패널 ── */
 #log-panel {
-  width: 220px; flex-shrink:0;
+  width: 280px; flex-shrink:0;
   background:#0a0a0a; border-left:1px solid #1a1a1a;
   display:flex; flex-direction:column; overflow:hidden;
 }
 #log-header {
   display:flex; justify-content:space-between; align-items:center;
   padding:6px 10px; border-bottom:1px solid #1a1a1a; flex-shrink:0;
-  color:#ffaa00; font-size:0.62rem; letter-spacing:0.12em;
+  color:#ffaa00; font-size:0.78rem; letter-spacing:0.12em;
 }
 #log-clear {
   background:none; border:1px solid #333; color:#555;
-  font-family:monospace; font-size:0.55rem; padding:2px 6px;
+  font-family:monospace; font-size:0.7rem; padding:3px 8px;
   cursor:pointer; border-radius:2px;
 }
 #log-clear:hover { border-color:#ffaa00; color:#ffaa00; }
@@ -124,7 +124,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
   display:flex; flex-direction:column-reverse;
 }
 .log-entry {
-  font-size:0.6rem; color:#555; line-height:1.7;
+  font-size:0.74rem; color:#888; line-height:1.7;
   border-bottom:1px solid #111; padding:1px 0;
 }
 .log-entry.warn   { color:#ff8800; }
@@ -174,6 +174,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
     <div class="hud-item"><div class="hud-label">정밀탐지[G]</div><div class="hud-val" id="hud-precise">📡 2</div></div>
     <div class="hud-item"><div class="hud-label">캡슐</div><div class="hud-val" id="hud-items">0/3</div></div>
     <div class="hud-item"><div class="hud-label">EXPLORED</div><div class="hud-val" id="hud-explored">0%</div></div>
+    <div class="hud-item"><div class="hud-label">🧬 DNA</div><div class="hud-val" id="hud-dna" style="color:#cc66ff;">0</div></div>
   </div>
   <button id="dev-toggle">⚙ DEV</button>
 </div>

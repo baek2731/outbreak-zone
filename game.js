@@ -1946,6 +1946,14 @@ function updateHUD() {
   let visited = 0;
   for (let i = 0; i < VISITED.length; i++) if (VISITED[i]) visited++;
   document.getElementById('hud-explored').textContent = Math.floor(visited / MAP.floorCount * 100) + '%';
+
+  // 누적 DNA (저장된 총량 + 이번 런 현재 회수량)
+  const dnaEl = document.getElementById('hud-dna');
+  if (dnaEl) {
+    let savedDna = 0;
+    try { savedDna = parseInt(localStorage.getItem('outbreak_total_dna') || '0'); } catch(e) {}
+    dnaEl.textContent = `${savedDna} (+${player.totalCollected})`;
+  }
 }
 
 function updateDevInfo() {
