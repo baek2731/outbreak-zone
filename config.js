@@ -18,7 +18,6 @@ const CONFIG = {
   oxygen: {
     max:              100,           // 산소 최대치
     drainPerStage:    [2, 3.5, 5.5, 7, 9], // 스테이지별 자연 감소 속도 (%/초)
-    drainOnHit:        7.5,          // (구) 좀비 피격 시 산소 감소 — 현재 미니게임으로 대체
     infectThreshold:   60,           // 산소 이 % 이하부터 감염 시작
     infectRate:         1.25,        // 감염 증가 속도 (%/초) — 위험구간
     infectRateEmpty:    3.0,         // 감염 증가 속도 (%/초) — 산소 0일 때
@@ -27,7 +26,6 @@ const CONFIG = {
   },
 
   sonar: {
-    minCharge:      0.5,   // 최소 차징
     maxCharge:      1.5,   // 최대 차징
     minRadius:      2,     // 최소 스캔 반경
     maxRadius:      4,     // 최대 스캔 반경
@@ -56,7 +54,6 @@ const CONFIG = {
   zombie: {
     speed:        0.30,  // 플레이어 대비 속도 비율
     spawnDist:    6,     // 스폰 최소 거리 (타일)
-    damageCool:   1.5,   // 접촉 판정 쿨타임 (초)
     fovAngle:     90,    // 시야각 (도)
     fovRange:     2,     // 시야 거리 (타일)
     hearRange:    4,     // 청각 범위 (타일)

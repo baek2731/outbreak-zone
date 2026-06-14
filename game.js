@@ -552,8 +552,6 @@ const player = {
   exitCooldown:   0,   // 재탐사 선택 후 출구 무시 쿨타임 (초)
   recordSaved:    false, // 이번 런 기록 저장 여부 (중복 방지)
   lastFinalCollected: 0, // 마지막 저장된 최종 획득량
-  noiseRadius: 0,
-  noiseX: 0, noiseY: 0,
   // 산소 / 감염 시스템
   oxygen:    100,
   infection:   0,
@@ -599,7 +597,6 @@ const minigame = {
 
 // 미니게임 config (game.js 내부 상수)
 const MG = {
-  patternLengthByStage: [3, 4, 5],  // 스테이지별 패턴 길이
   dirs: ['up','down','left','right'],
   keyToDir: { KeyW:'up', KeyS:'down', KeyA:'left', KeyD:'right',
               ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right' },
@@ -672,9 +669,8 @@ function init() {
     px: CONFIG.map.tileSize, py: CONFIG.map.tileSize,
     targetX: CONFIG.map.tileSize, targetY: CONFIG.map.tileSize,
     moving: false, facing: 'down',
-    dead: false, itemsFound: 0, noiseRadius: 0, exitCooldown: 0,
+    dead: false, itemsFound: 0, exitCooldown: 0,
     // totalCollected는 런 전체 누적이라 init에서 리셋 안 함
-    noiseX: 0, noiseY: 0,
     // oxygen/infection은 init 밖에서 관리 (스테이지 전환 시 유지, 신규/재시작 시만 초기화)
   });
 
@@ -1239,7 +1235,6 @@ function fireSonar(isPrecise) {
 
   // 소나 발동 소음 — 소나 반경과 좀비 청력 중 작은 값
   const noiseWx = player.px + ts / 2, noiseWy = player.py + ts / 2;
-  player.noiseX = noiseWx; player.noiseY = noiseWy;
   triggerNoise(noiseWx, noiseWy, Math.min(radius, CONFIG.zombie.hearRange));
 
   sonar.pulseWx   = player.px + ts / 2;
