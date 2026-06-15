@@ -1344,25 +1344,24 @@ function saveRunRecord(exitType) {
   player.lastFinalCollected = finalCollected;
 
   const record = {
-    date:      new Date().toLocaleString('ko-KR'),
+    date:         new Date().toLocaleString('ko-KR'),
     exitType,
-    stage:     stageIdx + 1,
-    stageName: CONFIG.stages[stageIdx].name,
-    rawCollected:   player.totalCollected, // 실제 회수량 (차감 전)
-    collected:      finalCollected,        // 최종 획득량 (차감 후)
-    infection: Math.ceil(player.infection),
+    unit:         getCurrentUnit(),
+    stage:        stageIdx + 1,
+    stageName:    CONFIG.stages[stageIdx].name,
+    rawCollected: player.totalCollected,
+    collected:    finalCollected,
+    infection:    Math.ceil(player.infection),
     elapsed,
   };
 
   try {
-    const key  = 'outbreak_records';
-    const prev = JSON.parse(localStorage.getItem(key) || '[]');
+    const prev = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
     prev.push(record);
-    localStorage.setItem(key, JSON.stringify(prev));
+    localStorage.setItem(RECORDS_KEY, JSON.stringify(prev));
     // 누적 DNA 총량도 별도 키로 관리
-    const dnaKey  = 'outbreak_total_dna';
-    const prevDna = parseInt(localStorage.getItem(dnaKey) || '0');
-    localStorage.setItem(dnaKey, String(prevDna + finalCollected));
+    const prevDna = parseInt(localStorage.getItem(DNA_KEY) || '0');
+    localStorage.setItem(DNA_KEY, String(prevDna + finalCollected));
   } catch(e) { console.warn('기록 저장 실패', e); }
 
   const label = { retire:'복귀', early:'조기탈출', death:'사망', infected:'좀비화' }[exitType] || exitType;
@@ -1371,11 +1370,14 @@ function saveRunRecord(exitType) {
 }
 
 // ================================================================
-//  로비 시스템 (스테이터스 / 특성)
+//  기지 시스템 (데이터/로직 중심 — UI는 추후 교체)
 // ================================================================
 
-// 플레이어 업그레이드 레벨 저장 키
-const UPGRADE_KEY = 'outbreak_upgrades';
+// localStorage 키 상수
+const UPGRADE_KEY  = 'outbreak_upgrades';
+const RECORDS_KEY  = 'outbreak_records';
+const DNA_KEY      = 'outbreak_total_dna';
+const UNIT_KEY     = 'outbreak_unit_number'; // 현재 요원 번호
 
 function loadUpgrades() {
   try { return JSON.parse(localStorage.getItem(UPGRADE_KEY) || '{}'); }
@@ -1383,6 +1385,17 @@ function loadUpgrades() {
 }
 function saveUpgrades(data) {
   try { localStorage.setItem(UPGRADE_KEY, JSON.stringify(data)); } catch(e) {}
+}
+
+// 요원 번호 — 런 시작마다 +1
+function getCurrentUnit() {
+  try { return parseInt(localStorage.getItem(UNIT_KEY) || '0'); }
+  catch(e) { return 0; }
+}
+function incrementUnit() {
+  const n = getCurrentUnit() + 1;
+  try { localStorage.setItem(UNIT_KEY, String(n)); } catch(e) {}
+  return n;
 }
 
 // 현재 업그레이드가 게임 파라미터에 적용된 효과 반환
@@ -1414,108 +1427,163 @@ function getUpgradeEffects() {
   return fx;
 }
 
-// 로비 화면 열기
+// ── 기지 화면 열기/닫기 ──────────────────────────────────────────
 function showLobby() {
-  document.getElementById('title-screen').classList.remove('show');
+  // 타이틀/게임오버/탈출 화면 모두 닫기
+  ['title-screen','gameover','escaped','early-exit','stage-intro']
+    .forEach(id => document.getElementById(id)?.classList.remove('show'));
   document.getElementById('lobby-screen').classList.add('show');
+  renderLobbyMeta();
   renderLobby('status');
 }
 
-// 로비 닫고 타이틀로
 function closeLobby() {
   document.getElementById('lobby-screen').classList.remove('show');
-  document.getElementById('title-screen').classList.add('show');
-  updateTitleStats();
+  showTitle();
 }
 
-// 탭 렌더링
-function renderLobby(tab) {
-  const dna = parseInt(localStorage.getItem('outbreak_total_dna') || '0');
-  document.getElementById('lb-dna-val').textContent = dna;
+// 요원 정보 / DNA 헤더 갱신
+function renderLobbyMeta() {
+  const dna     = parseInt(localStorage.getItem(DNA_KEY) || '0');
+  const records = loadRecords();
+  const unit    = getCurrentUnit();
+  document.getElementById('lb-dna-val').textContent    = dna;
+  document.getElementById('lb-agent-name').textContent = `UNIT-${String(unit).padStart(2,'0')}`;
+  document.getElementById('lb-agent-runs').textContent = `총 출격 ${records.length}회`;
+}
 
-  // 탭 활성화
-  document.querySelectorAll('.lb-tab').forEach(t => {
-    t.classList.toggle('on', t.dataset.tab === tab);
+// 런 기록 로드
+function loadRecords() {
+  try { return JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]'); }
+  catch(e) { return []; }
+}
+
+// ── 탭별 콘텐츠 렌더링 ────────────────────────────────────────────
+function renderLobby(tab) {
+  // 사이드바 탭 버튼 활성화
+  document.querySelectorAll('.lb-tab-btn').forEach(b => {
+    b.classList.toggle('on', b.dataset.tab === tab);
   });
+  renderLobbyMeta();
 
   const el = document.getElementById('lb-content');
+
   if (tab === 'relic') {
     el.innerHTML = '<div class="lb-locked">🔒 유물 — 추후 해금</div>';
     return;
   }
+  if (tab === 'memorial') {
+    renderMemorial(el);
+    return;
+  }
 
-  const ups  = loadUpgrades();
-  const items = tab === 'status' ? LOBBY.status : LOBBY.trait;
+  // 스테이터스 / 특성 공통 렌더
+  const dna     = parseInt(localStorage.getItem(DNA_KEY) || '0');
+  const ups     = loadUpgrades();
   const isTrait = tab === 'trait';
+  const items   = isTrait ? LOBBY.trait : LOBBY.status;
+  const dotCls  = isTrait ? 'trait-on' : 'on';
+  const btnCls  = isTrait ? 'lb-btn trait' : 'lb-btn';
 
-  let html = `<div class="lb-section">— ${isTrait ? '특성 (오브젝트 영향)' : '스테이터스 (기본 능력치)'} —</div>`;
-  html += '<div class="lb-grid">';
-  for (const item of items) {
-    const lv      = ups[item.id] || 0;
-    const isMax   = lv >= item.maxLv;
-    const cost    = isMax ? 0 : item.costs[lv];
-    const canBuy  = !isMax && dna >= cost;
-    const cardCls = isTrait ? 'lb-card trait' : 'lb-card';
-    const dotCls  = isTrait ? 'trait-on' : 'on';
-    const btnCls  = isTrait ? 'lb-btn trait' : 'lb-btn';
-
-    // 효과 텍스트
-    const effLines = [];
+  const effText = (item) => {
+    const lines = [];
     for (let i = 1; i <= item.maxLv; i++) {
       const e = item.effects(i);
-      const parts = [];
-      if (e.oxygenMaxBonus)       parts.push(`산소 +${Math.round(e.oxygenMaxBonus*100)}%`);
-      if (e.oxygenDrainMult)      parts.push(`감소속도 ×${e.oxygenDrainMult.toFixed(2)}`);
-      if (e.infectThresholdBonus) parts.push(`감염기준 -${e.infectThresholdBonus}%`);
-      if (e.combatPowerBonus)     parts.push(`전투게이지 +${e.combatPowerBonus}`);
-      if (e.postCooldownBonus)    parts.push(`무적 +${e.postCooldownBonus}초`);
-      if (e.capsuleHealBonus)     parts.push(`캡슐 +${Math.round(e.capsuleHealBonus*100)}%`);
-      if (e.patternLenMinus)      parts.push(`패턴 -${e.patternLenMinus}자`);
-      if (e.noiseRadiusMinus)     parts.push(`소음반경 -${e.noiseRadiusMinus}칸`);
-      if (e.sonarRadiusBonus)     parts.push(`소나반경 +${e.sonarRadiusBonus}칸`);
-      if (e.noInfectOnSuccess)    parts.push('회수성공 감염 없음');
-      effLines.push(`Lv${i}: ${parts.join(', ')}`);
+      const p = [];
+      if (e.oxygenMaxBonus)        p.push(`산소 +${Math.round(e.oxygenMaxBonus*100)}%`);
+      if (e.oxygenDrainMult)       p.push(`감소속도 ×${e.oxygenDrainMult.toFixed(2)}`);
+      if (e.infectThresholdBonus)  p.push(`감염기준 -${e.infectThresholdBonus}%`);
+      if (e.combatPowerBonus)      p.push(`전투게이지 +${e.combatPowerBonus}`);
+      if (e.postCooldownBonus)     p.push(`무적 +${e.postCooldownBonus}초`);
+      if (e.capsuleHealBonus)      p.push(`캡슐 +${Math.round(e.capsuleHealBonus*100)}%`);
+      if (e.patternLenMinus)       p.push(`패턴 -${e.patternLenMinus}자`);
+      if (e.noiseRadiusMinus)      p.push(`소음반경 -${e.noiseRadiusMinus}칸`);
+      if (e.sonarRadiusBonus)      p.push(`소나반경 +${e.sonarRadiusBonus}칸`);
+      if (e.noInfectOnSuccess)     p.push('회수성공 감염 없음');
+      lines.push(`Lv${i}: ${p.join(', ')}`);
     }
+    return lines.join('<br>');
+  };
 
+  let html = `<div class="lb-section">— ${isTrait ? '특성 (오브젝트 영향)' : '스테이터스 (기본 능력치)'} —</div><div class="lb-grid">`;
+  for (const item of items) {
+    const lv    = ups[item.id] || 0;
+    const isMax = lv >= item.maxLv;
+    const cost  = isMax ? 0 : item.costs[lv];
+    const canBuy = !isMax && dna >= cost;
     let dots = '';
-    for (let i = 0; i < item.maxLv; i++) {
+    for (let i = 0; i < item.maxLv; i++)
       dots += `<div class="lb-dot${i < lv ? ' '+dotCls : ''}"></div>`;
-    }
-
     html += `
-    <div class="${cardCls}" data-id="${item.id}">
-      <div class="lb-card-name">${item.name}</div>
-      <div class="lb-card-desc">${item.desc}</div>
-      <div class="lb-card-eff">${effLines.join('<br>')}</div>
-      <div class="lb-lv-row">${dots}<span class="lb-cost">${isMax ? 'MAX' : 'DNA '+cost}</span></div>
-      <button class="${btnCls}" data-id="${item.id}" data-tab="${tab}"
-        ${!canBuy ? 'disabled' : ''}>
-        ${isMax ? '최대' : '강화 ▶'}
-      </button>
-    </div>`;
+      <div class="lb-card${isTrait?' trait':''}">
+        <div class="lb-card-name">${item.name}</div>
+        <div class="lb-card-desc">${item.desc}</div>
+        <div class="lb-card-eff">${effText(item)}</div>
+        <div class="lb-lv-row">${dots}<span class="lb-cost">${isMax?'MAX':'DNA '+cost}</span></div>
+        <button class="${btnCls}" data-id="${item.id}" data-tab="${tab}" ${!canBuy?'disabled':''}>
+          ${isMax?'최대':'강화 ▶'}
+        </button>
+      </div>`;
   }
   html += '</div>';
   el.innerHTML = html;
 
   // 강화 버튼 이벤트
-  el.querySelectorAll('.lb-btn[data-id]').forEach(btn => {
+  el.querySelectorAll('[data-id]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const id   = btn.dataset.id;
-      const t    = btn.dataset.tab;
-      const ups2 = loadUpgrades();
-      const lv2  = ups2[id] || 0;
-      const item2= [...LOBBY.status, ...LOBBY.trait].find(x => x.id === id);
+      const id    = btn.dataset.id;
+      const t     = btn.dataset.tab;
+      const ups2  = loadUpgrades();
+      const lv2   = ups2[id] || 0;
+      const item2 = [...LOBBY.status, ...LOBBY.trait].find(x => x.id === id);
       if (!item2 || lv2 >= item2.maxLv) return;
       const cost2 = item2.costs[lv2];
-      const dna2  = parseInt(localStorage.getItem('outbreak_total_dna') || '0');
+      const dna2  = parseInt(localStorage.getItem(DNA_KEY) || '0');
       if (dna2 < cost2) return;
       ups2[id] = lv2 + 1;
       saveUpgrades(ups2);
-      localStorage.setItem('outbreak_total_dna', String(dna2 - cost2));
+      localStorage.setItem(DNA_KEY, String(dna2 - cost2));
       devLog(`강화: ${item2.name} Lv${ups2[id]} (DNA -${cost2})`, 'good');
       renderLobby(t);
     });
   });
+}
+
+// ── 전사자 기록 탭 ────────────────────────────────────────────────
+const MEMORIAL_ICONS = {
+  retire:   '🧬',  // 탈출 성공
+  early:    '☣',   // 조기 탈출
+  death:    '💀',  // 사망
+  infected: '🪖',  // 좀비화
+};
+const MEMORIAL_LABELS = {
+  retire:'탈출', early:'조기탈출', death:'사망', infected:'좀비화',
+};
+
+function renderMemorial(el) {
+  const records = loadRecords();
+  if (records.length === 0) {
+    el.innerHTML = '<div class="lb-section">— 전사자 기록 —</div><div class="mem-empty">아직 기록 없음</div>';
+    return;
+  }
+  let html = '<div class="lb-section">— 전사자 기록 —</div>';
+  // 최신순 역순 표시
+  [...records].reverse().forEach((r, i) => {
+    const icon   = MEMORIAL_ICONS[r.exitType] || '☣';
+    const label  = MEMORIAL_LABELS[r.exitType] || r.exitType;
+    const unit   = r.unit ? `UNIT-${String(r.unit).padStart(2,'0')}` : `UNIT-??`;
+    const raw    = r.rawCollected ?? r.collected ?? 0;
+    html += `
+      <div class="mem-item">
+        <div class="mem-icon">${icon}</div>
+        <div class="mem-info">
+          <div class="mem-name">${unit} — ${r.stage}층 ${r.stageName || ''}</div>
+          <div class="mem-detail">${label} | ${r.elapsed}초 생존 | 회수 ${raw}개 | 감염 ${r.infection}%</div>
+        </div>
+        <div class="mem-dna">+${r.collected} DNA</div>
+      </div>`;
+  });
+  el.innerHTML = html;
 }
 
 // ── 타이틀 화면 ──────────────────────────────────────────────────
@@ -1527,8 +1595,8 @@ function showTitle() {
 
 function updateTitleStats() {
   try {
-    const records = JSON.parse(localStorage.getItem('outbreak_records') || '[]');
-    const totalDna = parseInt(localStorage.getItem('outbreak_total_dna') || '0');
+    const records = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
+    const totalDna = parseInt(localStorage.getItem(DNA_KEY) || '0');
     const bestStage = records.reduce((m, r) => Math.max(m, r.stage || 0), 0);
     document.getElementById('ts-dna').textContent   = totalDna;
     document.getElementById('ts-best').textContent  = bestStage > 0 ? bestStage + 'F' : '-';
@@ -1556,17 +1624,22 @@ function applyUpgradeEffects() {
   devLog(`업그레이드 효과 적용: 산소MAX=${CONFIG.oxygen.max} 감소×${fx.oxygenDrainMult.toFixed(2)} 전투+${fx.combatPowerBonus}`, 'good');
 }
 
-function startFromTitle() {
-  document.getElementById('title-screen').classList.remove('show');
+function startGame() {
+  // 기지/타이틀 화면 닫기
+  ['title-screen','lobby-screen'].forEach(id =>
+    document.getElementById(id)?.classList.remove('show'));
+  incrementUnit();
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
   player.infection      = 0;
   player.totalCollected = 0;
   player.recordSaved    = false;
   applyUpgradeEffects();
-  player.oxygen = CONFIG.oxygen.max; // 업그레이드 후 최대치로 재설정
+  player.oxygen = CONFIG.oxygen.max;
   init();
 }
+
+function startFromTitle() { startGame(); }
 
 // ── 스테이지 인트로 ──────────────────────────────────────────────
 function showStageIntro() {
@@ -2698,11 +2771,13 @@ function closeIntro() {
 }
 document.getElementById('intro-btn').addEventListener('click', closeIntro);
 
-// 로비 탭 버튼
-document.querySelectorAll('.lb-tab').forEach(btn => {
+// 기지 사이드바 탭 버튼
+document.querySelectorAll('.lb-tab-btn').forEach(btn => {
   btn.addEventListener('click', () => renderLobby(btn.dataset.tab));
 });
-// 로비 뒤로가기
+// 기지 작전 개시
+document.getElementById('lb-start-btn').addEventListener('click', startGame);
+// 기지 뒤로가기
 document.getElementById('lb-back-btn').addEventListener('click', closeLobby);
 
 // 타이틀 메뉴 버튼
@@ -2710,8 +2785,8 @@ document.getElementById('ts-start').addEventListener('click', startFromTitle);
 document.getElementById('ts-base').addEventListener('click', showLobby);
 document.getElementById('ts-records').addEventListener('click', () => {
   try {
-    const records = JSON.parse(localStorage.getItem('outbreak_records') || '[]');
-    const totalDna = parseInt(localStorage.getItem('outbreak_total_dna') || '0');
+    const records = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
+    const totalDna = parseInt(localStorage.getItem(DNA_KEY) || '0');
     // 임시: 로그 패널에 기록 표시
     devLog(`총 DNA: ${totalDna} / ${records.length}런`, 'good');
     records.slice(-5).reverse().forEach(r => {
@@ -2724,8 +2799,8 @@ document.getElementById('ts-records').addEventListener('click', () => {
 // DEV — 수집 기록 보기 (로그 패널에 출력)
 document.getElementById('d-records').addEventListener('click', () => {
   try {
-    const records = JSON.parse(localStorage.getItem('outbreak_records') || '[]');
-    const totalDna = parseInt(localStorage.getItem('outbreak_total_dna') || '0');
+    const records = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
+    const totalDna = parseInt(localStorage.getItem(DNA_KEY) || '0');
     devLog(`═══ 누적 DNA: ${totalDna}개 / 총 ${records.length}런 ═══`, 'good');
     records.slice(-8).reverse().forEach(r => {
       const label = { retire:'복귀', early:'조기', death:'사망', infected:'좀비화' }[r.exitType] || r.exitType;

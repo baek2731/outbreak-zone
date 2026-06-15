@@ -133,43 +133,60 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 .log-entry.danger { color:#ff3333; }
 .log-entry.good   { color:#00ff88; }
 
-/* ── 로비 화면 ── */
+/* ── 기지 화면 ── */
 #lobby-screen {
   display:none; position:absolute; inset:0;
-  background:#000; z-index:45; overflow-y:auto;
+  background:#000; z-index:45;
   font-family:'Press Start 2P',monospace;
+  flex-direction:column;
 }
-#lobby-screen.show { display:block; }
-.lb { padding:20px; min-height:100%; }
-.lb-header { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1a1a1a; padding-bottom:12px; margin-bottom:16px; }
-.lb-title { color:#00ff88; font-size:9px; letter-spacing:0.2em; }
-.lb-dna { color:#cc66ff; font-size:8px; }
+#lobby-screen.show { display:flex; }
+.lb { display:flex; flex-direction:column; height:100%; }
+.lb-header { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid #1a1a1a; flex-shrink:0; }
+.lb-title { color:#ff3333; font-size:8px; letter-spacing:0.15em; }
+.lb-dna { color:#cc66ff; font-size:7px; }
 .lb-dna span { color:#00ff88; }
-.lb-back { color:#555; font-size:6px; cursor:pointer; border:1px solid #222; padding:4px 10px; background:none; font-family:'Press Start 2P',monospace; }
-.lb-back:hover { color:#00ff88; border-color:#00ff88; }
-.lb-tabs { display:flex; gap:2px; margin-bottom:16px; }
-.lb-tab { font-size:6px; padding:6px 12px; cursor:pointer; border:1px solid #222; color:#444; letter-spacing:0.1em; background:none; font-family:'Press Start 2P',monospace; }
-.lb-tab.on { color:#00ff88; border-color:#00ff88; }
-.lb-tab:hover:not(.on) { color:#aaa; }
-.lb-section { font-size:6px; color:#333; letter-spacing:0.15em; margin-bottom:10px; padding-bottom:4px; border-bottom:1px solid #111; }
-.lb-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
-.lb-card { background:#0a0a0a; border:1px solid #1a1a1a; padding:10px; }
+.lb-body { display:flex; flex:1; overflow:hidden; }
+.lb-sidebar { width:150px; flex-shrink:0; border-right:1px solid #1a1a1a; padding:12px 8px; display:flex; flex-direction:column; gap:5px; overflow-y:auto; }
+.lb-agent { text-align:center; padding-bottom:10px; border-bottom:1px solid #111; margin-bottom:6px; }
+.lb-avatar { width:44px; height:44px; border:2px solid #222; margin:0 auto 6px; display:flex; align-items:center; justify-content:center; font-size:18px; color:#444; }
+.lb-agent-name { color:#444; font-size:5px; letter-spacing:0.1em; margin-bottom:3px; }
+.lb-agent-runs { color:#222; font-size:5px; }
+.lb-sb-btn { font-size:5px; padding:6px 8px; background:none; border:1px solid #1a1a1a; color:#333; cursor:pointer; font-family:'Press Start 2P',monospace; text-align:left; letter-spacing:0.05em; }
+.lb-sb-btn:hover { border-color:#555; color:#555; }
+.lb-sb-btn.on { color:#00ff88; border-color:#00ff88; }
+.lb-sb-btn.primary { color:#00ff88; border-color:#00ff88; }
+.lb-sb-btn.primary:hover { background:rgba(0,255,136,0.05); }
+.lb-sb-btn.danger { color:#ff3333; border-color:#330000; margin-top:auto; }
+.lb-sb-btn.danger:hover { border-color:#ff3333; }
+.lb-sb-div { border:none; border-top:1px solid #111; }
+.lb-content { flex:1; padding:14px; overflow-y:auto; }
+.lb-section { font-size:5px; color:#222; letter-spacing:0.15em; margin-bottom:10px; padding-bottom:4px; border-bottom:1px solid #0a0a0a; }
+.lb-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:14px; }
+.lb-card { background:#050505; border:1px solid #0d0d0d; padding:9px; }
 .lb-card.trait { border-color:#1a1200; }
-.lb-card-name { font-size:7px; color:#aaa; margin-bottom:5px; }
-.lb-card.trait .lb-card-name { color:#ffaa00; }
-.lb-card-desc { font-size:5px; color:#333; margin-bottom:5px; line-height:1.8; }
-.lb-card-eff { font-size:5px; color:#00ff88; margin-bottom:8px; line-height:1.8; }
+.lb-card-name { font-size:6px; color:#777; margin-bottom:4px; }
+.lb-card.trait .lb-card-name { color:#aa8800; }
+.lb-card-desc { font-size:4px; color:#222; margin-bottom:4px; line-height:1.8; }
+.lb-card-eff { font-size:4px; color:#00ff88; margin-bottom:7px; line-height:1.8; }
 .lb-card.trait .lb-card-eff { color:#ffaa00; }
-.lb-lv-row { display:flex; align-items:center; gap:4px; margin-bottom:7px; }
-.lb-dot { width:10px; height:10px; border:1px solid #222; flex-shrink:0; }
+.lb-lv-row { display:flex; align-items:center; gap:3px; margin-bottom:6px; }
+.lb-dot { width:8px; height:8px; border:1px solid #1a1a1a; flex-shrink:0; }
 .lb-dot.on { background:#00ff88; border-color:#00ff88; }
 .lb-dot.trait-on { background:#ffaa00; border-color:#ffaa00; }
-.lb-cost { font-size:5px; color:#cc66ff; margin-left:auto; }
-.lb-btn { font-size:5px; padding:4px 8px; background:none; border:1px solid #333; color:#555; cursor:pointer; font-family:'Press Start 2P',monospace; }
+.lb-cost { font-size:4px; color:#cc66ff; margin-left:auto; }
+.lb-btn { font-size:4px; padding:4px 7px; background:none; border:1px solid #222; color:#444; cursor:pointer; font-family:'Press Start 2P',monospace; }
 .lb-btn:hover:not(:disabled) { border-color:#00ff88; color:#00ff88; }
 .lb-btn.trait:hover:not(:disabled) { border-color:#ffaa00; color:#ffaa00; }
-.lb-btn:disabled { border-color:#111; color:#222; cursor:default; }
-.lb-locked { padding:30px; text-align:center; color:#222; font-size:7px; letter-spacing:0.1em; }
+.lb-btn:disabled { border-color:#0a0a0a; color:#1a1a1a; cursor:default; }
+.lb-locked { padding:30px; text-align:center; color:#1a1a1a; font-size:6px; letter-spacing:0.1em; }
+.mem-item { display:flex; align-items:center; gap:10px; padding:7px 10px; border:1px solid #0d0d0d; background:#050505; margin-bottom:5px; }
+.mem-icon { font-size:14px; width:22px; text-align:center; color:#333; flex-shrink:0; }
+.mem-info { flex:1; }
+.mem-name { font-size:5px; color:#333; margin-bottom:3px; }
+.mem-detail { font-size:4px; color:#1a1a1a; line-height:1.8; }
+.mem-dna { font-size:5px; color:#cc66ff; flex-shrink:0; }
+.mem-empty { font-size:5px; color:#1a1a1a; text-align:center; padding:30px 0; letter-spacing:0.1em; }
 
 /* ── 타이틀 화면 ── */
 #title-screen {
@@ -260,20 +277,31 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 
 <div id="main">
   <div id="game-area">
-    <!-- 로비 화면 -->
+    <!-- 기지 화면 -->
     <div id="lobby-screen">
       <div class="lb">
         <div class="lb-header">
-          <div class="lb-title">☣ 기지</div>
+          <div class="lb-title">☣ 기지 — 작전 지휘실</div>
           <div class="lb-dna">🧬 DNA <span id="lb-dna-val">0</span></div>
-          <button class="lb-back" id="lb-back-btn">◀ 타이틀</button>
         </div>
-        <div class="lb-tabs">
-          <button class="lb-tab on" data-tab="status">스테이터스</button>
-          <button class="lb-tab" data-tab="trait">특성</button>
-          <button class="lb-tab" data-tab="relic">유물</button>
+        <div class="lb-body">
+          <div class="lb-sidebar">
+            <div class="lb-agent">
+              <div class="lb-avatar">☣</div>
+              <div class="lb-agent-name" id="lb-agent-name">UNIT-01</div>
+              <div class="lb-agent-runs" id="lb-agent-runs">총 출격 0회</div>
+            </div>
+            <button class="lb-sb-btn primary" id="lb-start-btn">▶ 작전 개시</button>
+            <hr class="lb-sb-div">
+            <button class="lb-sb-btn lb-tab-btn on" data-tab="status">스테이터스</button>
+            <button class="lb-sb-btn lb-tab-btn" data-tab="trait">특성</button>
+            <button class="lb-sb-btn lb-tab-btn" data-tab="relic">유물 🔒</button>
+            <hr class="lb-sb-div">
+            <button class="lb-sb-btn lb-tab-btn" data-tab="memorial">전사자 기록</button>
+            <button class="lb-sb-btn danger" id="lb-back-btn">◀ 타이틀</button>
+          </div>
+          <div class="lb-content" id="lb-content"></div>
         </div>
-        <div id="lb-content"></div>
       </div>
     </div>
 
