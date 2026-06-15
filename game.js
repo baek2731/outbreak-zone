@@ -44,9 +44,21 @@ function drawZombie(z, ts) {
   const zt = CONFIG.zombieTypes[z.type] || CONFIG.zombieTypes.BASIC;
   const typeColor = zt.color;
 
-  // DEV 시야 표시 — 타입별 fovRange 반영
+  // DEV 시야 표시 — 시야각 삼각형 + 청각 범위 점선 원
   if (devZombieFov) {
     ctx.save();
+
+    // 청각 범위 — 점선 원 (모든 좀비 공통)
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = typeColor;
+    ctx.lineWidth   = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, zt.hearRange * ts, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 시야각 삼각형
     const fovR    = zt.fovRange * ts;
     const fovHalf = (zt.fovAngle * patrol.fovMult / 2) * Math.PI / 180;
     ctx.globalAlpha = 0.15;
@@ -58,7 +70,9 @@ function drawZombie(z, ts) {
     ctx.fill();
     ctx.globalAlpha = 0.5;
     ctx.strokeStyle = z.state === 'CHASE' ? '#ff6666' : z.state === 'SEARCH' ? '#ffaa44' : typeColor;
-    ctx.lineWidth = 1; ctx.stroke();
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
     ctx.restore();
   }
 
@@ -1745,7 +1759,8 @@ function zombieStep(z, c, zcx, zcy) {
         a = Math.atan2(z.targetWy - zcy, z.targetWx - zcx);
       }
       z.facingAngle = a;
-      const sp = z.state === 'CHASE' ? c.spd : c.spd * 0.85;
+      // RUSHER: 추격 중 빠른 속도 적용 (chaseSpd)
+      const sp = z.state === 'CHASE' ? c.chaseSpd : c.spd * 0.85;
       mvx = Math.cos(a) * sp;
       mvy = Math.sin(a) * sp;
     }
