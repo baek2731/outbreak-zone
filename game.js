@@ -1381,6 +1381,13 @@ function fireSonar(isPrecise) {
 
   sonar.pings        = [...sonar.pings.filter(p => p.alpha > 0), ...newPings];
   sonar.preciseMarks = [...sonar.preciseMarks.filter(m => m.alpha > 0), ...newMarks];
+
+  // 소나 발동 후 — 플레이어가 현재 서 있는 타일이 병원체면 자동 탐지
+  const curIdx = player.ty * MAP.width + player.tx;
+  if (MAP.tiles[curIdx] === T.MINE) {
+    MAP.detected[curIdx] = 1;
+    devLog('현재 위치 병원체 탐지 — [E] 회수 가능', 'good');
+  }
 }
 
 function updateSonar(dt) {
