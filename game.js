@@ -2623,6 +2623,15 @@ document.getElementById('go-btn').addEventListener('click', () => {
   document.getElementById('gameover').classList.remove('show');
   showTitle();
 });
+document.getElementById('go-base-btn').addEventListener('click', () => {
+  player.stage          = 0;
+  player.oxygen         = CONFIG.oxygen.max;
+  player.infection      = 0;
+  player.totalCollected = 0;
+  player.recordSaved    = false;
+  document.getElementById('gameover').classList.remove('show');
+  showLobby();
+});
 // 다음 스테이지
 document.getElementById('esc-btn').addEventListener('click', () => {
   if (player.stage < CONFIG.stages.length - 1) {
@@ -2640,6 +2649,15 @@ document.getElementById('esc-retire').addEventListener('click', () => {
   player.recordSaved    = false;
   document.getElementById('escaped').classList.remove('show');
   showTitle();
+});
+document.getElementById('esc-base-btn').addEventListener('click', () => {
+  player.stage          = 0;
+  player.oxygen         = CONFIG.oxygen.max;
+  player.infection      = 0;
+  player.totalCollected = 0;
+  player.recordSaved    = false;
+  document.getElementById('escaped').classList.remove('show');
+  showLobby();
 });
 document.getElementById('esc-clear').addEventListener('click', () => {
   player.stage          = 0;
