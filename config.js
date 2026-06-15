@@ -127,3 +127,44 @@ const CONFIG = {
   ],
 
 };
+
+// ── 로비: 스테이터스 / 특성 정의 ─────────────────────────────────
+const LOBBY = {
+
+  status: [
+    { id:'maskDura',   name:'방독면 내구도', desc:'산소 최대치 증가',
+      maxLv:3, costs:[5,10,20],
+      effects: lv => ({ oxygenMaxBonus: lv * 0.10 }) },
+    { id:'oxyFilter',  name:'산소 필터',    desc:'산소 감소 속도 감소',
+      maxLv:3, costs:[5,10,20],
+      effects: lv => ({ oxygenDrainMult: 1 - lv * 0.08 }) },
+    { id:'antivirus',  name:'항바이러스',   desc:'감염 시작 임계값 하향',
+      maxLv:2, costs:[8,15],
+      effects: lv => ({ infectThresholdBonus: lv * 5 }) },
+    { id:'bodyTrain',  name:'체력 단련',    desc:'전투 게이지 증가량 상승',
+      maxLv:3, costs:[8,15,25],
+      effects: lv => ({ combatPowerBonus: lv * 3 }) },
+    { id:'suitUp',     name:'방호복 강화',  desc:'전투 후 무적 시간 증가',
+      maxLv:2, costs:[8,15],
+      effects: lv => ({ postCooldownBonus: lv * 0.5 }) },
+    { id:'capsuleUp',  name:'산소 캡슐 개량', desc:'캡슐 회복량 증가',
+      maxLv:2, costs:[8,15],
+      effects: lv => ({ capsuleHealBonus: lv * 0.10 }) },
+  ],
+
+  trait: [
+    { id:'preciseDismantle', name:'정밀 해체',  desc:'병원체 회수 패턴 길이 감소',
+      maxLv:2, costs:[12,20],
+      effects: lv => ({ patternLenMinus: lv }) },
+    { id:'noiseSuppressor',  name:'소음 억제',  desc:'회수 실패 소음 반경 감소',
+      maxLv:2, costs:[10,18],
+      effects: lv => ({ noiseRadiusMinus: lv }) },
+    { id:'sonarAmp',         name:'소나 증폭',  desc:'소나 최대 반경 확장',
+      maxLv:2, costs:[12,20],
+      effects: lv => ({ sonarRadiusBonus: lv }) },
+    { id:'infectResist',     name:'감염 저항',  desc:'회수 성공 시 감염 증가 없음',
+      maxLv:1, costs:[20],
+      effects: lv => ({ noInfectOnSuccess: lv >= 1 }) },
+  ],
+
+};

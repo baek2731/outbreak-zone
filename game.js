@@ -1097,7 +1097,8 @@ function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
     minigame.interruptedMine = interrupted || false;
   }
   const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
-  const len = CONFIG.stages[stageIdx].patternLen;
+  const fxLen = getUpgradeEffects();
+  const len = Math.max(2, CONFIG.stages[stageIdx].patternLen - fxLen.patternLenMinus);
 
   const zState = zombieRef ? zombieRef.state : 'WANDER';
   // 전투 drain — 상태 기반 + 특수 좀비 보정
@@ -1168,15 +1169,20 @@ function endMinigame(success) {
         // GUARD 홈 포인트 갱신 (회수된 병원체가 홈이었을 경우)
         updateGuardHomePoints();
       }
-      player.infection = Math.min(100, player.infection + MG.mineSuccessInfect);
-      revealAround(player.tx, player.ty, CONFIG.player.visionRad); // 시야 즉시 복구
-      devLog(`병원체 회수 성공 — 감염 +${MG.mineSuccessInfect}%`, 'good');
+      const fx = getUpgradeEffects();
+      if (!fx.noInfectOnSuccess) {
+        player.infection = Math.min(100, player.infection + MG.mineSuccessInfect);
+      }
+      revealAround(player.tx, player.ty, CONFIG.player.visionRad);
+      devLog(`병원체 회수 성공 — 감염 ${fx.noInfectOnSuccess ? '+0%(저항)' : '+'+MG.mineSuccessInfect+'%'}`, 'good');
     } else {
       // 실패 — 감염 대폭 증가 + 소음
       player.infection = Math.min(100, player.infection + MG.mineFailInfect);
+      const fxNoise = getUpgradeEffects();
+      const noiseR = Math.max(1, CONFIG.zombie.noiseRadius - fxNoise.noiseRadiusMinus);
       triggerNoise(player.px + CONFIG.map.tileSize / 2,
                    player.py + CONFIG.map.tileSize / 2,
-                   CONFIG.zombie.noiseRadius, 'noise');
+                   noiseR, 'noise');
       devLog(`병원체 회수 실패 — 감염 +${MG.mineFailInfect}%`, 'danger');
     }
   } else {
@@ -1364,6 +1370,154 @@ function saveRunRecord(exitType) {
   return finalCollected;
 }
 
+// ================================================================
+//  로비 시스템 (스테이터스 / 특성)
+// ================================================================
+
+// 플레이어 업그레이드 레벨 저장 키
+const UPGRADE_KEY = 'outbreak_upgrades';
+
+function loadUpgrades() {
+  try { return JSON.parse(localStorage.getItem(UPGRADE_KEY) || '{}'); }
+  catch(e) { return {}; }
+}
+function saveUpgrades(data) {
+  try { localStorage.setItem(UPGRADE_KEY, JSON.stringify(data)); } catch(e) {}
+}
+
+// 현재 업그레이드가 게임 파라미터에 적용된 효과 반환
+function getUpgradeEffects() {
+  const ups = loadUpgrades();
+  const fx = {
+    oxygenMaxBonus:      0,
+    oxygenDrainMult:     1.0,
+    infectThresholdBonus:0,
+    combatPowerBonus:    0,
+    postCooldownBonus:   0,
+    capsuleHealBonus:    0,
+    patternLenMinus:     0,
+    noiseRadiusMinus:    0,
+    sonarRadiusBonus:    0,
+    noInfectOnSuccess:   false,
+  };
+  const all = [...LOBBY.status, ...LOBBY.trait];
+  for (const item of all) {
+    const lv = ups[item.id] || 0;
+    if (lv <= 0) continue;
+    const e = item.effects(lv);
+    for (const k in e) {
+      if (k === 'oxygenDrainMult') fx[k] *= e[k];
+      else if (typeof e[k] === 'boolean') fx[k] = fx[k] || e[k];
+      else fx[k] += e[k];
+    }
+  }
+  return fx;
+}
+
+// 로비 화면 열기
+function showLobby() {
+  document.getElementById('title-screen').classList.remove('show');
+  document.getElementById('lobby-screen').classList.add('show');
+  renderLobby('status');
+}
+
+// 로비 닫고 타이틀로
+function closeLobby() {
+  document.getElementById('lobby-screen').classList.remove('show');
+  document.getElementById('title-screen').classList.add('show');
+  updateTitleStats();
+}
+
+// 탭 렌더링
+function renderLobby(tab) {
+  const dna = parseInt(localStorage.getItem('outbreak_total_dna') || '0');
+  document.getElementById('lb-dna-val').textContent = dna;
+
+  // 탭 활성화
+  document.querySelectorAll('.lb-tab').forEach(t => {
+    t.classList.toggle('on', t.dataset.tab === tab);
+  });
+
+  const el = document.getElementById('lb-content');
+  if (tab === 'relic') {
+    el.innerHTML = '<div class="lb-locked">🔒 유물 — 추후 해금</div>';
+    return;
+  }
+
+  const ups  = loadUpgrades();
+  const items = tab === 'status' ? LOBBY.status : LOBBY.trait;
+  const isTrait = tab === 'trait';
+
+  let html = `<div class="lb-section">— ${isTrait ? '특성 (오브젝트 영향)' : '스테이터스 (기본 능력치)'} —</div>`;
+  html += '<div class="lb-grid">';
+  for (const item of items) {
+    const lv      = ups[item.id] || 0;
+    const isMax   = lv >= item.maxLv;
+    const cost    = isMax ? 0 : item.costs[lv];
+    const canBuy  = !isMax && dna >= cost;
+    const cardCls = isTrait ? 'lb-card trait' : 'lb-card';
+    const dotCls  = isTrait ? 'trait-on' : 'on';
+    const btnCls  = isTrait ? 'lb-btn trait' : 'lb-btn';
+
+    // 효과 텍스트
+    const effLines = [];
+    for (let i = 1; i <= item.maxLv; i++) {
+      const e = item.effects(i);
+      const parts = [];
+      if (e.oxygenMaxBonus)       parts.push(`산소 +${Math.round(e.oxygenMaxBonus*100)}%`);
+      if (e.oxygenDrainMult)      parts.push(`감소속도 ×${e.oxygenDrainMult.toFixed(2)}`);
+      if (e.infectThresholdBonus) parts.push(`감염기준 -${e.infectThresholdBonus}%`);
+      if (e.combatPowerBonus)     parts.push(`전투게이지 +${e.combatPowerBonus}`);
+      if (e.postCooldownBonus)    parts.push(`무적 +${e.postCooldownBonus}초`);
+      if (e.capsuleHealBonus)     parts.push(`캡슐 +${Math.round(e.capsuleHealBonus*100)}%`);
+      if (e.patternLenMinus)      parts.push(`패턴 -${e.patternLenMinus}자`);
+      if (e.noiseRadiusMinus)     parts.push(`소음반경 -${e.noiseRadiusMinus}칸`);
+      if (e.sonarRadiusBonus)     parts.push(`소나반경 +${e.sonarRadiusBonus}칸`);
+      if (e.noInfectOnSuccess)    parts.push('회수성공 감염 없음');
+      effLines.push(`Lv${i}: ${parts.join(', ')}`);
+    }
+
+    let dots = '';
+    for (let i = 0; i < item.maxLv; i++) {
+      dots += `<div class="lb-dot${i < lv ? ' '+dotCls : ''}"></div>`;
+    }
+
+    html += `
+    <div class="${cardCls}" data-id="${item.id}">
+      <div class="lb-card-name">${item.name}</div>
+      <div class="lb-card-desc">${item.desc}</div>
+      <div class="lb-card-eff">${effLines.join('<br>')}</div>
+      <div class="lb-lv-row">${dots}<span class="lb-cost">${isMax ? 'MAX' : 'DNA '+cost}</span></div>
+      <button class="${btnCls}" data-id="${item.id}" data-tab="${tab}"
+        ${!canBuy ? 'disabled' : ''}>
+        ${isMax ? '최대' : '강화 ▶'}
+      </button>
+    </div>`;
+  }
+  html += '</div>';
+  el.innerHTML = html;
+
+  // 강화 버튼 이벤트
+  el.querySelectorAll('.lb-btn[data-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id   = btn.dataset.id;
+      const t    = btn.dataset.tab;
+      const ups2 = loadUpgrades();
+      const lv2  = ups2[id] || 0;
+      const item2= [...LOBBY.status, ...LOBBY.trait].find(x => x.id === id);
+      if (!item2 || lv2 >= item2.maxLv) return;
+      const cost2 = item2.costs[lv2];
+      const dna2  = parseInt(localStorage.getItem('outbreak_total_dna') || '0');
+      if (dna2 < cost2) return;
+      ups2[id] = lv2 + 1;
+      saveUpgrades(ups2);
+      localStorage.setItem('outbreak_total_dna', String(dna2 - cost2));
+      devLog(`강화: ${item2.name} Lv${ups2[id]} (DNA -${cost2})`, 'good');
+      renderLobby(t);
+    });
+  });
+}
+
 // ── 타이틀 화면 ──────────────────────────────────────────────────
 function showTitle() {
   GAME_STATE = 'TITLE';
@@ -1382,6 +1536,26 @@ function updateTitleStats() {
   } catch(e) {}
 }
 
+function applyUpgradeEffects() {
+  const fx = getUpgradeEffects();
+  // 산소 최대치
+  CONFIG.oxygen.max = Math.round(100 * (1 + fx.oxygenMaxBonus));
+  // 산소 감소 속도 배율 (drainPerStage 전체에 적용)
+  CONFIG.oxygen._drainMult = fx.oxygenDrainMult;
+  // 감염 임계값
+  CONFIG.oxygen.infectThreshold = 60 - fx.infectThresholdBonus;
+  // 전투 게이지 증가량
+  MG.combatPlayerPower = 18 + fx.combatPowerBonus;
+  // 무적 시간
+  MG.postCooldown = 3.0 + fx.postCooldownBonus;
+  // 캡슐 회복량
+  CONFIG.oxygen.capsuleHeal = Math.round(33 * (1 + fx.capsuleHealBonus));
+  // 소나 반경
+  CONFIG.sonar.maxRadius = 4 + fx.sonarRadiusBonus;
+  // 특성 효과는 런타임에서 참조 (MG/endMinigame에서 getUpgradeEffects 호출)
+  devLog(`업그레이드 효과 적용: 산소MAX=${CONFIG.oxygen.max} 감소×${fx.oxygenDrainMult.toFixed(2)} 전투+${fx.combatPowerBonus}`, 'good');
+}
+
 function startFromTitle() {
   document.getElementById('title-screen').classList.remove('show');
   player.stage          = 0;
@@ -1389,6 +1563,8 @@ function startFromTitle() {
   player.infection      = 0;
   player.totalCollected = 0;
   player.recordSaved    = false;
+  applyUpgradeEffects();
+  player.oxygen = CONFIG.oxygen.max; // 업그레이드 후 최대치로 재설정
   init();
 }
 
@@ -2111,7 +2287,8 @@ function updateOxygenInfection(dt) {
 
   // 산소 자연 감소 (스테이지별 속도)
   if (!devInvincible) {
-    const drainRate = cfg.drainPerStage[Math.min(player.stage, cfg.drainPerStage.length - 1)];
+    const baseDrain = cfg.drainPerStage[Math.min(player.stage, cfg.drainPerStage.length - 1)];
+    const drainRate = baseDrain * (CONFIG.oxygen._drainMult || 1.0);
     player.oxygen = Math.max(0, player.oxygen - drainRate * dt);
   }
 
@@ -2503,11 +2680,16 @@ function closeIntro() {
 }
 document.getElementById('intro-btn').addEventListener('click', closeIntro);
 
+// 로비 탭 버튼
+document.querySelectorAll('.lb-tab').forEach(btn => {
+  btn.addEventListener('click', () => renderLobby(btn.dataset.tab));
+});
+// 로비 뒤로가기
+document.getElementById('lb-back-btn').addEventListener('click', closeLobby);
+
 // 타이틀 메뉴 버튼
 document.getElementById('ts-start').addEventListener('click', startFromTitle);
-document.getElementById('ts-base').addEventListener('click', () => {
-  devLog('기지 화면 — 추후 구현', 'warn');
-});
+document.getElementById('ts-base').addEventListener('click', showLobby);
 document.getElementById('ts-records').addEventListener('click', () => {
   try {
     const records = JSON.parse(localStorage.getItem('outbreak_records') || '[]');

@@ -133,6 +133,44 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 .log-entry.danger { color:#ff3333; }
 .log-entry.good   { color:#00ff88; }
 
+/* ── 로비 화면 ── */
+#lobby-screen {
+  display:none; position:absolute; inset:0;
+  background:#000; z-index:45; overflow-y:auto;
+  font-family:'Press Start 2P',monospace;
+}
+#lobby-screen.show { display:block; }
+.lb { padding:20px; min-height:100%; }
+.lb-header { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1a1a1a; padding-bottom:12px; margin-bottom:16px; }
+.lb-title { color:#00ff88; font-size:9px; letter-spacing:0.2em; }
+.lb-dna { color:#cc66ff; font-size:8px; }
+.lb-dna span { color:#00ff88; }
+.lb-back { color:#555; font-size:6px; cursor:pointer; border:1px solid #222; padding:4px 10px; background:none; font-family:'Press Start 2P',monospace; }
+.lb-back:hover { color:#00ff88; border-color:#00ff88; }
+.lb-tabs { display:flex; gap:2px; margin-bottom:16px; }
+.lb-tab { font-size:6px; padding:6px 12px; cursor:pointer; border:1px solid #222; color:#444; letter-spacing:0.1em; background:none; font-family:'Press Start 2P',monospace; }
+.lb-tab.on { color:#00ff88; border-color:#00ff88; }
+.lb-tab:hover:not(.on) { color:#aaa; }
+.lb-section { font-size:6px; color:#333; letter-spacing:0.15em; margin-bottom:10px; padding-bottom:4px; border-bottom:1px solid #111; }
+.lb-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
+.lb-card { background:#0a0a0a; border:1px solid #1a1a1a; padding:10px; }
+.lb-card.trait { border-color:#1a1200; }
+.lb-card-name { font-size:7px; color:#aaa; margin-bottom:5px; }
+.lb-card.trait .lb-card-name { color:#ffaa00; }
+.lb-card-desc { font-size:5px; color:#333; margin-bottom:5px; line-height:1.8; }
+.lb-card-eff { font-size:5px; color:#00ff88; margin-bottom:8px; line-height:1.8; }
+.lb-card.trait .lb-card-eff { color:#ffaa00; }
+.lb-lv-row { display:flex; align-items:center; gap:4px; margin-bottom:7px; }
+.lb-dot { width:10px; height:10px; border:1px solid #222; flex-shrink:0; }
+.lb-dot.on { background:#00ff88; border-color:#00ff88; }
+.lb-dot.trait-on { background:#ffaa00; border-color:#ffaa00; }
+.lb-cost { font-size:5px; color:#cc66ff; margin-left:auto; }
+.lb-btn { font-size:5px; padding:4px 8px; background:none; border:1px solid #333; color:#555; cursor:pointer; font-family:'Press Start 2P',monospace; }
+.lb-btn:hover:not(:disabled) { border-color:#00ff88; color:#00ff88; }
+.lb-btn.trait:hover:not(:disabled) { border-color:#ffaa00; color:#ffaa00; }
+.lb-btn:disabled { border-color:#111; color:#222; cursor:default; }
+.lb-locked { padding:30px; text-align:center; color:#222; font-size:7px; letter-spacing:0.1em; }
+
 /* ── 타이틀 화면 ── */
 #title-screen {
   display:none; position:absolute; inset:0;
@@ -222,6 +260,23 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 
 <div id="main">
   <div id="game-area">
+    <!-- 로비 화면 -->
+    <div id="lobby-screen">
+      <div class="lb">
+        <div class="lb-header">
+          <div class="lb-title">☣ 기지</div>
+          <div class="lb-dna">🧬 DNA <span id="lb-dna-val">0</span></div>
+          <button class="lb-back" id="lb-back-btn">◀ 타이틀</button>
+        </div>
+        <div class="lb-tabs">
+          <button class="lb-tab on" data-tab="status">스테이터스</button>
+          <button class="lb-tab" data-tab="trait">특성</button>
+          <button class="lb-tab" data-tab="relic">유물</button>
+        </div>
+        <div id="lb-content"></div>
+      </div>
+    </div>
+
     <!-- 타이틀 화면 -->
     <div id="title-screen" class="show">
       <div class="ts-scanline"></div>
