@@ -357,8 +357,6 @@ function drawSonarPreciseMarks() {
 
 function drawMinigame(ts) {
   if (!minigame.active) return;
-  const cx = player.px + ts / 2 - camX;
-  const cy = player.py - camX * 0 - camY;  // camX/Y는 ctx.translate로 이미 적용됨
 
   // ctx는 이미 translate(-camX,-camY) 상태 → 월드 좌표 사용
   const wx = player.px + ts / 2;
@@ -2843,7 +2841,6 @@ player.recordSaved    = false;
 resize();
 // 타이틀 화면으로 시작 (init은 작전 개시 후)
 showTitle();
-requestAnimationFrame(loop);
 
 // 소나 JIT 워밍업 — 오프스크린에서 draw 함수 한 번 실행
 (function warmupSonar() {
