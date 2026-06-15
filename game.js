@@ -1231,35 +1231,35 @@ function showStageIntro() {
   document.getElementById('stage-intro').classList.add('show');
 }
 
-// ── 패트롤 강화 체크 ─────────────────────────────────────────────
+// ── 패트롤 강화 체크 (고정 개수 기반) ──────────────────────────
 function checkPatrolPhase() {
-  const stageIdx  = Math.min(player.stage, CONFIG.stages.length - 1);
-  const total     = CONFIG.stages[stageIdx].mineCount;
-  let remaining   = 0;
+  const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
+  const st       = CONFIG.stages[stageIdx];
+  const thr      = st.patrolThresholds; // [1단계, 2단계, 3단계] 제거 개수
+  let remaining  = 0;
   for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remaining++;
-  const removed   = total - remaining;
-  const ratio     = removed / Math.max(total, 1);
+  const removed  = st.mineCount - remaining;
 
-  // 33% 임계값 — 좀비 1체 추가 스폰
-  if (ratio >= 0.33 && patrol.phase < 1) {
+  // 1단계 — 좀비 extraSpawn체 추가 스폰
+  if (removed >= thr[0] && patrol.phase < 1) {
     patrol.phase = 1;
-    spawnExtraZombie();
-    devLog('⚠ 패트롤 강화 1단계 — 좀비 증원', 'warn');
+    for (let i = 0; i < (st.extraSpawn || 1); i++) spawnExtraZombie();
+    devLog(`⚠ 패트롤 1단계 [${removed}개 제거] — 좀비 ${st.extraSpawn || 1}체 증원`, 'warn');
     triggerFlash('red');
   }
-  // 66% 임계값 — 속도 +20%
-  if (ratio >= 0.66 && patrol.phase < 2) {
+  // 2단계 — 이동속도 +20%
+  if (removed >= thr[1] && patrol.phase < 2) {
     patrol.phase     = 2;
     patrol.speedMult = 1.2;
-    devLog('⚠ 패트롤 강화 2단계 — 이동속도 +20%', 'warn');
+    devLog(`⚠ 패트롤 2단계 [${removed}개 제거] — 이동속도 ×1.2`, 'warn');
     triggerFlash('red');
   }
-  // 100% 임계값 — 속도 +40%, 시야각 확대
-  if (ratio >= 1.0 && patrol.phase < 3) {
+  // 3단계 — 이동속도 +40%, 시야각 120도
+  if (removed >= thr[2] && patrol.phase < 3) {
     patrol.phase     = 3;
     patrol.speedMult = 1.4;
-    patrol.fovMult   = 120 / CONFIG.zombie.fovAngle; // 120도로 확대
-    devLog('🔴 패트롤 강화 3단계 — 속도 +40%, 시야 확대', 'danger');
+    patrol.fovMult   = 120 / CONFIG.zombie.fovAngle;
+    devLog(`🔴 패트롤 3단계 [${removed}개 제거] — 속도 ×1.4, 시야 확대`, 'danger');
     triggerFlash('red');
   }
 }

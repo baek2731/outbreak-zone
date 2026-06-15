@@ -16,32 +16,53 @@ const CONFIG = {
   },
 
   oxygen: {
-    max:              100,           // 산소 최대치
-    drainPerStage:    [2, 3.5, 5.5, 7, 9], // 스테이지별 자연 감소 속도 (%/초)
-    infectThreshold:   60,           // 산소 이 % 이하부터 감염 시작
-    infectRate:         1.25,        // 감염 증가 속도 (%/초) — 위험구간
-    infectRateEmpty:    3.0,         // 감염 증가 속도 (%/초) — 산소 0일 때
-    capsuleHeal:       33,           // 산소 캡슐 1개당 회복량 (%)
-    stageHeal:         30,           // 층 이동 시 산소 보충량 (%)
+    max:             100,
+    drainPerStage:   [2, 3.5, 5.5, 7, 9],
+    infectThreshold:  60,
+    infectRate:        1.25,
+    infectRateEmpty:   3.0,
+    capsuleHeal:      33,
+    stageHeal:        30,
   },
 
   sonar: {
-    maxCharge:      1.5,   // 최대 차징
-    minRadius:      2,     // 최소 스캔 반경
-    maxRadius:      4,     // 최대 스캔 반경
-    pingDuration:   1.2,   // 핑 표시 지속 (초)
-    pulseSpeed:     160,   // 파장 속도 (px/초)
-    preciseCount:   2,     // 시작 시 정밀 소나 지급 수
-    radarDuration:  4.0,   // 소나 발동 후 미니맵 레이더 표시 지속 (초)
+    maxCharge:     1.5,
+    minRadius:     2,
+    maxRadius:     4,
+    pingDuration:  1.2,
+    pulseSpeed:    160,
+    preciseCount:  2,
+    radarDuration: 4.0,
   },
 
-  // 스테이지 테이블 — 맵/병원체/좀비/캡슐/미니게임 난이도
+  // 스테이지 테이블
+  // patrolThresholds: [1단계, 2단계, 3단계] — 제거 개수 기준
+  // extraSpawn: 1단계 발동 시 추가 스폰 수
   stages: [
-    { name:'외곽 병동',         mapSize:15, mineCount:5,  zombieCount:1, capsuleCount:3, patternLen:3, combatMash:{ CHASE:6,  SEARCH:4, WANDER:2 } },
-    { name:'일반 병동',         mapSize:17, mineCount:7,  zombieCount:2, capsuleCount:3, patternLen:3, combatMash:{ CHASE:7,  SEARCH:5, WANDER:3 } },
-    { name:'중환자실',          mapSize:19, mineCount:9,  zombieCount:3, capsuleCount:4, patternLen:4, combatMash:{ CHASE:8,  SEARCH:5, WANDER:3 } },
-    { name:'바이러스 연구소',   mapSize:21, mineCount:11, zombieCount:4, capsuleCount:4, patternLen:4, combatMash:{ CHASE:9,  SEARCH:6, WANDER:4 } },
-    { name:'발원지',            mapSize:23, mineCount:13, zombieCount:5, capsuleCount:5, patternLen:5, combatMash:{ CHASE:10, SEARCH:7, WANDER:4 } },
+    { name:'외곽 병동',
+      mapSize:15, mineCount:5,  zombieCount:1, capsuleCount:3, patternLen:3,
+      combatMash:{ CHASE:6, SEARCH:4, WANDER:2 },
+      patrolThresholds:[2, 3, 5], extraSpawn:1 },
+
+    { name:'일반 병동',
+      mapSize:17, mineCount:7,  zombieCount:2, capsuleCount:3, patternLen:3,
+      combatMash:{ CHASE:7, SEARCH:5, WANDER:3 },
+      patrolThresholds:[3, 5, 7], extraSpawn:1 },
+
+    { name:'중환자실',
+      mapSize:19, mineCount:9,  zombieCount:3, capsuleCount:4, patternLen:4,
+      combatMash:{ CHASE:8, SEARCH:5, WANDER:3 },
+      patrolThresholds:[3, 6, 9], extraSpawn:1 },
+
+    { name:'바이러스 연구소',
+      mapSize:21, mineCount:11, zombieCount:4, capsuleCount:4, patternLen:4,
+      combatMash:{ CHASE:9, SEARCH:6, WANDER:4 },
+      patrolThresholds:[4, 7, 11], extraSpawn:2 },
+
+    { name:'발원지',
+      mapSize:23, mineCount:13, zombieCount:5, capsuleCount:5, patternLen:5,
+      combatMash:{ CHASE:10, SEARCH:7, WANDER:4 },
+      patrolThresholds:[4, 8, 13], extraSpawn:2 },
   ],
 
   camera: { smooth: 0.12 },
@@ -52,13 +73,13 @@ const CONFIG = {
   },
 
   zombie: {
-    speed:        0.30,  // 플레이어 대비 속도 비율
-    spawnDist:    6,     // 스폰 최소 거리 (타일)
-    fovAngle:     90,    // 시야각 (도)
-    fovRange:     2,     // 시야 거리 (타일)
-    hearRange:    4,     // 청각 범위 (타일)
-    chaseMemory:  2.5,   // 시야 잃은 후 추격 유지 (초)
-    noiseMemory:  6.0,   // 소음 인지 후 탐색 유지 (초)
+    speed:       0.30,
+    spawnDist:   6,
+    fovAngle:    90,
+    fovRange:    2,
+    hearRange:   4,
+    chaseMemory: 2.5,
+    noiseMemory: 6.0,
   },
 
 };
