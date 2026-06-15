@@ -619,6 +619,13 @@ const MG = {
   combatWinThreshold: 100,   // 이 값 이상이면 성공
 };
 
+// ── 패트롤 강화 상태 ─────────────────────────────────────────────
+const patrol = {
+  phase:       0,     // 0=초기 1=33% 2=66% 3=100%
+  speedMult:   1.0,   // 현재 속도 배율
+  fovMult:     1.0,   // 현재 시야각 배율
+};
+
 // ── DEV 이벤트 로그 ──────────────────────────────────────────────
 const DEV_LOG_MAX = 30;
 const devLogEntries = [];   // { time, msg, cls }
@@ -686,6 +693,7 @@ function init() {
   stats.minesHit = 0; stats.startTime = Date.now();
   moveTimer = 0;
   _prevOxyZone = 'safe'; _prevInfZone = 'low';
+  Object.assign(patrol, { phase:0, speedMult:1.0, fovMult:1.0 });
   devLogEntries.length = 0; _renderDevLog();
   Object.assign(minigame, {
     active:false, type:null, pattern:[], current:0, result:null,
@@ -1013,6 +1021,7 @@ function endMinigame(success) {
         let remain = 0;
         for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remain++;
         if (remain === 0) devLog('✓ 모든 병원체 회수 완료 — 출구로 이동하세요!', 'good');
+        checkPatrolPhase();
       }
       player.infection = Math.min(100, player.infection + MG.mineSuccessInfect);
       revealAround(player.tx, player.ty, CONFIG.player.visionRad); // 시야 즉시 복구
@@ -1222,6 +1231,65 @@ function showStageIntro() {
   document.getElementById('stage-intro').classList.add('show');
 }
 
+// ── 패트롤 강화 체크 ─────────────────────────────────────────────
+function checkPatrolPhase() {
+  const stageIdx  = Math.min(player.stage, CONFIG.stages.length - 1);
+  const total     = CONFIG.stages[stageIdx].mineCount;
+  let remaining   = 0;
+  for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remaining++;
+  const removed   = total - remaining;
+  const ratio     = removed / Math.max(total, 1);
+
+  // 33% 임계값 — 좀비 1체 추가 스폰
+  if (ratio >= 0.33 && patrol.phase < 1) {
+    patrol.phase = 1;
+    spawnExtraZombie();
+    devLog('⚠ 패트롤 강화 1단계 — 좀비 증원', 'warn');
+    triggerFlash('red');
+  }
+  // 66% 임계값 — 속도 +20%
+  if (ratio >= 0.66 && patrol.phase < 2) {
+    patrol.phase     = 2;
+    patrol.speedMult = 1.2;
+    devLog('⚠ 패트롤 강화 2단계 — 이동속도 +20%', 'warn');
+    triggerFlash('red');
+  }
+  // 100% 임계값 — 속도 +40%, 시야각 확대
+  if (ratio >= 1.0 && patrol.phase < 3) {
+    patrol.phase     = 3;
+    patrol.speedMult = 1.4;
+    patrol.fovMult   = 120 / CONFIG.zombie.fovAngle; // 120도로 확대
+    devLog('🔴 패트롤 강화 3단계 — 속도 +40%, 시야 확대', 'danger');
+    triggerFlash('red');
+  }
+}
+
+function spawnExtraZombie() {
+  const { tiles, width, height } = MAP;
+  const ts   = CONFIG.map.tileSize;
+  const minD = CONFIG.zombie.spawnDist;
+  const candidates = [];
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    if (tiles[y * width + x] !== T.FLOOR) continue;
+    if (Math.hypot(x - player.tx, y - player.ty) < minD) continue;
+    candidates.push([x, y]);
+  }
+  if (candidates.length === 0) return;
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  zombies.push({
+    tx: pick[0], ty: pick[1],
+    px: pick[0] * ts, py: pick[1] * ts,
+    state: 'SEARCH',             // 바로 탐색 상태로 스폰 (위협적)
+    facingAngle: Math.random() * Math.PI * 2,
+    targetWx: player.px + ts / 2,
+    targetWy: player.py + ts / 2,
+    hasTarget: true,
+    wanderTimer: 0,
+    memoryTimer: CONFIG.zombie.chaseMemory,
+  });
+  devLog(`증원 좀비 스폰 @ (${pick[0]},${pick[1]}) — 총 ${zombies.length}마리`, 'warn');
+}
+
 // ── 소나 ─────────────────────────────────────────────────────────
 function fireSonar(isPrecise) {
   const cfg = CONFIG.sonar;
@@ -1406,9 +1474,9 @@ function updateZombies(dt) {
 
   const c = {
     dt, ts, pcx, pcy,
-    spd:        (ts / CONFIG.player.moveDelay) * CONFIG.zombie.speed * dt,
-    wSpd:       (ts / CONFIG.player.moveDelay) * CONFIG.zombie.speed * dt * 0.5,
-    fovHalf:    (CONFIG.zombie.fovAngle / 2) * Math.PI / 180,
+    spd:        (ts / CONFIG.player.moveDelay) * CONFIG.zombie.speed * patrol.speedMult * dt,
+    wSpd:       (ts / CONFIG.player.moveDelay) * CONFIG.zombie.speed * patrol.speedMult * dt * 0.5,
+    fovHalf:    (CONFIG.zombie.fovAngle * patrol.fovMult / 2) * Math.PI / 180,
     sightTiles: CONFIG.zombie.fovRange,
     r:          ts * ZOMBIE_RADIUS,
   };
@@ -1979,6 +2047,8 @@ function updateDevInfo() {
   document.getElementById('di-time').textContent    = Math.floor((Date.now() - stats.startTime) / 1000) + 's';
   document.getElementById('di-oxygen').textContent  = Math.ceil(player.oxygen) + '%';
   document.getElementById('di-infect').textContent  = Math.ceil(player.infection) + '%';
+  const patEl = document.getElementById('di-patrol');
+  if (patEl) patEl.textContent = `${patrol.phase}단계 / 속도×${patrol.speedMult.toFixed(1)}`;
   const stEl = document.getElementById('di-stage');
   if (stEl) stEl.textContent = `${player.stage + 1}층 (${CONFIG.stages[Math.min(player.stage, CONFIG.stages.length-1)].name})`;
 }
