@@ -143,16 +143,16 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 #lobby-screen.show { display:flex; }
 .lb { display:flex; flex-direction:column; height:100%; }
 .lb-header { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid #1a1a1a; flex-shrink:0; }
-.lb-title { color:#ff3333; font-size:8px; letter-spacing:0.15em; }
-.lb-dna { color:#cc66ff; font-size:7px; }
+.lb-title { color:#ff3333; font-size:10px; letter-spacing:0.15em; }
+.lb-dna { color:#cc66ff; font-size:9px; }
 .lb-dna span { color:#00ff88; }
 .lb-body { display:flex; flex:1; overflow:hidden; }
-.lb-sidebar { width:150px; flex-shrink:0; border-right:1px solid #1a1a1a; padding:12px 8px; display:flex; flex-direction:column; gap:5px; overflow-y:auto; }
+.lb-sidebar { width:170px; flex-shrink:0; border-right:1px solid #1a1a1a; padding:12px 8px; display:flex; flex-direction:column; gap:5px; overflow-y:auto; }
 .lb-agent { text-align:center; padding-bottom:10px; border-bottom:1px solid #111; margin-bottom:6px; }
 .lb-avatar { width:44px; height:44px; border:2px solid #222; margin:0 auto 6px; display:flex; align-items:center; justify-content:center; font-size:18px; color:#444; }
-.lb-agent-name { color:#444; font-size:5px; letter-spacing:0.1em; margin-bottom:3px; }
-.lb-agent-runs { color:#222; font-size:5px; }
-.lb-sb-btn { font-size:5px; padding:6px 8px; background:none; border:1px solid #1a1a1a; color:#333; cursor:pointer; font-family:'Press Start 2P',monospace; text-align:left; letter-spacing:0.05em; }
+.lb-agent-name { color:#00ff88; font-size:7px; letter-spacing:0.1em; margin-bottom:3px; }
+.lb-agent-runs { color:#333; font-size:6px; }
+.lb-sb-btn { font-size:7px; padding:6px 8px; background:none; border:1px solid #1a1a1a; color:#333; cursor:pointer; font-family:'Press Start 2P',monospace; text-align:left; letter-spacing:0.05em; }
 .lb-sb-btn:hover { border-color:#555; color:#555; }
 .lb-sb-btn.on { color:#00ff88; border-color:#00ff88; }
 .lb-sb-btn.primary { color:#00ff88; border-color:#00ff88; }
@@ -161,32 +161,32 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 .lb-sb-btn.danger:hover { border-color:#ff3333; }
 .lb-sb-div { border:none; border-top:1px solid #111; }
 .lb-content { flex:1; padding:14px; overflow-y:auto; }
-.lb-section { font-size:5px; color:#222; letter-spacing:0.15em; margin-bottom:10px; padding-bottom:4px; border-bottom:1px solid #0a0a0a; }
+.lb-section { font-size:6px; color:#222; letter-spacing:0.15em; margin-bottom:10px; padding-bottom:4px; border-bottom:1px solid #0a0a0a; }
 .lb-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-bottom:14px; }
 .lb-card { background:#050505; border:1px solid #0d0d0d; padding:9px; }
 .lb-card.trait { border-color:#1a1200; }
-.lb-card-name { font-size:6px; color:#777; margin-bottom:4px; }
-.lb-card.trait .lb-card-name { color:#aa8800; }
-.lb-card-desc { font-size:4px; color:#222; margin-bottom:4px; line-height:1.8; }
-.lb-card-eff { font-size:4px; color:#00ff88; margin-bottom:7px; line-height:1.8; }
+.lb-card-name { font-size:8px; color:#777; margin-bottom:4px; }
+.lb-card.trait .lb-card-name { color:#ffaa00; font-size:8px; }
+.lb-card-desc { font-size:6px; color:#222; margin-bottom:4px; line-height:1.8; }
+.lb-card-eff { font-size:6px; color:#00ff88; margin-bottom:7px; line-height:1.8; }
 .lb-card.trait .lb-card-eff { color:#ffaa00; }
 .lb-lv-row { display:flex; align-items:center; gap:3px; margin-bottom:6px; }
-.lb-dot { width:8px; height:8px; border:1px solid #1a1a1a; flex-shrink:0; }
+.lb-dot { width:10px; height:10px; border:1px solid #1a1a1a; flex-shrink:0; }
 .lb-dot.on { background:#00ff88; border-color:#00ff88; }
 .lb-dot.trait-on { background:#ffaa00; border-color:#ffaa00; }
-.lb-cost { font-size:4px; color:#cc66ff; margin-left:auto; }
-.lb-btn { font-size:4px; padding:4px 7px; background:none; border:1px solid #222; color:#444; cursor:pointer; font-family:'Press Start 2P',monospace; }
+.lb-cost { font-size:6px; color:#cc66ff; margin-left:auto; }
+.lb-btn { font-size:6px; padding:4px 7px; background:none; border:1px solid #222; color:#444; cursor:pointer; font-family:'Press Start 2P',monospace; }
 .lb-btn:hover:not(:disabled) { border-color:#00ff88; color:#00ff88; }
 .lb-btn.trait:hover:not(:disabled) { border-color:#ffaa00; color:#ffaa00; }
 .lb-btn:disabled { border-color:#0a0a0a; color:#1a1a1a; cursor:default; }
-.lb-locked { padding:30px; text-align:center; color:#1a1a1a; font-size:6px; letter-spacing:0.1em; }
+.lb-locked { padding:30px; text-align:center; color:#333; font-size:8px; letter-spacing:0.1em; }
 .mem-item { display:flex; align-items:center; gap:10px; padding:7px 10px; border:1px solid #0d0d0d; background:#050505; margin-bottom:5px; }
 .mem-icon { font-size:14px; width:22px; text-align:center; color:#333; flex-shrink:0; }
 .mem-info { flex:1; }
-.mem-name { font-size:5px; color:#333; margin-bottom:3px; }
-.mem-detail { font-size:4px; color:#1a1a1a; line-height:1.8; }
-.mem-dna { font-size:5px; color:#cc66ff; flex-shrink:0; }
-.mem-empty { font-size:5px; color:#1a1a1a; text-align:center; padding:30px 0; letter-spacing:0.1em; }
+.mem-name { font-size:6px; color:#333; margin-bottom:3px; }
+.mem-detail { font-size:6px; color:#1a1a1a; line-height:1.8; }
+.mem-dna { font-size:7px; color:#cc66ff; flex-shrink:0; }
+.mem-empty { font-size:7px; color:#1a1a1a; text-align:center; padding:30px 0; letter-spacing:0.1em; }
 
 /* ── 타이틀 화면 ── */
 #title-screen {
@@ -319,7 +319,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       <div class="ts-title2">ZONE</div>
       <div class="ts-press">— PRESS SPACE TO START —</div>
       <div class="ts-menu">
-        <div class="ts-menu-item active" id="ts-start">작전 개시</div>
+        <div class="ts-menu-item active" id="ts-start">기지로 이동 ▶</div>
         <div class="ts-menu-item" id="ts-base">기지 (특성 / 유물)</div>
         <div class="ts-menu-item" id="ts-records">기록</div>
       </div>

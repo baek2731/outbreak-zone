@@ -887,7 +887,7 @@ window.addEventListener('keydown', e => {
 
   // ── TITLE 상태: 스페이스/엔터로 시작 ──────────────────────────
   if (GAME_STATE === 'TITLE') {
-    if (e.code === 'Space' || e.code === 'Enter') startFromTitle();
+    if (e.code === 'Space' || e.code === 'Enter') showLobby();
     return;
   }
 
@@ -2781,7 +2781,7 @@ document.getElementById('lb-start-btn').addEventListener('click', startGame);
 document.getElementById('lb-back-btn').addEventListener('click', closeLobby);
 
 // 타이틀 메뉴 버튼
-document.getElementById('ts-start').addEventListener('click', startFromTitle);
+document.getElementById('ts-start').addEventListener('click', showLobby);
 document.getElementById('ts-base').addEventListener('click', showLobby);
 document.getElementById('ts-records').addEventListener('click', () => {
   try {
