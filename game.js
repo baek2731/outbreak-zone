@@ -1638,8 +1638,6 @@ function startGame() {
   init();
 }
 
-function startFromTitle() { startGame(); }
-
 // ── 스테이지 인트로 ──────────────────────────────────────────────
 function showStageIntro() {
   GAME_STATE = 'INTRO';
