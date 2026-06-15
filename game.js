@@ -2303,8 +2303,11 @@ function circleWallCollide(cx, cy, r, ts, width, height, tiles) {
 // ── ③ 접촉 → 전투 미니게임 진입 ───────────────────────────────
 function zombieContact(z, c, zcx, zcy) {
   if (minigame.postCooldown > 0) return;          // 무적 쿨타임 중
-  if (minigame.active && minigame.type === 'combat') return; // 전투 중엔 중복 차단
-  // mine 진행 중 or 결과 표시 중엔 전투로 강제 전환 허용
+  if (minigame.active && minigame.type === 'combat') return; // 전투 중 중복 차단
+  // 출구 처리 중이거나 탈출/게임오버 상태면 전투 차단
+  if (GAME_STATE === 'ESCAPED' || GAME_STATE === 'GAMEOVER') return;
+  const curTile = MAP.tiles[player.ty * MAP.width + player.tx];
+  if (curTile === T.EXIT) return; // 출구 타일 위에 있을 때 전투 차단
   const dist = Math.hypot(zcx - c.pcx, zcy - c.pcy);
   if (dist < c.ts * 0.6) {
     if (!devInvincible) {
@@ -2779,6 +2782,22 @@ document.querySelectorAll('.lb-tab-btn').forEach(btn => {
 document.getElementById('lb-start-btn').addEventListener('click', startGame);
 // 기지 뒤로가기
 document.getElementById('lb-back-btn').addEventListener('click', closeLobby);
+// 강화 초기화 — 확인 후 실행
+document.getElementById('lb-reset-btn').addEventListener('click', () => {
+  if (!confirm('모든 강화를 초기화하고 DNA를 환불합니까?')) return;
+  const ups = loadUpgrades();
+  let refund = 0;
+  const all = [...LOBBY.status, ...LOBBY.trait];
+  for (const item of all) {
+    const lv = ups[item.id] || 0;
+    for (let i = 0; i < lv; i++) refund += item.costs[i];
+  }
+  saveUpgrades({});
+  const dna = parseInt(localStorage.getItem(DNA_KEY) || '0');
+  localStorage.setItem(DNA_KEY, String(dna + refund));
+  devLog(`강화 초기화 — DNA +${refund} 환불`, 'warn');
+  renderLobby('status');
+});
 
 // 타이틀 메뉴 버튼
 document.getElementById('ts-start').addEventListener('click', showLobby);
@@ -2811,10 +2830,24 @@ document.getElementById('d-records').addEventListener('click', () => {
 
 // DEV — 기록 초기화
 document.getElementById('d-clearrecords').addEventListener('click', () => {
-  localStorage.removeItem('outbreak_records');
-  localStorage.removeItem('outbreak_total_dna');
+  localStorage.removeItem(RECORDS_KEY);
+  localStorage.removeItem(DNA_KEY);
   devLog('수집 기록 전체 초기화됨', 'warn');
 });
+
+// DEV — 기지 UI 폰트 크기 조절
+(function() {
+  const root  = document.documentElement;
+  const valEl = document.getElementById('d-font-size-val');
+  let basePx  = 10;
+  const update = () => {
+    root.style.setProperty('--lb-base', basePx + 'px');
+    if (valEl) valEl.textContent = basePx + 'px';
+  };
+  update();
+  document.getElementById('d-font-up').addEventListener('click',   () => { basePx++; update(); });
+  document.getElementById('d-font-down').addEventListener('click', () => { if (basePx > 4) { basePx--; update(); } });
+})();
 
 // ── 메인 루프 ────────────────────────────────────────────────────
 let lastTs = 0, fps = 0, frameCount = 0, fpsTimer = 0;
