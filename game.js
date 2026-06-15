@@ -47,7 +47,7 @@ function drawZombie(z, ts) {
   if (devZombieFov) {
     ctx.save();
     const fovR   = CONFIG.zombie.fovRange * ts;
-    const fovHalf = (CONFIG.zombie.fovAngle / 2) * Math.PI / 180;
+    const fovHalf = (CONFIG.zombie.fovAngle * patrol.fovMult / 2) * Math.PI / 180;
     ctx.globalAlpha = 0.15;
     ctx.beginPath();
     ctx.moveTo(cx, cy);

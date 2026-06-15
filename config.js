@@ -73,7 +73,7 @@ const CONFIG = {
   },
 
   zombie: {
-    speed:       0.30,
+    speed:       0.40,
     spawnDist:   6,
     fovAngle:    90,
     fovRange:    2,
