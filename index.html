@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>OUTBREAK ZONE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
 body {
@@ -131,6 +133,44 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 .log-entry.danger { color:#ff3333; }
 .log-entry.good   { color:#00ff88; }
 
+/* ── 타이틀 화면 ── */
+#title-screen {
+  display:none; position:absolute; inset:0;
+  background:#000; z-index:50;
+  flex-direction:column; align-items:center; justify-content:center;
+  font-family:'Press Start 2P',monospace;
+  overflow:hidden;
+}
+#title-screen.show { display:flex; }
+.ts-scanline {
+  position:absolute; inset:0; pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.1) 2px,rgba(0,0,0,0.1) 4px);
+}
+.ts-corner { position:absolute; color:#1a1a1a; font-size:6px; font-family:'Press Start 2P',monospace; }
+.ts-corner.tl{top:12px;left:16px;} .ts-corner.tr{top:12px;right:16px;}
+.ts-corner.bl{bottom:12px;left:16px;} .ts-corner.br{bottom:12px;right:16px;}
+.ts-version { position:absolute; top:12px; right:16px; color:#222; font-size:6px; }
+.ts-bio { font-size:44px; margin-bottom:20px; animation:ts-pulse 2s infinite; }
+@keyframes ts-pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+.ts-sub { color:#ff3333; font-size:7px; letter-spacing:0.3em; margin-bottom:6px; }
+.ts-title1 { color:#ff3333; font-size:20px; letter-spacing:0.15em; margin-bottom:4px; text-shadow:2px 2px 0 #660000; }
+.ts-title2 { color:#00ff88; font-size:20px; letter-spacing:0.15em; margin-bottom:28px; text-shadow:2px 2px 0 #004422; }
+.ts-press { color:#aaa; font-size:7px; letter-spacing:0.2em; margin-bottom:32px; animation:ts-blink 1.2s step-end infinite; }
+@keyframes ts-blink { 0%,100%{opacity:1} 50%{opacity:0} }
+.ts-menu { display:flex; flex-direction:column; align-items:center; gap:12px; margin-bottom:32px; }
+.ts-menu-item {
+  color:#555; font-size:7px; letter-spacing:0.15em; cursor:pointer;
+  padding:6px 16px; border:1px solid transparent;
+  transition:color 0.1s, border-color 0.1s;
+}
+.ts-menu-item:hover, .ts-menu-item.active { color:#00ff88; border-color:#00ff88; }
+.ts-menu-item.active::before { content:'▶  '; }
+.ts-divider { width:180px; border:none; border-top:1px solid #1a1a1a; margin:0 0 20px; }
+.ts-stats { display:flex; gap:28px; }
+.ts-stat { text-align:center; }
+.ts-stat-label { color:#333; font-size:5px; letter-spacing:0.1em; margin-bottom:5px; }
+.ts-stat-val { color:#00ff88; font-size:8px; }
+
 /* ── 산소/감염 게이지 ── */
 .hud-gauge-wrap { min-width:80px; }
 .hud-gauge-bg {
@@ -182,6 +222,41 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 
 <div id="main">
   <div id="game-area">
+    <!-- 타이틀 화면 -->
+    <div id="title-screen" class="show">
+      <div class="ts-scanline"></div>
+      <div class="ts-corner tl">☰ ☰</div>
+      <div class="ts-corner tr">☰ ☰</div>
+      <div class="ts-corner bl">☰ ☰</div>
+      <div class="ts-corner br">☰ ☰</div>
+      <div class="ts-version">v0.1</div>
+      <div class="ts-bio">☣</div>
+      <div class="ts-sub">BIOHAZARD CONTAINMENT UNIT</div>
+      <div class="ts-title1">OUTBREAK</div>
+      <div class="ts-title2">ZONE</div>
+      <div class="ts-press">— PRESS SPACE TO START —</div>
+      <div class="ts-menu">
+        <div class="ts-menu-item active" id="ts-start">작전 개시</div>
+        <div class="ts-menu-item" id="ts-base">기지 (특성 / 유물)</div>
+        <div class="ts-menu-item" id="ts-records">기록</div>
+      </div>
+      <hr class="ts-divider">
+      <div class="ts-stats">
+        <div class="ts-stat">
+          <div class="ts-stat-label">누적 DNA</div>
+          <div class="ts-stat-val" id="ts-dna">0</div>
+        </div>
+        <div class="ts-stat">
+          <div class="ts-stat-label">최고 층수</div>
+          <div class="ts-stat-val" id="ts-best">-</div>
+        </div>
+        <div class="ts-stat">
+          <div class="ts-stat-label">총 런</div>
+          <div class="ts-stat-val" id="ts-runs">0</div>
+        </div>
+      </div>
+    </div>
+
     <canvas id="canvas"></canvas>
     <div id="minimap-wrap"><canvas id="minimap"></canvas></div>
     <div id="flash"></div>

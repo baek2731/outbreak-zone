@@ -856,11 +856,17 @@ const GAME_KEYS = new Set([
 ]);
 
 // ── 게임 상태 머신 ──────────────────────────────────────────────
-// 'LOBBY' | 'INTRO' | 'PLAYING' | 'ESCAPED' | 'GAMEOVER'
-let GAME_STATE = 'INTRO';
+// 'TITLE' | 'INTRO' | 'PLAYING' | 'ESCAPED' | 'GAMEOVER'
+let GAME_STATE = 'TITLE';
 
 window.addEventListener('keydown', e => {
   if (GAME_KEYS.has(e.code)) e.preventDefault();
+
+  // ── TITLE 상태: 스페이스/엔터로 시작 ──────────────────────────
+  if (GAME_STATE === 'TITLE') {
+    if (e.code === 'Space' || e.code === 'Enter') startFromTitle();
+    return;
+  }
 
   // ── INTRO 상태: 스페이스/엔터만 허용 ──────────────────────────
   if (GAME_STATE === 'INTRO') {
@@ -1333,6 +1339,34 @@ function saveRunRecord(exitType) {
   const label = { retire:'복귀', early:'조기탈출', death:'사망', infected:'좀비화' }[exitType] || exitType;
   devLog(`기록 저장 [${label}] ${stageIdx+1}층 / 획득 ${finalCollected}개 (회수 ${player.totalCollected})`, 'good');
   return finalCollected;
+}
+
+// ── 타이틀 화면 ──────────────────────────────────────────────────
+function showTitle() {
+  GAME_STATE = 'TITLE';
+  document.getElementById('title-screen').classList.add('show');
+  updateTitleStats();
+}
+
+function updateTitleStats() {
+  try {
+    const records = JSON.parse(localStorage.getItem('outbreak_records') || '[]');
+    const totalDna = parseInt(localStorage.getItem('outbreak_total_dna') || '0');
+    const bestStage = records.reduce((m, r) => Math.max(m, r.stage || 0), 0);
+    document.getElementById('ts-dna').textContent   = totalDna;
+    document.getElementById('ts-best').textContent  = bestStage > 0 ? bestStage + 'F' : '-';
+    document.getElementById('ts-runs').textContent  = records.length;
+  } catch(e) {}
+}
+
+function startFromTitle() {
+  document.getElementById('title-screen').classList.remove('show');
+  player.stage          = 0;
+  player.oxygen         = CONFIG.oxygen.max;
+  player.infection      = 0;
+  player.totalCollected = 0;
+  player.recordSaved    = false;
+  init();
 }
 
 // ── 스테이지 인트로 ──────────────────────────────────────────────
@@ -2363,13 +2397,13 @@ document.getElementById('d-zombiefov').addEventListener('click', () => {
   document.getElementById('d-zombiefov').textContent = '👁 좀비 시야 표시 ' + (devZombieFov ? 'ON' : 'OFF');
 });
 document.getElementById('go-btn').addEventListener('click', () => {
-  // 기록은 showGameOver에서 이미 저장됨 — 여기선 리셋만
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
   player.infection      = 0;
   player.totalCollected = 0;
   player.recordSaved    = false;
-  init();
+  document.getElementById('gameover').classList.remove('show');
+  showTitle();
 });
 // 다음 스테이지
 document.getElementById('esc-btn').addEventListener('click', () => {
@@ -2386,7 +2420,8 @@ document.getElementById('esc-retire').addEventListener('click', () => {
   player.infection      = 0;
   player.totalCollected = 0;
   player.recordSaved    = false;
-  init();
+  document.getElementById('escaped').classList.remove('show');
+  showTitle();
 });
 document.getElementById('esc-clear').addEventListener('click', () => {
   player.stage          = 0;
@@ -2394,7 +2429,8 @@ document.getElementById('esc-clear').addEventListener('click', () => {
   player.infection      = 0;
   player.totalCollected = 0;
   player.recordSaved    = false;
-  init();
+  document.getElementById('escaped').classList.remove('show');
+  showTitle();
 });
 // 출구 팝업 — 복귀 (조기 or 완전)
 document.getElementById('exit-retire-btn').addEventListener('click', () => {
@@ -2426,6 +2462,24 @@ function closeIntro() {
 }
 document.getElementById('intro-btn').addEventListener('click', closeIntro);
 
+// 타이틀 메뉴 버튼
+document.getElementById('ts-start').addEventListener('click', startFromTitle);
+document.getElementById('ts-base').addEventListener('click', () => {
+  devLog('기지 화면 — 추후 구현', 'warn');
+});
+document.getElementById('ts-records').addEventListener('click', () => {
+  try {
+    const records = JSON.parse(localStorage.getItem('outbreak_records') || '[]');
+    const totalDna = parseInt(localStorage.getItem('outbreak_total_dna') || '0');
+    // 임시: 로그 패널에 기록 표시
+    devLog(`총 DNA: ${totalDna} / ${records.length}런`, 'good');
+    records.slice(-5).reverse().forEach(r => {
+      const label = { retire:'복귀', early:'조기', death:'사망', infected:'좀비화' }[r.exitType] || r.exitType;
+      devLog(`${r.stage}층 [${label}] DNA+${r.collected}`, '');
+    });
+  } catch(e) {}
+});
+
 // DEV — 수집 기록 보기 (로그 패널에 출력)
 document.getElementById('d-records').addEventListener('click', () => {
   try {
@@ -2453,8 +2507,10 @@ function loop(ts) {
   const dt = Math.min((ts - lastTs) / 1000, 0.1); lastTs = ts;
   frameCount++; fpsTimer += dt;
   if (fpsTimer >= 1) { fps = frameCount; frameCount = 0; fpsTimer = 0; }
-  handleInput(dt); updateSonar(dt); update(dt);
-  render(); renderMinimap(); updateHUD(); updateDevInfo();
+  if (GAME_STATE !== 'TITLE') {
+    handleInput(dt); updateSonar(dt); update(dt);
+    render(); renderMinimap(); updateHUD(); updateDevInfo();
+  }
   requestAnimationFrame(loop);
 }
 
@@ -2464,7 +2520,10 @@ player.infection      = 0;
 player.stage          = 0;
 player.totalCollected = 0;
 player.recordSaved    = false;
-resize(); init();
+resize();
+// 타이틀 화면으로 시작 (init은 작전 개시 후)
+showTitle();
+requestAnimationFrame(loop);
 
 // 소나 JIT 워밍업 — 오프스크린에서 draw 함수 한 번 실행
 (function warmupSonar() {
