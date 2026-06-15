@@ -1537,15 +1537,21 @@ function triggerNoise(sourceX, sourceY, radiusTiles) {
     const distToSource = Math.hypot(sourceX - zcx, sourceY - zcy) / ts;
     if (distToSource > radiusTiles) continue;
 
-    // 이미 더 가까운 목표가 있으면 무시
+    // 새 소음 → 더 가까우면 목표 갱신, 항상 memoryTimer 리셋 (포기 방지)
     if (z.hasTarget) {
       const distToCur = Math.hypot(z.targetWx - zcx, z.targetWy - zcy) / ts;
-      if (distToSource >= distToCur) continue;
+      if (distToSource < distToCur) {
+        z.targetWx = sourceX;
+        z.targetWy = sourceY;
+      }
+      // 더 멀어도 타이머는 리셋 — 쫓다가 포기하지 않음
+    } else {
+      z.targetWx = sourceX;
+      z.targetWy = sourceY;
     }
-    z.targetWx = sourceX;
-    z.targetWy = sourceY;
-    z.hasTarget = true;
-    z.memoryTimer = CONFIG.zombie.noiseMemory;
+    z.hasTarget    = true;
+    z.state        = 'SEARCH';
+    z.memoryTimer  = CONFIG.zombie.noiseMemory;
   }
 }
 
