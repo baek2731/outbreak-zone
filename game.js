@@ -1136,6 +1136,8 @@ function endMinigame(success) {
         for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remain++;
         if (remain === 0) devLog('✓ 모든 병원체 회수 완료 — 출구로 이동하세요!', 'good');
         checkPatrolPhase();
+        // GUARD 홈 포인트 갱신 (회수된 병원체가 홈이었을 경우)
+        updateGuardHomePoints();
       }
       player.infection = Math.min(100, player.infection + MG.mineSuccessInfect);
       revealAround(player.tx, player.ty, CONFIG.player.visionRad); // 시야 즉시 복구
@@ -1379,6 +1381,21 @@ function checkPatrolPhase() {
   }
 }
 
+// GUARD 홈 포인트 일괄 갱신 (병원체 회수 후 호출)
+function updateGuardHomePoints() {
+  const { tiles, width, height } = MAP;
+  for (const z of zombies) {
+    if (z.type !== 'GUARD') continue;
+    if (tiles[z.homeTy * width + z.homeTx] === T.MINE) continue; // 아직 유효
+    let bestDist = Infinity;
+    for (let my = 0; my < height; my++) for (let mx = 0; mx < width; mx++) {
+      if (tiles[my * width + mx] !== T.MINE) continue;
+      const d = Math.hypot(mx - z.tx, my - z.ty);
+      if (d < bestDist) { bestDist = d; z.homeTx = mx; z.homeTy = my; }
+    }
+  }
+}
+
 function spawnExtraZombie() {
   const { tiles, width, height } = MAP;
   const ts   = CONFIG.map.tileSize;
@@ -1587,6 +1604,18 @@ function spawnZombies() {
       idx++;
     }
   }
+  // GUARD 홈 포인트 — 가장 가까운 병원체 타일로 설정
+  const { tiles: mt, width: mw, height: mh } = MAP;
+  for (const z of zombies) {
+    if (z.type !== 'GUARD') continue;
+    let bestDist = Infinity, bestTx = z.tx, bestTy = z.ty;
+    for (let my = 0; my < mh; my++) for (let mx = 0; mx < mw; mx++) {
+      if (mt[my * mw + mx] !== T.MINE) continue;
+      const d = Math.hypot(mx - z.tx, my - z.ty);
+      if (d < bestDist) { bestDist = d; bestTx = mx; bestTy = my; }
+    }
+    z.homeTx = bestTx; z.homeTy = bestTy;
+  }
   devLog(`좀비 스폰: ${zombies.map(z=>z.type).join(', ')}`, '');
 }
 
@@ -1783,6 +1812,11 @@ function zombieStep(z, c, zcx, zcy) {
 
 // 배회 이동 벡터
 function zombieWanderVec(z, c) {
+  // GUARD: 홈 포인트(병원체) 기준 범위 제한 배회
+  if (z.type === 'GUARD') {
+    return zombieGuardPatrolVec(z, c);
+  }
+
   z.wanderTimer -= c.dt;
   if (z.wanderTimer <= 0) {
     const dirs = shuffle([...DIR4]);
@@ -1794,6 +1828,66 @@ function zombieWanderVec(z, c) {
         z.wanderTimer = 1.5 + Math.random() * 2.0;
         break;
       }
+    }
+  }
+  return [Math.cos(z.facingAngle) * c.wSpd, Math.sin(z.facingAngle) * c.wSpd];
+}
+
+// GUARD 순찰 벡터 — 홈 기준 2~5타일 범위 유지
+const GUARD_MIN_DIST = 2; // 최소 거리 (너무 붙으면 밀려남)
+const GUARD_MAX_DIST = 5; // 최대 거리 (벗어나면 복귀)
+
+function zombieGuardPatrolVec(z, c) {
+  // 홈 포인트가 제거된 병원체면 다음 병원체로 갱신
+  const { tiles, width, height } = MAP;
+  if (tiles[z.homeTy * width + z.homeTx] !== T.MINE) {
+    let bestDist = Infinity;
+    for (let my = 0; my < height; my++) for (let mx = 0; mx < width; mx++) {
+      if (tiles[my * width + mx] !== T.MINE) continue;
+      const d = Math.hypot(mx - z.tx, my - z.ty);
+      if (d < bestDist) { bestDist = d; z.homeTx = mx; z.homeTy = my; }
+    }
+    // 병원체 없으면 일반 배회
+    if (bestDist === Infinity) {
+      z.wanderTimer -= c.dt;
+      return [Math.cos(z.facingAngle) * c.wSpd, Math.sin(z.facingAngle) * c.wSpd];
+    }
+  }
+
+  const distHome = Math.hypot(z.tx - z.homeTx, z.ty - z.homeTy);
+
+  // 너무 가까움 → 홈에서 멀어지는 방향
+  if (distHome < GUARD_MIN_DIST) {
+    const a = Math.atan2(z.ty - z.homeTy, z.tx - z.homeTx); // 홈 반대 방향
+    z.facingAngle = a;
+    return [Math.cos(a) * c.wSpd, Math.sin(a) * c.wSpd];
+  }
+
+  // 너무 멀음 → BFS로 홈 복귀
+  if (distHome > GUARD_MAX_DIST) {
+    const next = zombieNextStepDir(z.tx, z.ty, z.homeTx, z.homeTy);
+    if (next) {
+      const a = Math.atan2(next[1] * c.ts + c.ts/2 - (z.py + c.ts/2),
+                           next[0] * c.ts + c.ts/2 - (z.px + c.ts/2));
+      z.facingAngle = a;
+      return [Math.cos(a) * c.wSpd, Math.sin(a) * c.wSpd];
+    }
+  }
+
+  // 적정 범위 → 일반 배회
+  z.wanderTimer -= c.dt;
+  if (z.wanderTimer <= 0) {
+    const dirs = shuffle([...DIR4]);
+    for (const [dx, dy] of dirs) {
+      const nx = z.tx + dx, ny = z.ty + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      if (tiles[ny * width + nx] === T.WALL) continue;
+      // 홈 범위 벗어나는 방향은 제외
+      const newDist = Math.hypot(nx - z.homeTx, ny - z.homeTy);
+      if (newDist > GUARD_MAX_DIST) continue;
+      z.facingAngle = Math.atan2(dy, dx);
+      z.wanderTimer = 1.2 + Math.random() * 1.5;
+      break;
     }
   }
   return [Math.cos(z.facingAngle) * c.wSpd, Math.sin(z.facingAngle) * c.wSpd];
