@@ -48,15 +48,17 @@ function drawZombie(z, ts) {
   if (devZombieFov) {
     ctx.save();
 
-    // 청각 범위 — 점선 원 (모든 좀비 공통)
-    ctx.globalAlpha = 0.25;
-    ctx.strokeStyle = typeColor;
-    ctx.lineWidth   = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.arc(cx, cy, zt.hearRange * ts, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // 센서 감지 원 — SENSOR 타입만 표시 (소나 파동 + sensorRange)
+    if (zt.sensorRange > 0) {
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = typeColor;
+      ctx.lineWidth   = 2.5;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.arc(cx, cy, zt.sensorRange * ts, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
 
     // 시야각 삼각형
     const fovR    = zt.fovRange * ts;
@@ -1142,7 +1144,8 @@ function endMinigame(success) {
       // 실패 — 감염 대폭 증가 + 소음
       player.infection = Math.min(100, player.infection + MG.mineFailInfect);
       triggerNoise(player.px + CONFIG.map.tileSize / 2,
-                   player.py + CONFIG.map.tileSize / 2, CONFIG.zombie.hearRange);
+                   player.py + CONFIG.map.tileSize / 2,
+                   CONFIG.zombie.noiseRadius, 'noise');
       devLog(`병원체 회수 실패 — 감염 +${MG.mineFailInfect}%`, 'danger');
     }
   } else {
@@ -1410,9 +1413,9 @@ function fireSonar(isPrecise) {
   if (isPrecise) { sonar.chargingPrecise = false; sonar.chargeTimePrecise = 0; sonar.precise--; }
   else           { sonar.charging = false; sonar.chargeTime = 0; }
 
-  // 소나 발동 소음 — 소나 반경과 좀비 청력 중 작은 값
+  // 소나 발동 소음 — 소나 반경 그대로 전달 (파동 도달 기반)
   const noiseWx = player.px + ts / 2, noiseWy = player.py + ts / 2;
-  triggerNoise(noiseWx, noiseWy, Math.min(radius, CONFIG.zombie.hearRange));
+  triggerNoise(noiseWx, noiseWy, radius, 'sonar');
 
   sonar.pulseWx   = player.px + ts / 2;
   sonar.pulseWy   = player.py + ts / 2;
@@ -1620,7 +1623,6 @@ function updateZombies(dt) {
       wSpd:       spd * 0.5,
       fovHalf:    (zt.fovAngle * patrol.fovMult / 2) * Math.PI / 180,
       sightTiles: zt.fovRange,
-      hearRange:  zt.hearRange,
       chaseMemory:zt.chaseMemory,
       r:          ts * ZOMBIE_RADIUS,
     };
@@ -1664,23 +1666,33 @@ function zombieSeparate(z, c) {
 // ── 소음 이벤트 ──────────────────────────────────────────────────
 // 발생 시점에 호출. 범위 내 좀비에게 "목표 좌표"를 심어줌.
 // 상태는 직접 바꾸지 않고, target만 세팅 → 다음 zombieSense가 처리.
-function triggerNoise(sourceX, sourceY, radiusTiles) {
+// sourceType: 'sonar'(소나 파동) | 'noise'(일반 소음)
+// radiusTiles: 소나 반경 or 일반 소음 반경
+function triggerNoise(sourceX, sourceY, radiusTiles, sourceType) {
   devNoiseMarker = { wx: sourceX, wy: sourceY, timer: 3.0, r: radiusTiles };
   const ts = CONFIG.map.tileSize;
+  const isSonar = (sourceType === 'sonar');
+
   for (const z of zombies) {
-    if (z.state === 'CHASE') continue;  // 추격 중엔 소음 무시
+    if (z.state === 'CHASE') continue; // 추격 중엔 소음 무시
     const zcx = z.px + ts / 2, zcy = z.py + ts / 2;
     const distToSource = Math.hypot(sourceX - zcx, sourceY - zcy) / ts;
-    // 개별 좀비의 hearRange 적용 (SENSOR는 더 넓게 감지)
     const zt = CONFIG.zombieTypes[z.type] || CONFIG.zombieTypes.BASIC;
-    const effectiveRange = Math.max(radiusTiles, zt.hearRange);
-    if (distToSource > effectiveRange) continue;
 
-    // 새 소음 → 무조건 목표 갱신 + memoryTimer 리셋
-    z.targetWx   = sourceX;
-    z.targetWy   = sourceY;
-    z.hasTarget  = true;
-    z.state      = 'SEARCH';
+    let reacts = false;
+    if (isSonar) {
+      // 소나: 파동이 좀비 몸체 or 센서의 감지 원에 닿으면 반응
+      reacts = distToSource <= radiusTiles + (zt.sensorRange || 0);
+    } else {
+      // 일반 소음: 반경 안에 있으면 반응 (모든 타입 동일)
+      reacts = distToSource <= radiusTiles;
+    }
+    if (!reacts) continue;
+
+    z.targetWx    = sourceX;
+    z.targetWy    = sourceY;
+    z.hasTarget   = true;
+    z.state       = 'SEARCH';
     z.memoryTimer = CONFIG.zombie.noiseMemory;
   }
 }

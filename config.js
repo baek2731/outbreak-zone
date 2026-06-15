@@ -78,7 +78,7 @@ const CONFIG = {
     spawnDist:   6,
     fovAngle:    90,
     fovRange:    2,
-    hearRange:   4,
+    noiseRadius: 4,   // 병원체 실패 등 일반 소음 반경 (타일)
     chaseMemory: 2.5,
     noiseMemory: 6.0,
   },
@@ -86,24 +86,29 @@ const CONFIG = {
   // 특수 좀비 타입 정의
   zombieTypes: {
     BASIC: {
-      speed:0.40, fovAngle:90, fovRange:2, hearRange:4,
+      speed:0.40, fovAngle:90, fovRange:2,
       chaseMemory:2.5, color:'#553333', rushSpeed:null,
+      sensorRange:0,   // 소나 파동 도달 시 반응 (추가 감지 범위 없음)
     },
-    SENSOR: {  // 청각형 — 소나 소음을 멀리서 감지
-      speed:0.35, fovAngle:90, fovRange:2, hearRange:8,
+    SENSOR: {  // 청각형 — 소나 파동 범위 밖에서도 감지 가능
+      speed:0.35, fovAngle:90, fovRange:2,
       chaseMemory:3.0, color:'#ffcc00', rushSpeed:null,
+      sensorRange:3,   // 소나 반경 + 3타일 추가 감지
     },
     GUARD: {   // 순찰형 — 병원체 주변 지킴, 시야 넓음
-      speed:0.35, fovAngle:110, fovRange:3, hearRange:4,
+      speed:0.35, fovAngle:110, fovRange:3,
       chaseMemory:3.5, color:'#0088ff', rushSpeed:null,
+      sensorRange:0,
     },
     STALKER: { // 추적형 — 한번 보면 오래 쫓음
-      speed:0.55, fovAngle:90, fovRange:3, hearRange:5,
+      speed:0.55, fovAngle:90, fovRange:3,
       chaseMemory:8.0, color:'#8800ff', rushSpeed:null,
+      sensorRange:0,
     },
-    RUSHER: {  // 돌진형 — CHASE 시 빠름, 청각 둔함
-      speed:0.40, fovAngle:90, fovRange:2, hearRange:3,
+    RUSHER: {  // 돌진형 — CHASE 시 빠름
+      speed:0.40, fovAngle:90, fovRange:2,
       chaseMemory:2.0, color:'#ff6600', rushSpeed:0.85,
+      sensorRange:0,
     },
   },
 
