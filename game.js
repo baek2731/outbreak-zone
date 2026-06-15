@@ -283,6 +283,25 @@ function drawSonarPulse() {
   ctx.restore();
 }
 
+function drawNoisePulses() {
+  for (const p of noisePulses) {
+    if (p.r <= 0) continue;
+    const progress = Math.min(p.r / p.maxR, 1);
+    const alpha = Math.max(0, 0.7 * (1 - progress));
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(p.wx, p.wy, p.r, 0, Math.PI * 2);
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth   = 2;
+    ctx.globalAlpha = alpha;
+    ctx.stroke();
+    ctx.globalAlpha = alpha * 0.06;
+    ctx.fillStyle = p.color;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 function drawSonarPings() {
   const ts = CONFIG.map.tileSize;
   const dangerColors = ['', '#ffee44', '#ff8800', '#ff3333'];
@@ -672,9 +691,12 @@ const sonar = {
   firing: false, pulseR: 0, pulseMaxR: 0, pulseWx: 0, pulseWy: 0,
   pings: [], preciseMarks: [],
   precise: 2,
-  radarTimer: 0,   // 소나 발동 후 미니맵 좀비 표시 잔여 시간
-  radarRadius: 0,  // 탐지된 소나 반경 (타일) — 미니맵 범위 필터용
+  radarTimer: 0,
+  radarRadius: 0,
 };
+
+// 소음 파동 풀 — { wx, wy, r, maxR, color } 배열
+const noisePulses = [];
 
 let camX = 0, camY = 0, moveTimer = 0;
 let devRevealMines = false;
@@ -802,6 +824,7 @@ function init() {
   moveTimer = 0;
   _prevOxyZone = 'safe'; _prevInfZone = 'low';
   Object.assign(patrol, { phase:0, speedMult:1.0, fovMult:1.0 });
+  noisePulses.length = 0;
   devLogEntries.length = 0; _renderDevLog();
   Object.assign(minigame, {
     active:false, type:null, pattern:[], current:0, result:null,
@@ -1736,6 +1759,16 @@ function triggerNoise(sourceX, sourceY, radiusTiles, sourceType) {
   const ts = CONFIG.map.tileSize;
   const isSonar = (sourceType === 'sonar');
 
+  // 소음 파동 생성 — 소나가 아닌 소음만 (소나는 자체 파동 있음)
+  if (!isSonar) {
+    noisePulses.push({
+      wx: sourceX, wy: sourceY,
+      r: 0,
+      maxR: radiusTiles * ts,
+      color: '#ff6600', // 주황 — 일반 소음
+    });
+  }
+
   for (const z of zombies) {
     if (z.state === 'CHASE') continue; // 추격 중엔 소음 무시
     const zcx = z.px + ts / 2, zcy = z.py + ts / 2;
@@ -2055,6 +2088,13 @@ function update(dt) {
   updateMinigame(dt);
   updateOxygenInfection(dt);
   if (player.exitCooldown > 0) player.exitCooldown -= dt;
+
+  // 소음 파동 업데이트
+  const pulseSpd = CONFIG.sonar.pulseSpeed * 1.2; // 소나보다 살짝 빠름
+  for (const p of noisePulses) p.r += pulseSpd * dt;
+  for (let i = noisePulses.length - 1; i >= 0; i--) {
+    if (noisePulses[i].r > noisePulses[i].maxR * 1.4) noisePulses.splice(i, 1);
+  }
   const ts = CONFIG.map.tileSize;
   camX += (player.px + ts / 2 - W_px / 2 - camX) * CONFIG.camera.smooth;
   camY += (player.py + ts / 2 - H_px / 2 - camY) * CONFIG.camera.smooth;
@@ -2167,6 +2207,7 @@ function render() {
   drawSonarPings();
   drawSonarPreciseMarks();
   drawSonarPulse();
+  drawNoisePulses();
   drawSonarCharging(ts);
 
   // DEV 소음 발원지 마커
