@@ -38,44 +38,136 @@ function drawPlayer(ts) {
 }
 
 function drawZombie(z, ts) {
-  // 좀비 스프라이트 — 교체 시 이 함수만 수정
   const cx = z.px + ts / 2;
   const cy = z.py + ts / 2;
   const r  = ts * 0.30;
+  const zt = CONFIG.zombieTypes[z.type] || CONFIG.zombieTypes.BASIC;
+  const typeColor = zt.color;
 
-  // DEV 시야 원 표시
+  // DEV 시야 표시 — 타입별 fovRange 반영
   if (devZombieFov) {
     ctx.save();
-    const fovR   = CONFIG.zombie.fovRange * ts;
-    const fovHalf = (CONFIG.zombie.fovAngle * patrol.fovMult / 2) * Math.PI / 180;
+    const fovR    = zt.fovRange * ts;
+    const fovHalf = (zt.fovAngle * patrol.fovMult / 2) * Math.PI / 180;
     ctx.globalAlpha = 0.15;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, fovR, z.facingAngle - fovHalf, z.facingAngle + fovHalf);
     ctx.closePath();
-    ctx.fillStyle = z.state === 'CHASE' ? '#ff3333' : z.state === 'SEARCH' ? '#ff8800' : '#888888';
+    ctx.fillStyle = z.state === 'CHASE' ? '#ff3333' : z.state === 'SEARCH' ? '#ff8800' : typeColor;
     ctx.fill();
     ctx.globalAlpha = 0.5;
-    ctx.strokeStyle = z.state === 'CHASE' ? '#ff6666' : z.state === 'SEARCH' ? '#ffaa44' : '#444444';
+    ctx.strokeStyle = z.state === 'CHASE' ? '#ff6666' : z.state === 'SEARCH' ? '#ffaa44' : typeColor;
     ctx.lineWidth = 1; ctx.stroke();
     ctx.restore();
   }
 
-  // 후광
   ctx.save();
-  ctx.globalAlpha = 0.10; ctx.beginPath(); ctx.arc(cx, cy, r * 1.8, 0, Math.PI * 2);
-  ctx.fillStyle = '#ff3333'; ctx.fill();
+
+  // 후광 — 타입 색상
+  ctx.globalAlpha = 0.12;
+  ctx.beginPath(); ctx.arc(cx, cy, r * 1.9, 0, Math.PI * 2);
+  ctx.fillStyle = typeColor; ctx.fill();
   ctx.globalAlpha = 1;
-  // 몸통
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  const bodyCol = z.state === 'CHASE' ? '#cc2222' : z.state === 'SEARCH' ? '#884422' : '#553333';
-  ctx.fillStyle = bodyCol; ctx.fill();
-  // 방향 도트 (좀비가 실제 바라보는 방향 = 시야 방향)
+
+  // 몸통 — BASIC: 원, 나머지: 타입별 형태
+  const stateCol = z.state === 'CHASE'  ? lightenHex(typeColor, 0.4)
+                 : z.state === 'SEARCH' ? lightenHex(typeColor, 0.2)
+                 : typeColor;
+
+  if (z.type === 'BASIC') {
+    // 기본: 원형
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = stateCol; ctx.fill();
+
+  } else if (z.type === 'SENSOR') {
+    // 청각형: 원 + 양쪽 귀 (타원)
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = stateCol; ctx.fill();
+    ctx.save();
+    ctx.fillStyle = typeColor;
+    // 왼쪽 귀
+    ctx.beginPath();
+    ctx.ellipse(cx - r * 0.9, cy - r * 0.5, r * 0.18, r * 0.45, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    // 오른쪽 귀
+    ctx.beginPath();
+    ctx.ellipse(cx + r * 0.9, cy - r * 0.5, r * 0.18, r * 0.45, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+  } else if (z.type === 'GUARD') {
+    // 순찰형: 방패 (사각형 + 아래 삼각)
+    ctx.beginPath();
+    ctx.moveTo(cx - r, cy - r * 0.8);
+    ctx.lineTo(cx + r, cy - r * 0.8);
+    ctx.lineTo(cx + r, cy + r * 0.2);
+    ctx.lineTo(cx,     cy + r * 1.0);
+    ctx.lineTo(cx - r, cy + r * 0.2);
+    ctx.closePath();
+    ctx.fillStyle = stateCol; ctx.fill();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.globalAlpha = 0.3;
+    ctx.stroke(); ctx.globalAlpha = 1;
+
+  } else if (z.type === 'STALKER') {
+    // 추적형: 원 + 주변 가시 4개
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.85, 0, Math.PI * 2);
+    ctx.fillStyle = stateCol; ctx.fill();
+    ctx.fillStyle = typeColor;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + z.facingAngle;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * r * 0.85, cy + Math.sin(a) * r * 0.85);
+      ctx.lineTo(cx + Math.cos(a - 0.25) * r * 0.6, cy + Math.sin(a - 0.25) * r * 0.6);
+      ctx.lineTo(cx + Math.cos(a + 0.25) * r * 0.6, cy + Math.sin(a + 0.25) * r * 0.6);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+  } else if (z.type === 'RUSHER') {
+    // 돌진형: 화살표 (앞이 뾰족)
+    const a = z.facingAngle;
+    const cos = Math.cos(a), sin = Math.sin(a);
+    const perp = a + Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + cos * r,                     cy + sin * r);
+    ctx.lineTo(cx + Math.cos(perp) * r * 0.7,   cy + Math.sin(perp) * r * 0.7);
+    ctx.lineTo(cx - cos * r * 0.5,               cy - sin * r * 0.5);
+    ctx.lineTo(cx - Math.cos(perp) * r * 0.7,   cy - Math.sin(perp) * r * 0.7);
+    ctx.closePath();
+    ctx.fillStyle = stateCol; ctx.fill();
+  }
+
+  // 방향 도트 (공통)
   const ang = z.facingAngle;
   ctx.beginPath();
-  ctx.arc(cx + Math.cos(ang) * r * 0.52, cy + Math.sin(ang) * r * 0.52, r * 0.22, 0, Math.PI * 2);
-  ctx.fillStyle = '#330000'; ctx.fill();
+  ctx.arc(cx + Math.cos(ang) * r * 0.45, cy + Math.sin(ang) * r * 0.45, r * 0.18, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
+
+  // 타입 표시 텍스트 (그래픽 전까지 임시)
+  if (z.type !== 'BASIC') {
+    ctx.font = `bold ${ts * 0.18}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.85;
+    const label = { SENSOR:'S', GUARD:'G', STALKER:'T', RUSHER:'R' }[z.type] || '';
+    ctx.fillText(label, cx, cy + r * 1.6);
+    ctx.globalAlpha = 1;
+  }
+
   ctx.restore();
+}
+
+// 색상 밝히기 유틸
+function lightenHex(hex, amount) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  const lr = Math.min(255, Math.floor(r + (255 - r) * amount));
+  const lg = Math.min(255, Math.floor(g + (255 - g) * amount));
+  const lb = Math.min(255, Math.floor(b + (255 - b) * amount));
+  return `rgb(${lr},${lg},${lb})`;
 }
 
 function drawItem(tx, ty, ts) {
@@ -963,8 +1055,14 @@ function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
   const len = CONFIG.stages[stageIdx].patternLen;
 
   const zState = zombieRef ? zombieRef.state : 'WANDER';
-  const drain = type === 'combat'
-    ? (MG.combatZombieDrainByState[zState] ?? 7) : 0;
+  // 전투 drain — 상태 기반 + 특수 좀비 보정
+  let drain = 0;
+  if (type === 'combat') {
+    const baseDrain = MG.combatZombieDrainByState[zState] ?? 7;
+    const zType = zombieRef ? zombieRef.type : 'BASIC';
+    const typeBonus = { BASIC:1.0, SENSOR:0.9, GUARD:1.2, STALKER:1.3, RUSHER:1.5 }[zType] || 1.0;
+    drain = baseDrain * typeBonus;
+  }
   // 스테이지별 전투 연타 게이지 증가량 보정
   const stageCombatMash = CONFIG.stages[Math.min(player.stage, CONFIG.stages.length - 1)].combatMash;
   const stagePlayerPower = Math.max(8, MG.combatPlayerPower - (player.stage * 1.5)); // 스테이지 오를수록 연타당 게이지 소폭 감소
@@ -1276,17 +1374,14 @@ function spawnExtraZombie() {
   }
   if (candidates.length === 0) return;
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
-  zombies.push({
-    tx: pick[0], ty: pick[1],
-    px: pick[0] * ts, py: pick[1] * ts,
-    state: 'SEARCH',             // 바로 탐색 상태로 스폰 (위협적)
-    facingAngle: Math.random() * Math.PI * 2,
-    targetWx: player.px + ts / 2,
-    targetWy: player.py + ts / 2,
-    hasTarget: true,
-    wanderTimer: 0,
-    memoryTimer: CONFIG.zombie.chaseMemory,
-  });
+  const ez = makeZombieObj(pick[0], pick[1], ts, 'BASIC');
+  ez.state       = 'SEARCH';
+  ez.targetWx    = player.px + ts / 2;
+  ez.targetWy    = player.py + ts / 2;
+  ez.hasTarget   = true;
+  ez.wanderTimer = 0;
+  ez.memoryTimer = CONFIG.zombie.chaseMemory;
+  zombies.push(ez);
   devLog(`증원 좀비 스폰 @ (${pick[0]},${pick[1]}) — 총 ${zombies.length}마리`, 'warn');
 }
 
@@ -1424,42 +1519,58 @@ function updateSonar(dt) {
 }
 
 // ── 좀비 ─────────────────────────────────────────────────────────
+function makeZombieObj(tx, ty, ts, type) {
+  return {
+    tx, ty,
+    px: tx * ts, py: ty * ts,
+    type: type || 'BASIC',
+    state: 'WANDER',
+    facingAngle: Math.random() * Math.PI * 2,
+    targetWx: 0, targetWy: 0,
+    hasTarget: false,
+    wanderTimer: Math.random() * 2,
+    memoryTimer: 0,
+    // GUARD 전용: 순찰 홈 타일
+    homeTx: tx, homeTy: ty,
+  };
+}
+
 function spawnZombies() {
   zombies = [];
   const { tiles, width, height } = MAP;
   const ts    = CONFIG.map.tileSize;
-  const sIdxZ = Math.min(player.stage, CONFIG.stages.length - 1);
-  const count = CONFIG.stages[sIdxZ].zombieCount;
+  const sIdx  = Math.min(player.stage, CONFIG.stages.length - 1);
+  const comp  = CONFIG.zombieComposition[sIdx];
   const minD  = CONFIG.zombie.spawnDist;
 
-  // 후보: 바닥 타일, 스폰 거리 이상
-  const candidates = [];
+  // 스폰 후보 풀 — 바닥 타일, 스폰 거리 이상
+  const pool = [];
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     if (tiles[y * width + x] !== T.FLOOR) continue;
     if (Math.hypot(x - 1, y - 1) < minD) continue;
-    candidates.push({ x, y, d: Math.hypot(x - 1, y - 1) });
+    pool.push({ x, y, d: Math.hypot(x - 1, y - 1) });
   }
-  // 거리 순 정렬 후 count개 구간으로 분산 배치
-  candidates.sort((a, b) => a.d - b.d);
-  const zoneSize = Math.floor(candidates.length / Math.max(count, 1));
-  for (let i = 0; i < Math.min(count, candidates.length); i++) {
-    const zStart = i * zoneSize;
-    const zEnd   = i === count - 1 ? candidates.length : (i + 1) * zoneSize;
-    const zone   = candidates.slice(zStart, zEnd);
-    const pick   = zone[Math.floor(Math.random() * zone.length)];
-    zombies.push({
-      tx: pick.x, ty: pick.y,
-      px: pick.x * ts, py: pick.y * ts,
-      state: 'WANDER',          // WANDER / SEARCH / CHASE
-      facingAngle: Math.random() * Math.PI * 2,
-      // 목표 좌표 (SEARCH/CHASE 공통, 월드 px)
-      targetWx: 0, targetWy: 0,
-      hasTarget: false,
-      // 타이머
-      wanderTimer: Math.random() * 2,
-      memoryTimer: 0,           // 목표 기억 잔여 시간 (0 되면 WANDER 복귀)
-    });
+  pool.sort((a, b) => a.d - b.d);
+
+  // 전체 스폰 수 계산 후 구간 분산
+  const totalCount = comp.reduce((s, g) => s + g.count, 0);
+  const used = [];
+  const zoneSize = Math.floor(pool.length / Math.max(totalCount, 1));
+
+  let idx = 0;
+  for (const group of comp) {
+    for (let i = 0; i < group.count; i++) {
+      const zStart = idx * zoneSize;
+      const zEnd   = idx === totalCount - 1 ? pool.length : (idx + 1) * zoneSize;
+      const zone   = pool.slice(zStart, zEnd).filter(c => !used.find(u => u.x === c.x && u.y === c.y));
+      if (zone.length === 0) { idx++; continue; }
+      const pick = zone[Math.floor(Math.random() * zone.length)];
+      used.push(pick);
+      zombies.push(makeZombieObj(pick.x, pick.y, ts, group.type));
+      idx++;
+    }
   }
+  devLog(`좀비 스폰: ${zombies.map(z=>z.type).join(', ')}`, '');
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1479,16 +1590,27 @@ function updateZombies(dt) {
   const pcy = player.py + ts / 2;
 
 
-  const c = {
-    dt, ts, pcx, pcy,
-    spd:        (ts / CONFIG.player.moveDelay) * CONFIG.zombie.speed * patrol.speedMult * dt,
-    wSpd:       (ts / CONFIG.player.moveDelay) * CONFIG.zombie.speed * patrol.speedMult * dt * 0.5,
-    fovHalf:    (CONFIG.zombie.fovAngle * patrol.fovMult / 2) * Math.PI / 180,
-    sightTiles: CONFIG.zombie.fovRange,
-    r:          ts * ZOMBIE_RADIUS,
-  };
-
   for (const z of zombies) {
+    // 타입별 파라미터 적용
+    const zt  = CONFIG.zombieTypes[z.type] || CONFIG.zombieTypes.BASIC;
+    const spd = (ts / CONFIG.player.moveDelay) * zt.speed * patrol.speedMult * dt;
+    // RUSHER: CHASE 중엔 rushSpeed 사용
+    const chaseSpd = zt.rushSpeed
+      ? (ts / CONFIG.player.moveDelay) * zt.rushSpeed * patrol.speedMult * dt
+      : spd;
+
+    const c = {
+      dt, ts, pcx, pcy,
+      spd:        spd,
+      chaseSpd:   chaseSpd,
+      wSpd:       spd * 0.5,
+      fovHalf:    (zt.fovAngle * patrol.fovMult / 2) * Math.PI / 180,
+      sightTiles: zt.fovRange,
+      hearRange:  zt.hearRange,
+      chaseMemory:zt.chaseMemory,
+      r:          ts * ZOMBIE_RADIUS,
+    };
+
     const zcx = z.px + ts / 2;
     const zcy = z.py + ts / 2;
     const distTiles = Math.hypot(pcx - zcx, pcy - zcy) / ts;
@@ -1535,7 +1657,10 @@ function triggerNoise(sourceX, sourceY, radiusTiles) {
     if (z.state === 'CHASE') continue;  // 추격 중엔 소음 무시
     const zcx = z.px + ts / 2, zcy = z.py + ts / 2;
     const distToSource = Math.hypot(sourceX - zcx, sourceY - zcy) / ts;
-    if (distToSource > radiusTiles) continue;
+    // 개별 좀비의 hearRange 적용 (SENSOR는 더 넓게 감지)
+    const zt = CONFIG.zombieTypes[z.type] || CONFIG.zombieTypes.BASIC;
+    const effectiveRange = Math.max(radiusTiles, zt.hearRange);
+    if (distToSource > effectiveRange) continue;
 
     // 새 소음 → 무조건 목표 갱신 + memoryTimer 리셋
     z.targetWx   = sourceX;
@@ -1565,7 +1690,7 @@ function zombieSense(z, c, zcx, zcy, distTiles) {
     z.targetWx = c.pcx;
     z.targetWy = c.pcy;
     z.hasTarget = true;
-    z.memoryTimer = CONFIG.zombie.chaseMemory;
+    z.memoryTimer = c.chaseMemory;
     return;
   }
 
@@ -1605,10 +1730,11 @@ function zombieStep(z, c, zcx, zcy) {
         z.memoryTimer = Math.min(z.memoryTimer, 1.2);
         return;
       }
-      // CHASE면 플레이어와 겹친 것 → 직선으로 밀착
+      // CHASE면 플레이어와 겹친 것 → 직선으로 밀착 (RUSHER는 chaseSpd)
       const a = Math.atan2(c.pcy - zcy, c.pcx - zcx);
-      mvx = Math.cos(a) * c.spd;
-      mvy = Math.sin(a) * c.spd;
+      const mv = z.state === 'CHASE' ? c.chaseSpd : c.spd;
+      mvx = Math.cos(a) * mv;
+      mvy = Math.sin(a) * mv;
     } else {
       const next = zombieNextStepDir(z.tx, z.ty, gx, gy);
       let a;
