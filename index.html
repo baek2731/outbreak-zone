@@ -134,7 +134,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 .log-entry.good   { color:#00ff88; }
 
 /* ── 기지 화면 ── */
-:root { --lb-base: 10px; }
+:root { --lb-base: 13px; }
 #lobby-screen {
   display:none; position:absolute; inset:0;
   background:#000; z-index:45;
@@ -206,16 +206,16 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 .ts-corner.tl{top:12px;left:16px;} .ts-corner.tr{top:12px;right:16px;}
 .ts-corner.bl{bottom:12px;left:16px;} .ts-corner.br{bottom:12px;right:16px;}
 .ts-version { position:absolute; top:12px; right:16px; color:#222; font-size:6px; }
-.ts-bio { font-size:44px; margin-bottom:20px; animation:ts-pulse 2s infinite; }
+.ts-bio { font-size:52px; margin-bottom:20px; animation:ts-pulse 2s infinite; }
 @keyframes ts-pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
-.ts-sub { color:#ff3333; font-size:7px; letter-spacing:0.3em; margin-bottom:6px; }
-.ts-title1 { color:#ff3333; font-size:20px; letter-spacing:0.15em; margin-bottom:4px; text-shadow:2px 2px 0 #660000; }
-.ts-title2 { color:#00ff88; font-size:20px; letter-spacing:0.15em; margin-bottom:28px; text-shadow:2px 2px 0 #004422; }
-.ts-press { color:#aaa; font-size:7px; letter-spacing:0.2em; margin-bottom:32px; animation:ts-blink 1.2s step-end infinite; }
+.ts-sub { color:#ff3333; font-size:11px; letter-spacing:0.3em; margin-bottom:6px; }
+.ts-title1 { color:#ff3333; font-size:26px; letter-spacing:0.15em; margin-bottom:4px; text-shadow:2px 2px 0 #660000; }
+.ts-title2 { color:#00ff88; font-size:26px; letter-spacing:0.15em; margin-bottom:28px; text-shadow:2px 2px 0 #004422; }
+.ts-press { color:#aaa; font-size:11px; letter-spacing:0.2em; margin-bottom:32px; animation:ts-blink 1.2s step-end infinite; }
 @keyframes ts-blink { 0%,100%{opacity:1} 50%{opacity:0} }
 .ts-menu { display:flex; flex-direction:column; align-items:center; gap:12px; margin-bottom:32px; }
 .ts-menu-item {
-  color:#555; font-size:7px; letter-spacing:0.15em; cursor:pointer;
+  color:#555; font-size:13px; letter-spacing:0.15em; cursor:pointer;
   padding:6px 16px; border:1px solid transparent;
   transition:color 0.1s, border-color 0.1s;
 }
@@ -224,8 +224,8 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 .ts-divider { width:180px; border:none; border-top:1px solid #1a1a1a; margin:0 0 20px; }
 .ts-stats { display:flex; gap:28px; }
 .ts-stat { text-align:center; }
-.ts-stat-label { color:#333; font-size:5px; letter-spacing:0.1em; margin-bottom:5px; }
-.ts-stat-val { color:#00ff88; font-size:8px; }
+.ts-stat-label { color:#333; font-size:10px; letter-spacing:0.1em; margin-bottom:5px; }
+.ts-stat-val { color:#00ff88; font-size:13px; }
 
 /* ── 산소/감염 게이지 ── */
 .hud-gauge-wrap { min-width:80px; }

@@ -2839,7 +2839,7 @@ document.getElementById('d-clearrecords').addEventListener('click', () => {
 (function() {
   const root  = document.documentElement;
   const valEl = document.getElementById('d-font-size-val');
-  let basePx  = 10;
+  let basePx  = 13;
   const update = () => {
     root.style.setProperty('--lb-base', basePx + 'px');
     if (valEl) valEl.textContent = basePx + 'px';
