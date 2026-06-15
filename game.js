@@ -1315,9 +1315,8 @@ function showEscaped(exitType) {
   document.getElementById('esc-mines').textContent = stats.minesHit;
   document.getElementById('esc-time').textContent  = elapsed + '초';
 
-  // ESCAPED는 항상 기지 복귀 (전부회수/ALL CLEAR 여부만 표시)
+  // 마지막 층이면 ALL CLEAR 표시, 아니면 기지 복귀만
   const isLast = player.stage >= CONFIG.stages.length - 1;
-  document.getElementById('esc-retire').style.display = isLast ? 'none' : 'block';
   document.getElementById('esc-clear').style.display  = isLast ? 'block' : 'none';
   document.getElementById('esc-btn').style.display    = 'none';
 
@@ -2336,6 +2335,8 @@ function update(dt) {
     if (dist <= spd) { player.px = player.targetX; player.py = player.targetY; player.moving = false; }
     else { player.px += dx / dist * spd; player.py += dy / dist * spd; }
   }
+  // PLAYING 상태일 때만 게임 로직 실행
+  if (GAME_STATE !== 'PLAYING') return;
   updateZombies(dt);
   updateMinigame(dt);
   updateOxygenInfection(dt);
@@ -2690,15 +2691,7 @@ document.getElementById('d-zombiefov').addEventListener('click', () => {
   devZombieFov = !devZombieFov;
   document.getElementById('d-zombiefov').textContent = '👁 좀비 시야 표시 ' + (devZombieFov ? 'ON' : 'OFF');
 });
-document.getElementById('go-btn').addEventListener('click', () => {
-  player.stage          = 0;
-  player.oxygen         = CONFIG.oxygen.max;
-  player.infection      = 0;
-  player.totalCollected = 0;
-  player.recordSaved    = false;
-  document.getElementById('gameover').classList.remove('show');
-  showTitle();
-});
+// go-btn 제거됨 (게임오버에서 기지로만 이동)
 document.getElementById('go-base-btn').addEventListener('click', () => {
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
@@ -2717,15 +2710,7 @@ document.getElementById('esc-btn').addEventListener('click', () => {
   init();
 });
 // 기지 복귀 — 1층부터 재시작
-document.getElementById('esc-retire').addEventListener('click', () => {
-  player.stage          = 0;
-  player.oxygen         = CONFIG.oxygen.max;
-  player.infection      = 0;
-  player.totalCollected = 0;
-  player.recordSaved    = false;
-  document.getElementById('escaped').classList.remove('show');
-  showTitle();
-});
+// esc-retire 제거됨 (탈출에서 기지로만 이동)
 document.getElementById('esc-base-btn').addEventListener('click', () => {
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
@@ -2801,19 +2786,7 @@ document.getElementById('lb-reset-btn').addEventListener('click', () => {
 
 // 타이틀 메뉴 버튼
 document.getElementById('ts-start').addEventListener('click', showLobby);
-document.getElementById('ts-base').addEventListener('click', showLobby);
-document.getElementById('ts-records').addEventListener('click', () => {
-  try {
-    const records = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
-    const totalDna = parseInt(localStorage.getItem(DNA_KEY) || '0');
-    // 임시: 로그 패널에 기록 표시
-    devLog(`총 DNA: ${totalDna} / ${records.length}런`, 'good');
-    records.slice(-5).reverse().forEach(r => {
-      const label = { retire:'복귀', early:'조기', death:'사망', infected:'좀비화' }[r.exitType] || r.exitType;
-      devLog(`${r.stage}층 [${label}] DNA+${r.collected}`, '');
-    });
-  } catch(e) {}
-});
+// ts-base, ts-records 제거됨 — 기지로 이동만 사용
 
 // DEV — 수집 기록 보기 (로그 패널에 출력)
 document.getElementById('d-records').addEventListener('click', () => {

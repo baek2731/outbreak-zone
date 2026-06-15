@@ -322,8 +322,6 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       <div class="ts-press">— PRESS SPACE TO START —</div>
       <div class="ts-menu">
         <div class="ts-menu-item active" id="ts-start">기지로 이동 ▶</div>
-        <div class="ts-menu-item" id="ts-base">기지 (특성 / 유물)</div>
-        <div class="ts-menu-item" id="ts-records">기록</div>
       </div>
       <hr class="ts-divider">
       <div class="ts-stats">
@@ -355,10 +353,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
         밟은 병원체: <span id="go-mines">0</span>개<br>
         생존 시간: <span id="go-time">0초</span>
       </div>
-      <div style="display:flex; gap:10px; margin-top:4px;">
-        <button class="ov-btn red" id="go-btn">재시작</button>
-        <button class="ov-btn green" id="go-base-btn">기지</button>
-      </div>
+      <button class="ov-btn green" id="go-base-btn">기지로 복귀</button>
     </div>
 
     <!-- 탈출 성공 -->
@@ -372,8 +367,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
         생존 시간: <span class="g" id="esc-time">0초</span>
       </div>
       <div style="display:flex; gap:10px; margin-top:6px; flex-wrap:wrap; justify-content:center;">
-        <button class="ov-btn green" id="esc-retire">타이틀</button>
-        <button class="ov-btn green" id="esc-base-btn">기지</button>
+        <button class="ov-btn green" id="esc-base-btn">기지로 복귀</button>
         <button class="ov-btn green" id="esc-clear" style="display:none;">ALL CLEAR ✓</button>
         <button class="ov-btn green" id="esc-btn"   style="display:none;">다음 스테이지 ▶</button>
       </div>
