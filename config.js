@@ -122,8 +122,8 @@ const CONFIG = {
     [{ type:'BASIC', count:2 }, { type:'SENSOR', count:1 }],
     // 4층: 기본 + 청각형 + 순찰형
     [{ type:'BASIC', count:2 }, { type:'SENSOR', count:1 }, { type:'GUARD', count:1 }],
-    // 5층: 기본 + 추적형 + 돌진형 + 순찰형
-    [{ type:'BASIC', count:2 }, { type:'STALKER', count:1 }, { type:'RUSHER', count:1 }, { type:'GUARD', count:1 }],
+    // 5층: 기본×1 + 센서×1 + 추적형 + 돌진형 + 순찰형
+    [{ type:'BASIC', count:1 }, { type:'SENSOR', count:1 }, { type:'STALKER', count:1 }, { type:'RUSHER', count:1 }, { type:'GUARD', count:1 }],
   ],
 
 };
