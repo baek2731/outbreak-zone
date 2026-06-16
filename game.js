@@ -302,58 +302,126 @@ function drawNoisePulses() {
   }
 }
 
-// ── 플로팅 텍스트 팝업 ────────────────────────────────────────────
-// 여러 메시지가 동시에 쌓이면 delay로 순서 보장 (두둥 효과)
+// ── 플로팅 텍스트 팝업 (캐릭터 주변) ────────────────────────────
+// wx/wy는 delay 끝난 시점에 플레이어 위치로 확정
 function addPopup(text, color = '#00ff88', delay = 0) {
-  const ts = CONFIG.map.tileSize;
-  const wx = player.px + ts / 2;
-  const wy = player.py;
   popups.push({
     text,
-    wx,
-    wy: wy - popups.filter(p => p.delay <= 0 && p.alpha > 0).length * 18,
+    wx:      null,   // delay 끝날 때 확정
+    wy:      null,
     color,
     alpha:   1.0,
-    life:    1.4,
-    maxLife: 1.4,
-    vy:      -28,   // 위로 올라가는 속도 (px/s)
-    delay,          // 지연 시간 (초)
+    life:    2.2,
+    maxLife: 2.2,
+    vy:      -24,
+    delay,
+    started: false,
+  });
+}
+
+// ── 화면 중앙 상단 공지 팝업 (전부회수/패트롤) ──────────────────
+const notices = [];  // { text, color, alpha, life, maxLife }
+
+function addNotice(text, color = '#00ffcc', duration = 3.0) {
+  // 기존 같은 텍스트 중복 방지
+  notices.push({
+    text,
+    color,
+    alpha:   1.0,
+    life:    duration,
+    maxLife: duration,
   });
 }
 
 function drawPopups(dt) {
   const ts = CONFIG.map.tileSize;
   ctx.save();
-  ctx.textAlign = 'center';
+  ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
+
+  // 활성 팝업 y 오프셋 (겹치지 않게)
+  let activeCount = 0;
 
   for (let i = popups.length - 1; i >= 0; i--) {
     const p = popups[i];
 
-    // 딜레이 처리
+    // 딜레이 처리 — 끝나는 순간 플레이어 위치 확정
     if (p.delay > 0) {
       p.delay -= dt;
+      if (p.delay <= 0 && !p.started) {
+        // 현재 활성 팝업 수 기준으로 y 오프셋 결정
+        const living = popups.filter(q => q.started && q.life > 0);
+        p.wx      = player.px + ts / 2;
+        p.wy      = player.py - 20 - living.length * 20;
+        p.started = true;
+      }
       continue;
     }
 
+    // delay 없이 바로 시작하는 경우
+    if (!p.started) {
+      const living = popups.filter(q => q.started && q.life > 0);
+      p.wx      = player.px + ts / 2;
+      p.wy      = player.py - 20 - living.length * 20;
+      p.started = true;
+    }
+
     // 업데이트
-    p.wy  += p.vy * dt;
+    p.wy   += p.vy * dt;
     p.life -= dt;
     p.alpha = Math.max(0, p.life / p.maxLife);
-
     if (p.life <= 0) { popups.splice(i, 1); continue; }
 
-    // 렌더 — 월드 좌표계 (ctx가 이미 translate 상태)
-    ctx.globalAlpha = p.alpha;
-    ctx.font        = 'bold 11px monospace';
-
-    // 외곽선 (가독성)
-    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-    ctx.lineWidth   = 3;
+    // 렌더 (월드 좌표계)
+    ctx.globalAlpha  = p.alpha;
+    ctx.font         = 'bold 11px monospace';
+    ctx.strokeStyle  = 'rgba(0,0,0,0.85)';
+    ctx.lineWidth    = 3;
     ctx.strokeText(p.text, p.wx, p.wy);
-
-    ctx.fillStyle = p.color;
+    ctx.fillStyle    = p.color;
     ctx.fillText(p.text, p.wx, p.wy);
+  }
+  ctx.restore();
+}
+
+function drawNotices(dt) {
+  if (notices.length === 0) return;
+
+  ctx.save();
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+
+  let offsetY = 60;  // 화면 상단 기준 y
+
+  for (let i = notices.length - 1; i >= 0; i--) {
+    const n = notices[i];
+    n.life -= dt;
+    n.alpha = Math.max(0, Math.min(1, n.life / n.maxLife * 3));  // 끝에 페이드아웃
+    if (n.life <= 0) { notices.splice(i, 1); continue; }
+
+    // 화면 좌표계로 그림 (ctx.restore 후 다시)
+    const x = W_px / 2;
+    const y = offsetY;
+
+    // 배경 박스
+    ctx.globalAlpha = n.alpha * 0.7;
+    const tw = ctx.measureText(n.text).width + 28;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(x - tw / 2, y - 14, tw, 28);
+    ctx.strokeStyle = n.color;
+    ctx.lineWidth   = 1;
+    ctx.strokeRect(x - tw / 2, y - 14, tw, 28);
+
+    // 텍스트
+    ctx.globalAlpha = n.alpha;
+    ctx.font        = 'bold 14px monospace';
+    ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+    ctx.lineWidth   = 3;
+    ctx.strokeText(n.text, x, y);
+    ctx.fillStyle   = n.color;
+    ctx.fillText(n.text, x, y);
+
+    offsetY += 36;
   }
   ctx.restore();
 }
@@ -881,6 +949,7 @@ function init() {
   Object.assign(patrol, { phase:0, speedMult:1.0, fovMult:1.0 });
   noisePulses.length = 0;
   popups.length = 0;
+  notices.length = 0;
   devLogEntries.length = 0; _renderDevLog();
   Object.assign(minigame, {
     active:false, type:null, pattern:[], current:0, result:null,
@@ -1246,7 +1315,7 @@ function endMinigame(success) {
       // 마지막 병원체 회수 완료 알림
       let remain2 = 0;
       for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remain2++;
-      if (remain2 === 0) addPopup('전 병원체 회수 완료 — 출구로', '#00ffcc', 0.36);
+      if (remain2 === 0) addNotice('전 병원체 회수 완료 — 출구로', '#00ffcc', 3.5);
       revealAround(player.tx, player.ty, CONFIG.player.visionRad);
       devLog(`병원체 회수 성공 — 감염 ${fx.noInfectOnSuccess ? '+0%(저항)' : '+'+MG.mineSuccessInfect+'%'}`, 'good');
     } else {
@@ -1774,7 +1843,7 @@ function checkPatrolPhase() {
     devLog(`⚠ 패트롤 1단계 [${removed}개 제거] — 좀비 ${st.extraSpawn || 1}체 증원`, 'warn');
     triggerFlash('red');
     setTimeout(() => SoundManager.play('patrol_phase1'), 200);
-    setTimeout(() => addPopup('⚠ PATROL LV.1 — 좀비 증원', '#ff8800'), 200);
+    setTimeout(() => addNotice('⚠ PATROL LV.1 — 좀비 증원', '#ff8800', 3.0), 200);
   }
   // 2단계 — 이동속도 +20%
   if (removed >= thr[1] && patrol.phase < 2) {
@@ -1783,7 +1852,7 @@ function checkPatrolPhase() {
     devLog(`⚠ 패트롤 2단계 [${removed}개 제거] — 이동속도 ×1.2`, 'warn');
     triggerFlash('red');
     setTimeout(() => SoundManager.play('patrol_phase2'), 200);
-    setTimeout(() => addPopup('⚠ PATROL LV.2 — 이동속도 상승', '#ff6600'), 200);
+    setTimeout(() => addNotice('⚠ PATROL LV.2 — 이동속도 상승', '#ff6600', 3.0), 200);
   }
   // 3단계 — 이동속도 +40%, 시야각 120도
   if (removed >= thr[2] && patrol.phase < 3) {
@@ -1793,7 +1862,7 @@ function checkPatrolPhase() {
     devLog(`🔴 패트롤 3단계 [${removed}개 제거] — 속도 ×1.4, 시야 확대`, 'danger');
     triggerFlash('red');
     setTimeout(() => SoundManager.play('patrol_phase3'), 200);
-    setTimeout(() => addPopup('🔴 PATROL LV.3 — 시야 확대', '#ff3333'), 200);
+    setTimeout(() => addNotice('🔴 PATROL LV.3 — 시야 확대', '#ff3333', 3.0), 200);
   }
 }
 
@@ -2630,6 +2699,9 @@ function render() {
 
   // 비네팅
   ctx.fillStyle = vignetteGradient; ctx.fillRect(0, 0, W_px, H_px);
+
+  // 화면 중앙 상단 공지 (ctx.restore 후 화면 좌표계)
+  drawNotices(lastDt);
 }
 
 // ── 미니맵 ───────────────────────────────────────────────────────
