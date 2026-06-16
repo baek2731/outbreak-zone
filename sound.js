@@ -57,6 +57,7 @@ const SoundManager = (() => {
     stage_clear:       0.75,
     all_clear:         0.85,
     upgrade_buy:       0.55,
+    collect_key:       0.70,
   };
 
   // 개별 BGM 볼륨
@@ -222,6 +223,30 @@ const SoundManager = (() => {
     gainNode.gain.setValueAtTime(Math.max(0, vol), _ctx.currentTime);
   }
 
+  // 방향별 피치로 재생 (병원체 채집 키 입력)
+  // W: 높음 / D: 중간높음 / A: 중간낮음 / S: 낮음
+  const _KEY_PITCH = { W: 1.4, D: 1.2, A: 0.9, S: 0.7 };
+
+  function playKeyed(dir) {
+    if (!_ensureCtx()) return;
+    const buf = _sfxBuffers['collect_key'];
+    if (!buf) { console.warn('[Sound] 버퍼 없음 [collect_key]'); return; }
+
+    const vol          = SFX_VOL['collect_key'] ?? 0.7;
+    const playbackRate = _KEY_PITCH[dir] ?? 1.0;
+    const t            = _ctx.currentTime + 0.01;
+
+    const gainNode = _ctx.createGain();
+    gainNode.gain.setValueAtTime(vol, t);
+    gainNode.connect(_sfxGain);
+
+    const source         = _ctx.createBufferSource();
+    source.buffer        = buf;
+    source.playbackRate.value = playbackRate;
+    source.connect(gainNode);
+    source.start(t);
+  }
+
   // ── BGM 관리 ─────────────────────────────────────────────────
   function playBGM(id, fadeIn = 1.2) {
     if (!_ensureCtx()) return;
@@ -346,6 +371,7 @@ const SoundManager = (() => {
   return {
     init,
     play,
+    playKeyed,
     startLoop,
     stopLoop,
     setLoopVolume,

@@ -1276,12 +1276,13 @@ function minigameInput(dir) {
   if (minigame.type !== 'mine') return; // WASD는 병원체 회수만
   const expected = minigame.pattern[minigame.current];
   if (dir === expected) {
+    SoundManager.playKeyed(dir);  // 맞는 키 — 방향별 피치
     minigame.current++;
     if (minigame.current >= minigame.pattern.length) {
       endMinigame(true);
     }
   } else {
-    // 틀림 → 즉시 실패
+    // 틀림 → 즉시 실패 (실패음은 endMinigame에서 처리)
     minigame.flashTimer = 0.3;
     endMinigame(false);
   }
