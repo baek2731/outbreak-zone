@@ -302,6 +302,62 @@ function drawNoisePulses() {
   }
 }
 
+// ── 플로팅 텍스트 팝업 ────────────────────────────────────────────
+// 여러 메시지가 동시에 쌓이면 delay로 순서 보장 (두둥 효과)
+function addPopup(text, color = '#00ff88', delay = 0) {
+  const ts = CONFIG.map.tileSize;
+  const wx = player.px + ts / 2;
+  const wy = player.py;
+  popups.push({
+    text,
+    wx,
+    wy: wy - popups.filter(p => p.delay <= 0 && p.alpha > 0).length * 18,
+    color,
+    alpha:   1.0,
+    life:    1.4,
+    maxLife: 1.4,
+    vy:      -28,   // 위로 올라가는 속도 (px/s)
+    delay,          // 지연 시간 (초)
+  });
+}
+
+function drawPopups(dt) {
+  const ts = CONFIG.map.tileSize;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  for (let i = popups.length - 1; i >= 0; i--) {
+    const p = popups[i];
+
+    // 딜레이 처리
+    if (p.delay > 0) {
+      p.delay -= dt;
+      continue;
+    }
+
+    // 업데이트
+    p.wy  += p.vy * dt;
+    p.life -= dt;
+    p.alpha = Math.max(0, p.life / p.maxLife);
+
+    if (p.life <= 0) { popups.splice(i, 1); continue; }
+
+    // 렌더 — 월드 좌표계 (ctx가 이미 translate 상태)
+    ctx.globalAlpha = p.alpha;
+    ctx.font        = 'bold 11px monospace';
+
+    // 외곽선 (가독성)
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.lineWidth   = 3;
+    ctx.strokeText(p.text, p.wx, p.wy);
+
+    ctx.fillStyle = p.color;
+    ctx.fillText(p.text, p.wx, p.wy);
+  }
+  ctx.restore();
+}
+
 function drawSonarPings() {
   const ts = CONFIG.map.tileSize;
   const dangerColors = ['', '#ffee44', '#ff8800', '#ff3333'];
@@ -695,6 +751,7 @@ const sonar = {
 
 // 소음 파동 풀 — { wx, wy, r, maxR, color } 배열
 const noisePulses = [];
+const popups = [];   // 플로팅 텍스트 팝업 { text, wx, wy, color, alpha, life, maxLife, vy, delay }
 
 let camX = 0, camY = 0, moveTimer = 0;
 let devRevealMines = false;
@@ -823,6 +880,7 @@ function init() {
   _prevOxyZone = 'safe'; _prevInfZone = 'low';
   Object.assign(patrol, { phase:0, speedMult:1.0, fovMult:1.0 });
   noisePulses.length = 0;
+  popups.length = 0;
   devLogEntries.length = 0; _renderDevLog();
   Object.assign(minigame, {
     active:false, type:null, pattern:[], current:0, result:null,
@@ -1013,6 +1071,7 @@ function onStep(tx, ty) {
     player.oxygen = Math.min(CONFIG.oxygen.max, player.oxygen + CONFIG.oxygen.capsuleHeal);
     devLog(`캡슐 수집 — 산소 +${(player.oxygen - prevOxy).toFixed(1)}% (${prevOxy.toFixed(1)}% → ${player.oxygen.toFixed(1)}%)`, 'good');
     SoundManager.play('capsule_pickup');
+    addPopup(`산소 +${(player.oxygen - prevOxy).toFixed(0)}%`, '#44ddff', 0);
     triggerFlash('item');
     triggerFlash('oxygen');
     return;
@@ -1178,13 +1237,23 @@ function endMinigame(success) {
       const fx = getUpgradeEffects();
       if (!fx.noInfectOnSuccess) {
         player.infection = Math.min(100, player.infection + MG.mineSuccessInfect);
+        addPopup('병원체 +1', '#00ff88', 0);
+        addPopup(`오염 +${MG.mineSuccessInfect}%`, '#ff8800', 0.18);
+      } else {
+        addPopup('병원체 +1', '#00ff88', 0);
+        addPopup('오염 저항', '#bb88ff', 0.18);
       }
+      // 마지막 병원체 회수 완료 알림
+      let remain2 = 0;
+      for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remain2++;
+      if (remain2 === 0) addPopup('전 병원체 회수 완료 — 출구로', '#00ffcc', 0.36);
       revealAround(player.tx, player.ty, CONFIG.player.visionRad);
       devLog(`병원체 회수 성공 — 감염 ${fx.noInfectOnSuccess ? '+0%(저항)' : '+'+MG.mineSuccessInfect+'%'}`, 'good');
     } else {
       SoundManager.play('collect_fail');
       // 실패 — 감염 대폭 증가 + 소음
       player.infection = Math.min(100, player.infection + MG.mineFailInfect);
+      addPopup(`오염 +${MG.mineFailInfect}%`, '#ff3333', 0);
       const fxNoise = getUpgradeEffects();
       const noiseR = Math.max(1, CONFIG.zombie.noiseRadius - fxNoise.noiseRadiusMinus);
       triggerNoise(player.px + CONFIG.map.tileSize / 2,
@@ -1200,11 +1269,17 @@ function endMinigame(success) {
       const oxyLoss = Math.abs(MG.combatSuccessOxy) + (interrupted ? 5 : 0);
       applyOxygenDamage(oxyLoss);
       if (interrupted) player.infection = Math.min(100, player.infection + 5);
+      addPopup(`산소 -${oxyLoss}%`, '#ffaa00', 0);
+      if (interrupted) addPopup('오염 +5%', '#ff8800', 0.18);
       devLog(`전투 성공 — 산소 -${oxyLoss}%${interrupted ? ' (급습 패널티)' : ''}`, 'warn');
     } else {
       SoundManager.play('combat_lose');
-      applyOxygenDamage(Math.abs(MG.combatFailOxy) + (interrupted ? 10 : 0));
-      player.infection = Math.min(100, player.infection + MG.combatFailInfect + (interrupted ? 5 : 0));
+      const oxyLoss2 = Math.abs(MG.combatFailOxy) + (interrupted ? 10 : 0);
+      const infGain2 = MG.combatFailInfect + (interrupted ? 5 : 0);
+      applyOxygenDamage(oxyLoss2);
+      player.infection = Math.min(100, player.infection + infGain2);
+      addPopup(`산소 -${oxyLoss2}%`, '#ff3333', 0);
+      addPopup(`오염 +${infGain2}%`, '#ff3333', 0.18);
       devLog(`전투 실패 — 산소 대량 소모, 감염 증가${interrupted ? ' (급습 패널티)' : ''}`, 'danger');
     }
     triggerFlash('red');
@@ -1305,6 +1380,7 @@ function applyStageTransition() {
   player.oxygen   = Math.min(CONFIG.oxygen.max, player.oxygen + healAmt);
   // 감염은 그대로 — 누적 유지
   devLog(`층 이동 — 산소 +${healAmt}% 보충 (현재 ${player.oxygen.toFixed(1)}%), 감염 ${player.infection.toFixed(1)}% 누적`, 'good');
+  addPopup(`산소 +${healAmt}%`, '#44ddff', 0);
   // BGM 크로스페이드 — 스테이지별
   const nextStage = player.stage; // 이미 증가된 후 호출됨
   const bgmId = nextStage >= 4 ? 'bgm_stage5'
@@ -1698,6 +1774,7 @@ function checkPatrolPhase() {
     devLog(`⚠ 패트롤 1단계 [${removed}개 제거] — 좀비 ${st.extraSpawn || 1}체 증원`, 'warn');
     triggerFlash('red');
     setTimeout(() => SoundManager.play('patrol_phase1'), 200);
+    setTimeout(() => addPopup('⚠ PATROL LV.1 — 좀비 증원', '#ff8800'), 200);
   }
   // 2단계 — 이동속도 +20%
   if (removed >= thr[1] && patrol.phase < 2) {
@@ -1706,6 +1783,7 @@ function checkPatrolPhase() {
     devLog(`⚠ 패트롤 2단계 [${removed}개 제거] — 이동속도 ×1.2`, 'warn');
     triggerFlash('red');
     setTimeout(() => SoundManager.play('patrol_phase2'), 200);
+    setTimeout(() => addPopup('⚠ PATROL LV.2 — 이동속도 상승', '#ff6600'), 200);
   }
   // 3단계 — 이동속도 +40%, 시야각 120도
   if (removed >= thr[2] && patrol.phase < 3) {
@@ -1715,6 +1793,7 @@ function checkPatrolPhase() {
     devLog(`🔴 패트롤 3단계 [${removed}개 제거] — 속도 ×1.4, 시야 확대`, 'danger');
     triggerFlash('red');
     setTimeout(() => SoundManager.play('patrol_phase3'), 200);
+    setTimeout(() => addPopup('🔴 PATROL LV.3 — 시야 확대', '#ff3333'), 200);
   }
 }
 
@@ -2418,8 +2497,8 @@ function updateOxygenInfection(dt) {
   // 산소 구간 진입 로그 + 사운드
   const oxyZone = player.oxygen <= 0 ? 'empty' : player.oxygen < cfg.infectThreshold ? 'warn' : 'safe';
   if (oxyZone !== _prevOxyZone) {
-    if (oxyZone === 'warn')  { devLog(`⚠ 산소 위험구간 진입 (${player.oxygen.toFixed(1)}%) — 감염 시작`, 'warn'); SoundManager.startLoop('oxygen_warn'); }
-    if (oxyZone === 'empty') { devLog(`🔴 산소 고갈 — 감염 가속 시작`, 'danger'); SoundManager.play('oxygen_critical'); }
+    if (oxyZone === 'warn')  { devLog(`⚠ 산소 위험구간 진입 (${player.oxygen.toFixed(1)}%) — 감염 시작`, 'warn'); SoundManager.startLoop('oxygen_warn'); addPopup('⚠ 산소 부족', '#ffaa00'); }
+    if (oxyZone === 'empty') { devLog(`🔴 산소 고갈 — 감염 가속 시작`, 'danger'); SoundManager.play('oxygen_critical'); addPopup('🔴 산소 고갈', '#ff3333'); }
     if (oxyZone === 'safe')  { devLog(`산소 안전구간 복귀 (${player.oxygen.toFixed(1)}%)`, 'good'); SoundManager.stopLoop('oxygen_warn'); }
     _prevOxyZone = oxyZone;
   }
@@ -2442,8 +2521,8 @@ function updateOxygenInfection(dt) {
   // 감염 구간 진입 로그 + 사운드
   const infZone = player.infection >= 75 ? 'high' : player.infection >= 40 ? 'mid' : 'low';
   if (infZone !== _prevInfZone) {
-    if (infZone === 'mid')  devLog(`⚠ 감염 40% 돌파 (${player.infection.toFixed(1)}%)`, 'warn');
-    if (infZone === 'high') { devLog(`🔴 감염 75% 위험 (${player.infection.toFixed(1)}%)`, 'danger'); SoundManager.play('infection_high'); }
+    if (infZone === 'mid')  { devLog(`⚠ 감염 40% 돌파 (${player.infection.toFixed(1)}%)`, 'warn'); addPopup('⚠ 감염 진행 중', '#ff8800'); }
+    if (infZone === 'high') { devLog(`🔴 감염 75% 위험 (${player.infection.toFixed(1)}%)`, 'danger'); SoundManager.play('infection_high'); addPopup('🔴 감염 위험', '#ff3333'); }
     if (infZone === 'low')  devLog(`감염 감소 — 저위험 복귀`, 'good');
     _prevInfZone = infZone;
   }
@@ -2544,6 +2623,7 @@ function render() {
   drawPlayer(ts);
   drawMinePrompt(ts);
   drawMinigame(ts);
+  drawPopups(lastDt);
   // END RESOURCE LAYER
 
   ctx.restore();
@@ -2932,10 +3012,10 @@ document.getElementById('d-sound-export').addEventListener('click', () => {
 });
 
 // ── 메인 루프 ────────────────────────────────────────────────────
-let lastTs = 0, fps = 0, frameCount = 0, fpsTimer = 0;
+let lastTs = 0, fps = 0, frameCount = 0, fpsTimer = 0, lastDt = 0;
 
 function loop(ts) {
-  const dt = Math.min((ts - lastTs) / 1000, 0.1); lastTs = ts;
+  const dt = Math.min((ts - lastTs) / 1000, 0.1); lastTs = ts; lastDt = dt;
   frameCount++; fpsTimer += dt;
   if (fpsTimer >= 1) { fps = frameCount; frameCount = 0; fpsTimer = 0; }
   if (GAME_STATE !== 'TITLE') {
