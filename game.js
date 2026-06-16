@@ -334,52 +334,53 @@ function addNotice(text, color = '#00ffcc', duration = 3.0) {
 }
 
 function drawPopups(dt) {
-  const ts = CONFIG.map.tileSize;
+  // ctx.restore() 이후 화면 좌표계에서 호출됨
+  // player 화면 좌표 = player.px - camX, player.py - camY
+  const ts  = CONFIG.map.tileSize;
+  const spx = player.px - camX + ts / 2;  // 플레이어 화면 x 중앙
+  const spy = player.py - camY;            // 플레이어 화면 y 상단
+
   ctx.save();
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
-
-  // 활성 팝업 y 오프셋 (겹치지 않게)
-  let activeCount = 0;
+  ctx.font         = 'bold 11px monospace';
 
   for (let i = popups.length - 1; i >= 0; i--) {
     const p = popups[i];
 
-    // 딜레이 처리 — 끝나는 순간 플레이어 위치 확정
+    // 딜레이 처리 — 끝나는 순간 화면 좌표 확정
     if (p.delay > 0) {
       p.delay -= dt;
       if (p.delay <= 0 && !p.started) {
-        // 현재 활성 팝업 수 기준으로 y 오프셋 결정
         const living = popups.filter(q => q.started && q.life > 0);
-        p.wx      = player.px + ts / 2;
-        p.wy      = player.py - 20 - living.length * 20;
+        p.sx      = spx;
+        p.sy      = spy - 20 - living.length * 22;
         p.started = true;
       }
       continue;
     }
 
-    // delay 없이 바로 시작하는 경우
+    // delay 없이 바로 시작
     if (!p.started) {
       const living = popups.filter(q => q.started && q.life > 0);
-      p.wx      = player.px + ts / 2;
-      p.wy      = player.py - 20 - living.length * 20;
+      p.sx      = spx;
+      p.sy      = spy - 20 - living.length * 22;
       p.started = true;
     }
 
-    // 업데이트
-    p.wy   += p.vy * dt;
+    // 업데이트 (화면 y 좌표로 올라감)
+    p.sy   += p.vy * dt;
     p.life -= dt;
     p.alpha = Math.max(0, p.life / p.maxLife);
     if (p.life <= 0) { popups.splice(i, 1); continue; }
 
-    // 렌더 (월드 좌표계)
-    ctx.globalAlpha  = p.alpha;
-    ctx.font         = 'bold 11px monospace';
-    ctx.strokeStyle  = 'rgba(0,0,0,0.85)';
-    ctx.lineWidth    = 3;
-    ctx.strokeText(p.text, p.wx, p.wy);
-    ctx.fillStyle    = p.color;
-    ctx.fillText(p.text, p.wx, p.wy);
+    // 렌더 (화면 좌표계)
+    ctx.globalAlpha = p.alpha;
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.lineWidth   = 3;
+    ctx.strokeText(p.text, p.sx, p.sy);
+    ctx.fillStyle   = p.color;
+    ctx.fillText(p.text, p.sx, p.sy);
   }
   ctx.restore();
 }
@@ -390,38 +391,42 @@ function drawNotices(dt) {
   ctx.save();
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
+  ctx.font         = 'bold 14px monospace';  // 측정 전에 font 먼저 설정
 
-  let offsetY = 60;  // 화면 상단 기준 y
+  let offsetY = 60;
 
   for (let i = notices.length - 1; i >= 0; i--) {
     const n = notices[i];
     n.life -= dt;
-    n.alpha = Math.max(0, Math.min(1, n.life / n.maxLife * 3));  // 끝에 페이드아웃
+    // 앞 30%는 페이드인, 뒤 30%는 페이드아웃
+    const t = n.life / n.maxLife;
+    n.alpha = t > 0.7 ? Math.min(1, (1 - t) / 0.3)
+            : t < 0.3 ? t / 0.3
+            : 1.0;
     if (n.life <= 0) { notices.splice(i, 1); continue; }
 
-    // 화면 좌표계로 그림 (ctx.restore 후 다시)
-    const x = W_px / 2;
-    const y = offsetY;
+    const x  = W_px / 2;
+    const y  = offsetY;
+    const tw = ctx.measureText(n.text).width + 32;  // font 설정 후 측정
+    const th = 30;
 
     // 배경 박스
-    ctx.globalAlpha = n.alpha * 0.7;
-    const tw = ctx.measureText(n.text).width + 28;
-    ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    ctx.fillRect(x - tw / 2, y - 14, tw, 28);
+    ctx.globalAlpha = n.alpha * 0.75;
+    ctx.fillStyle   = 'rgba(0,0,0,0.80)';
+    ctx.fillRect(x - tw / 2, y - th / 2, tw, th);
     ctx.strokeStyle = n.color;
-    ctx.lineWidth   = 1;
-    ctx.strokeRect(x - tw / 2, y - 14, tw, 28);
+    ctx.lineWidth   = 1.5;
+    ctx.strokeRect(x - tw / 2, y - th / 2, tw, th);
 
     // 텍스트
     ctx.globalAlpha = n.alpha;
-    ctx.font        = 'bold 14px monospace';
     ctx.strokeStyle = 'rgba(0,0,0,0.9)';
     ctx.lineWidth   = 3;
     ctx.strokeText(n.text, x, y);
     ctx.fillStyle   = n.color;
     ctx.fillText(n.text, x, y);
 
-    offsetY += 36;
+    offsetY += th + 8;
   }
   ctx.restore();
 }
@@ -2692,7 +2697,6 @@ function render() {
   drawPlayer(ts);
   drawMinePrompt(ts);
   drawMinigame(ts);
-  drawPopups(lastDt);
   // END RESOURCE LAYER
 
   ctx.restore();
@@ -2700,7 +2704,8 @@ function render() {
   // 비네팅
   ctx.fillStyle = vignetteGradient; ctx.fillRect(0, 0, W_px, H_px);
 
-  // 화면 중앙 상단 공지 (ctx.restore 후 화면 좌표계)
+  // 화면 좌표계 오버레이 (ctx.restore 이후)
+  drawPopups(lastDt);
   drawNotices(lastDt);
 }
 
