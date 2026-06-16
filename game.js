@@ -1020,14 +1020,47 @@ window.addEventListener('keydown', e => {
     return;
   }
 
+  // ── LOBBY 상태: 스페이스로 작전 개시 ──────────────────────────
+  if (document.getElementById('lobby-screen').classList.contains('show')) {
+    if (e.code === 'Space') startGame();
+    return;
+  }
+
   // ── INTRO 상태: 스페이스/엔터만 허용 ──────────────────────────
   if (GAME_STATE === 'INTRO') {
     if (e.code === 'Space' || e.code === 'Enter') closeIntro();
     return;
   }
 
-  // ── ESCAPED / GAMEOVER 상태: 키 차단 ──────────────────────────
-  if (GAME_STATE === 'ESCAPED' || GAME_STATE === 'GAMEOVER') return;
+  // ── ESCAPED — 출구 팝업 키 처리 ──────────────────────────────
+  if (GAME_STATE === 'ESCAPED') {
+    const earlyEl = document.getElementById('early-exit');
+    if (earlyEl.classList.contains('show')) {
+      // F키 → 기지 복귀
+      if (e.code === 'KeyF') {
+        earlyEl.classList.remove('show');
+        showEscaped('early');
+        return;
+      }
+      // 스페이스 → 재탐사(미회수) or 다음 층(전부회수)
+      if (e.code === 'Space') {
+        const nextBtn  = document.getElementById('exit-next-btn');
+        const rescanBtn = document.getElementById('exit-rescan-btn');
+        if (nextBtn.style.display !== 'none') {
+          // 전부 회수 — 다음 층
+          nextBtn.click();
+        } else if (rescanBtn.style.display !== 'none') {
+          // 미회수 — 재탐사
+          rescanBtn.click();
+        }
+        return;
+      }
+    }
+    return;
+  }
+
+  // ── GAMEOVER 상태: 키 차단 ────────────────────────────────────
+  if (GAME_STATE === 'GAMEOVER') return;
 
   // ── PLAYING 상태 ──────────────────────────────────────────────
   // 미니게임 중 입력
