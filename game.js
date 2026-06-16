@@ -1049,6 +1049,7 @@ window.addEventListener('keydown', e => {
   }
   if (e.code === 'KeyF') {
     if (minigame.active && minigame.type === 'combat' && !minigame.result) {
+      if (e.repeat) return;  // 꾹 누름 무시 — 실제 연타만 인정
       minigame.combatGauge = Math.min(MG.combatGaugeMax,
         minigame.combatGauge + minigame.playerPower);
       SoundManager.play('combat_mash');
@@ -3087,6 +3088,41 @@ document.getElementById('d-sound-export').addEventListener('click', () => {
   URL.revokeObjectURL(url);
   devLog('사운드 설정 내보내기 완료 → sound_config.json', 'good');
 });
+
+// ── 인게임 볼륨 패널 ─────────────────────────────────────────────
+(function() {
+  function bindVol(id, valId, fn) {
+    const el  = document.getElementById(id);
+    const vel = document.getElementById(valId);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      const v = parseFloat(el.value);
+      if (vel) vel.textContent = v.toFixed(2);
+      fn(v);
+      // DEV 패널 슬라이더도 동기화
+      const devMap = { 'vp-master':'s-master', 'vp-bgm':'s-bgm', 'vp-sfx':'s-sfx' };
+      const devEl  = document.getElementById(devMap[id]);
+      const devVal = document.getElementById(devMap[id] + '-v');
+      if (devEl)  devEl.value = el.value;
+      if (devVal) devVal.textContent = v.toFixed(2);
+    });
+  }
+  bindVol('vp-master', 'vp-master-v', v => SoundManager.setMasterVolume(v));
+  bindVol('vp-bgm',    'vp-bgm-v',    v => SoundManager.setBGMVolume(v));
+  bindVol('vp-sfx',    'vp-sfx-v',    v => SoundManager.setSFXVolume(v));
+
+  // DEV 패널 슬라이더 변경 시 인게임 패널도 동기화
+  ['master','bgm','sfx'].forEach(key => {
+    const devEl = document.getElementById(`s-${key}`);
+    if (!devEl) return;
+    devEl.addEventListener('input', () => {
+      const vpEl  = document.getElementById(`vp-${key}`);
+      const vpVal = document.getElementById(`vp-${key}-v`);
+      if (vpEl)  vpEl.value = devEl.value;
+      if (vpVal) vpVal.textContent = parseFloat(devEl.value).toFixed(2);
+    });
+  });
+})();
 
 // ── 메인 루프 ────────────────────────────────────────────────────
 let lastTs = 0, fps = 0, frameCount = 0, fpsTimer = 0, lastDt = 0;
