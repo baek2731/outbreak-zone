@@ -78,8 +78,10 @@ canvas#minimap { display:block; image-rendering:pixelated; }
   width:0; background:#0d0d0d; border-left:1px solid #1a1a1a;
   overflow:hidden; flex-shrink:0; transition:width 0.15s;
 }
-#dev-panel.open { width:240px; }
-#dev-inner { padding:12px; min-width:240px; }
+#dev-panel.open { width:260px; }
+#dev-inner { padding:12px; min-width:260px; }
+.dev-row input[type=range].snd { width:90px; accent-color:#ff8800; }
+.dev-val.snd { color:#ff8800; }
 .dev-title { color:#ffaa00; font-size:0.72rem; letter-spacing:0.15em; border-bottom:1px solid #222; padding-bottom:6px; margin-bottom:10px; }
 .dev-section { color:#555; font-size:0.6rem; text-transform:uppercase; letter-spacing:0.1em; margin:9px 0 4px; }
 .dev-row { display:flex; justify-content:space-between; align-items:center; gap:6px; margin:4px 0; }
@@ -470,6 +472,48 @@ canvas#minimap { display:block; image-rendering:pixelated; }
         패트롤: <span id="di-patrol">0단계</span><br>
         경과: <span id="di-time">0s</span>
       </div>
+
+      <div class="dev-section">SOUND — 마스터</div>
+      <div class="dev-row"><label>전체</label><input type="range" class="snd" id="s-master" min="0" max="1" step="0.05" value="0.85"><span class="dev-val snd" id="s-master-v">0.85</span></div>
+      <div class="dev-row"><label>BGM</label><input type="range" class="snd" id="s-bgm" min="0" max="1" step="0.05" value="0.40"><span class="dev-val snd" id="s-bgm-v">0.40</span></div>
+      <div class="dev-row"><label>효과음</label><input type="range" class="snd" id="s-sfx" min="0" max="1" step="0.05" value="0.80"><span class="dev-val snd" id="s-sfx-v">0.80</span></div>
+
+      <div class="dev-section">SOUND — 효과음 개별</div>
+      <div class="dev-row"><label>sonar_fire</label><input type="range" class="snd sfx-slider" data-id="sonar_fire" min="0" max="1" step="0.05" value="0.70"><span class="dev-val snd">0.70</span></div>
+      <div class="dev-row"><label>sonar_precise</label><input type="range" class="snd sfx-slider" data-id="sonar_precise" min="0" max="1" step="0.05" value="0.65"><span class="dev-val snd">0.65</span></div>
+      <div class="dev-row"><label>sonar_ping_hit</label><input type="range" class="snd sfx-slider" data-id="sonar_ping_hit" min="0" max="1" step="0.05" value="0.35"><span class="dev-val snd">0.35</span></div>
+      <div class="dev-row"><label>collect_success</label><input type="range" class="snd sfx-slider" data-id="collect_success" min="0" max="1" step="0.05" value="0.75"><span class="dev-val snd">0.75</span></div>
+      <div class="dev-row"><label>collect_fail</label><input type="range" class="snd sfx-slider" data-id="collect_fail" min="0" max="1" step="0.05" value="0.85"><span class="dev-val snd">0.85</span></div>
+      <div class="dev-row"><label>collect_prompt</label><input type="range" class="snd sfx-slider" data-id="collect_prompt" min="0" max="1" step="0.05" value="0.40"><span class="dev-val snd">0.40</span></div>
+      <div class="dev-row"><label>combat_start</label><input type="range" class="snd sfx-slider" data-id="combat_start" min="0" max="1" step="0.05" value="0.85"><span class="dev-val snd">0.85</span></div>
+      <div class="dev-row"><label>combat_mash</label><input type="range" class="snd sfx-slider" data-id="combat_mash" min="0" max="1" step="0.05" value="0.65"><span class="dev-val snd">0.65</span></div>
+      <div class="dev-row"><label>combat_win</label><input type="range" class="snd sfx-slider" data-id="combat_win" min="0" max="1" step="0.05" value="0.65"><span class="dev-val snd">0.65</span></div>
+      <div class="dev-row"><label>combat_lose</label><input type="range" class="snd sfx-slider" data-id="combat_lose" min="0" max="1" step="0.05" value="0.85"><span class="dev-val snd">0.85</span></div>
+      <div class="dev-row"><label>patrol_phase1</label><input type="range" class="snd sfx-slider" data-id="patrol_phase1" min="0" max="1" step="0.05" value="0.70"><span class="dev-val snd">0.70</span></div>
+      <div class="dev-row"><label>patrol_phase2</label><input type="range" class="snd sfx-slider" data-id="patrol_phase2" min="0" max="1" step="0.05" value="0.80"><span class="dev-val snd">0.80</span></div>
+      <div class="dev-row"><label>patrol_phase3</label><input type="range" class="snd sfx-slider" data-id="patrol_phase3" min="0" max="1" step="0.05" value="1.00"><span class="dev-val snd">1.00</span></div>
+      <div class="dev-row"><label>capsule_pickup</label><input type="range" class="snd sfx-slider" data-id="capsule_pickup" min="0" max="1" step="0.05" value="0.65"><span class="dev-val snd">0.65</span></div>
+      <div class="dev-row"><label>exit_reach</label><input type="range" class="snd sfx-slider" data-id="exit_reach" min="0" max="1" step="0.05" value="0.65"><span class="dev-val snd">0.65</span></div>
+      <div class="dev-row"><label>zombie_spawn</label><input type="range" class="snd sfx-slider" data-id="zombie_spawn" min="0" max="1" step="0.05" value="0.75"><span class="dev-val snd">0.75</span></div>
+      <div class="dev-row"><label>oxygen_warn</label><input type="range" class="snd sfx-slider" data-id="oxygen_warn" min="0" max="1" step="0.05" value="0.45"><span class="dev-val snd">0.45</span></div>
+      <div class="dev-row"><label>oxygen_critical</label><input type="range" class="snd sfx-slider" data-id="oxygen_critical" min="0" max="1" step="0.05" value="0.90"><span class="dev-val snd">0.90</span></div>
+      <div class="dev-row"><label>infection_high</label><input type="range" class="snd sfx-slider" data-id="infection_high" min="0" max="1" step="0.05" value="0.75"><span class="dev-val snd">0.75</span></div>
+      <div class="dev-row"><label>gameover_death</label><input type="range" class="snd sfx-slider" data-id="gameover_death" min="0" max="1" step="0.05" value="0.90"><span class="dev-val snd">0.90</span></div>
+      <div class="dev-row"><label>gameover_infected</label><input type="range" class="snd sfx-slider" data-id="gameover_infected" min="0" max="1" step="0.05" value="0.90"><span class="dev-val snd">0.90</span></div>
+      <div class="dev-row"><label>stage_clear</label><input type="range" class="snd sfx-slider" data-id="stage_clear" min="0" max="1" step="0.05" value="0.75"><span class="dev-val snd">0.75</span></div>
+      <div class="dev-row"><label>all_clear</label><input type="range" class="snd sfx-slider" data-id="all_clear" min="0" max="1" step="0.05" value="0.85"><span class="dev-val snd">0.85</span></div>
+      <div class="dev-row"><label>upgrade_buy</label><input type="range" class="snd sfx-slider" data-id="upgrade_buy" min="0" max="1" step="0.05" value="0.55"><span class="dev-val snd">0.55</span></div>
+
+      <div class="dev-section">SOUND — BGM 개별</div>
+      <div class="dev-row"><label>bgm_title</label><input type="range" class="snd bgm-slider" data-id="bgm_title" min="0" max="1" step="0.05" value="0.38"><span class="dev-val snd">0.38</span></div>
+      <div class="dev-row"><label>bgm_base</label><input type="range" class="snd bgm-slider" data-id="bgm_base" min="0" max="1" step="0.05" value="0.35"><span class="dev-val snd">0.35</span></div>
+      <div class="dev-row"><label>bgm_stage12</label><input type="range" class="snd bgm-slider" data-id="bgm_stage12" min="0" max="1" step="0.05" value="0.38"><span class="dev-val snd">0.38</span></div>
+      <div class="dev-row"><label>bgm_stage34</label><input type="range" class="snd bgm-slider" data-id="bgm_stage34" min="0" max="1" step="0.05" value="0.40"><span class="dev-val snd">0.40</span></div>
+      <div class="dev-row"><label>bgm_stage5</label><input type="range" class="snd bgm-slider" data-id="bgm_stage5" min="0" max="1" step="0.05" value="0.42"><span class="dev-val snd">0.42</span></div>
+      <div class="dev-row"><label>bgm_ending</label><input type="range" class="snd bgm-slider" data-id="bgm_ending" min="0" max="1" step="0.05" value="0.38"><span class="dev-val snd">0.38</span></div>
+      <div class="dev-row"><label>sting_gameover</label><input type="range" class="snd bgm-slider" data-id="sting_gameover" min="0" max="1" step="0.05" value="0.60"><span class="dev-val snd">0.60</span></div>
+
+      <button class="dev-btn" id="d-sound-export" style="border-color:#ff8800;color:#ff8800;margin-top:8px;">💾 사운드 설정 내보내기</button>
 
       <div class="dev-section">EVENT LOG</div>
       <div id="dev-log"></div>

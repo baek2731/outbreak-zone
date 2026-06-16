@@ -996,6 +996,7 @@ function onStep(tx, ty) {
     const tileIdx2 = ty * MAP.width + tx;
     if (MAP.detected[tileIdx2]) {
       // 탐지된 병원체 — E키 프롬프트 (타일 유지)
+      SoundManager.play('collect_prompt');
       devLog('병원체 위에 섬 — [E] 회수 시도', '');
     } else {
       // 미탐지 병원체 — 아무 일도 없음 (소나로 탐지해야 회수 가능)
@@ -1068,7 +1069,6 @@ function showGameOver(reason) {
   GAME_STATE = 'GAMEOVER';
   SoundManager.stopBGMImmediate();
   SoundManager.stopLoop('oxygen_warn');
-  SoundManager.stopLoop('sonar_charge');
   SoundManager.play(reason === 'infected' ? 'gameover_infected' : 'gameover_death');
   // 사망 시점에 즉시 기록 저장 (창 닫아도 남음)
   const got = saveRunRecord(reason === 'infected' ? 'infected' : 'death');
@@ -1265,6 +1265,8 @@ function recalcNumbers(tx, ty) {
 
 function showExitChoice(mode, remaining) {
   GAME_STATE = 'ESCAPED';
+  SoundManager.play('exit_reach');
+  SoundManager.stopLoop('oxygen_warn');
   const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
   const total     = CONFIG.stages[stageIdx].mineCount;
   const collected = total - (remaining || 0);
@@ -1336,7 +1338,6 @@ function showEscaped(exitType) {
   document.getElementById('esc-btn').style.display    = 'none';
 
   SoundManager.stopLoop('oxygen_warn');
-  SoundManager.stopLoop('sonar_charge');
   if (isLast) {
     SoundManager.stopBGMImmediate();
     setTimeout(() => SoundManager.play('all_clear'), 300);
@@ -1769,7 +1770,6 @@ function fireSonar(isPrecise) {
 
   // 사운드
   SoundManager.play(isPrecise ? 'sonar_precise' : 'sonar_fire');
-  SoundManager.stopLoop('sonar_charge');
 
   // 소나 발동 소음 — 소나 반경 그대로 전달 (파동 도달 기반)
   const noiseWx = player.px + ts / 2, noiseWy = player.py + ts / 2;
@@ -1852,6 +1852,12 @@ function fireSonar(isPrecise) {
   sonar.pings        = [...sonar.pings.filter(p => p.alpha > 0), ...newPings];
   sonar.preciseMarks = [...sonar.preciseMarks.filter(m => m.alpha > 0), ...newMarks];
 
+  // 위험 핑 감지 시 틱음 — 최고 위험도 기반 (기본 소나만, 핑이 있을 때)
+  if (!isPrecise && newPings.length > 0) {
+    const maxDanger = newPings.reduce((m, p) => Math.max(m, p.danger), 0);
+    if (maxDanger > 0) SoundManager.play('sonar_ping_hit');
+  }
+
   // 소나 발동 후 — 플레이어가 현재 서 있는 타일이 병원체면 자동 탐지
   const curIdx = player.ty * MAP.width + player.tx;
   if (MAP.tiles[curIdx] === T.MINE) {
@@ -1864,13 +1870,9 @@ function updateSonar(dt) {
   const cfg = CONFIG.sonar;
   if (sonar.charging) {
     sonar.chargeTime = Math.min(sonar.chargeTime + dt, cfg.maxCharge);
-    SoundManager.startLoop('sonar_charge');
-    SoundManager.setSonarChargeRatio(sonar.chargeTime / cfg.maxCharge);
   }
   if (sonar.chargingPrecise) {
     sonar.chargeTimePrecise = Math.min(sonar.chargeTimePrecise + dt, cfg.maxCharge);
-    SoundManager.startLoop('sonar_charge');
-    SoundManager.setSonarChargeRatio(sonar.chargeTimePrecise / cfg.maxCharge);
   }
   if (sonar.radarTimer > 0)  sonar.radarTimer = Math.max(0, sonar.radarTimer - dt);
 
@@ -2871,6 +2873,63 @@ document.getElementById('d-clearrecords').addEventListener('click', () => {
   document.getElementById('d-font-up').addEventListener('click',   () => { basePx++; update(); });
   document.getElementById('d-font-down').addEventListener('click', () => { if (basePx > 4) { basePx--; update(); } });
 })();
+
+// DEV — 사운드 마스터 슬라이더
+(function() {
+  function bindSlider(id, valId, fn) {
+    const el  = document.getElementById(id);
+    const vel = document.getElementById(valId);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      const v = parseFloat(el.value);
+      if (vel) vel.textContent = v.toFixed(2);
+      fn(v);
+    });
+  }
+  bindSlider('s-master', 's-master-v', v => SoundManager.setMasterVolume(v));
+  bindSlider('s-bgm',    's-bgm-v',    v => SoundManager.setBGMVolume(v));
+  bindSlider('s-sfx',    's-sfx-v',    v => SoundManager.setSFXVolume(v));
+})();
+
+// DEV — 효과음 개별 슬라이더
+document.querySelectorAll('.sfx-slider').forEach(el => {
+  const valEl = el.nextElementSibling;
+  el.addEventListener('input', () => {
+    const id = el.dataset.id;
+    const v  = parseFloat(el.value);
+    if (valEl) valEl.textContent = v.toFixed(2);
+    SoundManager.setSFXIndividualVolume(id, v);
+  });
+});
+
+// DEV — BGM 개별 슬라이더
+document.querySelectorAll('.bgm-slider').forEach(el => {
+  const valEl = el.nextElementSibling;
+  el.addEventListener('input', () => {
+    const id = el.dataset.id;
+    const v  = parseFloat(el.value);
+    if (valEl) valEl.textContent = v.toFixed(2);
+    SoundManager.setBGMIndividualVolume(id, v);
+  });
+});
+
+// DEV — 사운드 설정 내보내기
+document.getElementById('d-sound-export').addEventListener('click', () => {
+  const data = {
+    VOL:     { ...SoundManager.VOL },
+    SFX_VOL: { ...SoundManager.SFX_VOL },
+    BGM_VOL: { ...SoundManager.BGM_VOL },
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'sound_config.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  devLog('사운드 설정 내보내기 완료 → sound_config.json', 'good');
+});
 
 // ── 메인 루프 ────────────────────────────────────────────────────
 let lastTs = 0, fps = 0, frameCount = 0, fpsTimer = 0;
