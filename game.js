@@ -919,6 +919,7 @@ window.addEventListener('keydown', e => {
     if (minigame.active && minigame.type === 'combat' && !minigame.result) {
       minigame.combatGauge = Math.min(MG.combatGaugeMax,
         minigame.combatGauge + minigame.playerPower);
+      SoundManager.play('combat_mash');
       if (minigame.combatGauge >= MG.combatWinThreshold) endMinigame(true);
       return;
     }
@@ -1010,6 +1011,7 @@ function onStep(tx, ty) {
     const prevOxy = player.oxygen;
     player.oxygen = Math.min(CONFIG.oxygen.max, player.oxygen + CONFIG.oxygen.capsuleHeal);
     devLog(`캡슐 수집 — 산소 +${(player.oxygen - prevOxy).toFixed(1)}% (${prevOxy.toFixed(1)}% → ${player.oxygen.toFixed(1)}%)`, 'good');
+    SoundManager.play('capsule_pickup');
     triggerFlash('item');
     triggerFlash('oxygen');
     return;
@@ -1064,6 +1066,10 @@ function triggerFlash(color) {
 function showGameOver(reason) {
   player.dead = true;
   GAME_STATE = 'GAMEOVER';
+  SoundManager.stopBGMImmediate();
+  SoundManager.stopLoop('oxygen_warn');
+  SoundManager.stopLoop('sonar_charge');
+  SoundManager.play(reason === 'infected' ? 'gameover_infected' : 'gameover_death');
   // 사망 시점에 즉시 기록 저장 (창 닫아도 남음)
   const got = saveRunRecord(reason === 'infected' ? 'infected' : 'death');
   const elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
@@ -1126,6 +1132,7 @@ function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
   });
   if (type === 'mine') revealAround(player.tx, player.ty, MG.visionRadMine);
   triggerFlash('red');
+  if (type === 'combat') SoundManager.play('combat_start');
   if (type === 'mine') devLog(`병원체 회수 시작 — 패턴: ${minigame.pattern.join('-')}`, 'warn');
   else devLog(`전투 시작 [${zState}] — F키 연타로 게이지 채우기 (좀비 drain: ${drain}/s)`, 'warn');
 }
@@ -1152,6 +1159,7 @@ function endMinigame(success) {
 
   if (minigame.type === 'mine') {
     if (success) {
+      SoundManager.play('collect_success');
       // 병원체 회수 성공
       if (minigame.mineTileIdx >= 0) {
         MAP.tiles[minigame.mineTileIdx] = T.FLOOR;
@@ -1174,6 +1182,7 @@ function endMinigame(success) {
       revealAround(player.tx, player.ty, CONFIG.player.visionRad);
       devLog(`병원체 회수 성공 — 감염 ${fx.noInfectOnSuccess ? '+0%(저항)' : '+'+MG.mineSuccessInfect+'%'}`, 'good');
     } else {
+      SoundManager.play('collect_fail');
       // 실패 — 감염 대폭 증가 + 소음
       player.infection = Math.min(100, player.infection + MG.mineFailInfect);
       const fxNoise = getUpgradeEffects();
@@ -1187,11 +1196,13 @@ function endMinigame(success) {
     // 전투
     const interrupted = minigame.interruptedMine;
     if (success) {
+      SoundManager.play('combat_win');
       const oxyLoss = Math.abs(MG.combatSuccessOxy) + (interrupted ? 5 : 0);
       applyOxygenDamage(oxyLoss);
       if (interrupted) player.infection = Math.min(100, player.infection + 5);
       devLog(`전투 성공 — 산소 -${oxyLoss}%${interrupted ? ' (급습 패널티)' : ''}`, 'warn');
     } else {
+      SoundManager.play('combat_lose');
       applyOxygenDamage(Math.abs(MG.combatFailOxy) + (interrupted ? 10 : 0));
       player.infection = Math.min(100, player.infection + MG.combatFailInfect + (interrupted ? 5 : 0));
       devLog(`전투 실패 — 산소 대량 소모, 감염 증가${interrupted ? ' (급습 패널티)' : ''}`, 'danger');
@@ -1292,6 +1303,12 @@ function applyStageTransition() {
   player.oxygen   = Math.min(CONFIG.oxygen.max, player.oxygen + healAmt);
   // 감염은 그대로 — 누적 유지
   devLog(`층 이동 — 산소 +${healAmt}% 보충 (현재 ${player.oxygen.toFixed(1)}%), 감염 ${player.infection.toFixed(1)}% 누적`, 'good');
+  // BGM 크로스페이드 — 스테이지별
+  const nextStage = player.stage; // 이미 증가된 후 호출됨
+  const bgmId = nextStage >= 4 ? 'bgm_stage5'
+              : nextStage >= 2 ? 'bgm_stage34'
+              : 'bgm_stage12';
+  SoundManager.crossfadeBGM(bgmId);
 }
 
 function showEscaped(exitType) {
@@ -1317,6 +1334,16 @@ function showEscaped(exitType) {
   const isLast = player.stage >= CONFIG.stages.length - 1;
   document.getElementById('esc-clear').style.display  = isLast ? 'block' : 'none';
   document.getElementById('esc-btn').style.display    = 'none';
+
+  SoundManager.stopLoop('oxygen_warn');
+  SoundManager.stopLoop('sonar_charge');
+  if (isLast) {
+    SoundManager.stopBGMImmediate();
+    setTimeout(() => SoundManager.play('all_clear'), 300);
+  } else {
+    SoundManager.stopBGM(0.8);
+    setTimeout(() => SoundManager.play('stage_clear'), 200);
+  }
 
   document.getElementById('escaped').classList.add('show');
 }
@@ -1430,6 +1457,7 @@ function showLobby() {
   ['title-screen','gameover','escaped','early-exit','stage-intro']
     .forEach(id => document.getElementById(id)?.classList.remove('show'));
   document.getElementById('lobby-screen').classList.add('show');
+  SoundManager.crossfadeBGM('bgm_base');
   renderLobbyMeta();
   renderLobby('status');
 }
@@ -1540,6 +1568,7 @@ function renderLobby(tab) {
       ups2[id] = lv2 + 1;
       saveUpgrades(ups2);
       localStorage.setItem(DNA_KEY, String(dna2 - cost2));
+      SoundManager.play('upgrade_buy');
       devLog(`강화: ${item2.name} Lv${ups2[id]} (DNA -${cost2})`, 'good');
       renderLobby(t);
     });
@@ -1588,6 +1617,8 @@ function showTitle() {
   GAME_STATE = 'TITLE';
   document.getElementById('title-screen').classList.add('show');
   updateTitleStats();
+  SoundManager.init();
+  SoundManager.playBGM('bgm_title', 1.5);
 }
 
 function updateTitleStats() {
@@ -1633,6 +1664,7 @@ function startGame() {
   player.recordSaved    = false;
   applyUpgradeEffects();
   player.oxygen = CONFIG.oxygen.max;
+  SoundManager.crossfadeBGM('bgm_stage12');
   init();
 }
 
@@ -1664,6 +1696,7 @@ function checkPatrolPhase() {
     for (let i = 0; i < (st.extraSpawn || 1); i++) spawnExtraZombie();
     devLog(`⚠ 패트롤 1단계 [${removed}개 제거] — 좀비 ${st.extraSpawn || 1}체 증원`, 'warn');
     triggerFlash('red');
+    setTimeout(() => SoundManager.play('patrol_phase1'), 200);
   }
   // 2단계 — 이동속도 +20%
   if (removed >= thr[1] && patrol.phase < 2) {
@@ -1671,6 +1704,7 @@ function checkPatrolPhase() {
     patrol.speedMult = 1.2;
     devLog(`⚠ 패트롤 2단계 [${removed}개 제거] — 이동속도 ×1.2`, 'warn');
     triggerFlash('red');
+    setTimeout(() => SoundManager.play('patrol_phase2'), 200);
   }
   // 3단계 — 이동속도 +40%, 시야각 120도
   if (removed >= thr[2] && patrol.phase < 3) {
@@ -1679,6 +1713,7 @@ function checkPatrolPhase() {
     patrol.fovMult   = 120 / CONFIG.zombie.fovAngle;
     devLog(`🔴 패트롤 3단계 [${removed}개 제거] — 속도 ×1.4, 시야 확대`, 'danger');
     triggerFlash('red');
+    setTimeout(() => SoundManager.play('patrol_phase3'), 200);
   }
 }
 
@@ -1717,6 +1752,7 @@ function spawnExtraZombie() {
   ez.wanderTimer = 0;
   ez.memoryTimer = CONFIG.zombie.chaseMemory;
   zombies.push(ez);
+  SoundManager.play('zombie_spawn');
   devLog(`증원 좀비 스폰 @ (${pick[0]},${pick[1]}) — 총 ${zombies.length}마리`, 'warn');
 }
 
@@ -1730,6 +1766,10 @@ function fireSonar(isPrecise) {
 
   if (isPrecise) { sonar.chargingPrecise = false; sonar.chargeTimePrecise = 0; sonar.precise--; }
   else           { sonar.charging = false; sonar.chargeTime = 0; }
+
+  // 사운드
+  SoundManager.play(isPrecise ? 'sonar_precise' : 'sonar_fire');
+  SoundManager.stopLoop('sonar_charge');
 
   // 소나 발동 소음 — 소나 반경 그대로 전달 (파동 도달 기반)
   const noiseWx = player.px + ts / 2, noiseWy = player.py + ts / 2;
@@ -1822,9 +1862,17 @@ function fireSonar(isPrecise) {
 
 function updateSonar(dt) {
   const cfg = CONFIG.sonar;
-  if (sonar.charging)        sonar.chargeTime        = Math.min(sonar.chargeTime + dt, cfg.maxCharge);
-  if (sonar.chargingPrecise) sonar.chargeTimePrecise = Math.min(sonar.chargeTimePrecise + dt, cfg.maxCharge);
-  if (sonar.radarTimer > 0)  sonar.radarTimer        = Math.max(0, sonar.radarTimer - dt);
+  if (sonar.charging) {
+    sonar.chargeTime = Math.min(sonar.chargeTime + dt, cfg.maxCharge);
+    SoundManager.startLoop('sonar_charge');
+    SoundManager.setSonarChargeRatio(sonar.chargeTime / cfg.maxCharge);
+  }
+  if (sonar.chargingPrecise) {
+    sonar.chargeTimePrecise = Math.min(sonar.chargeTimePrecise + dt, cfg.maxCharge);
+    SoundManager.startLoop('sonar_charge');
+    SoundManager.setSonarChargeRatio(sonar.chargeTimePrecise / cfg.maxCharge);
+  }
+  if (sonar.radarTimer > 0)  sonar.radarTimer = Math.max(0, sonar.radarTimer - dt);
 
   if (sonar.firing) {
     sonar.pulseR += cfg.pulseSpeed * dt;
@@ -2365,13 +2413,19 @@ function updateOxygenInfection(dt) {
     player.oxygen = Math.max(0, player.oxygen - drainRate * dt);
   }
 
-  // 산소 구간 진입 로그
+  // 산소 구간 진입 로그 + 사운드
   const oxyZone = player.oxygen <= 0 ? 'empty' : player.oxygen < cfg.infectThreshold ? 'warn' : 'safe';
   if (oxyZone !== _prevOxyZone) {
-    if (oxyZone === 'warn')  devLog(`⚠ 산소 위험구간 진입 (${player.oxygen.toFixed(1)}%) — 감염 시작`, 'warn');
-    if (oxyZone === 'empty') devLog(`🔴 산소 고갈 — 감염 가속 시작`, 'danger');
-    if (oxyZone === 'safe')  devLog(`산소 안전구간 복귀 (${player.oxygen.toFixed(1)}%)`, 'good');
+    if (oxyZone === 'warn')  { devLog(`⚠ 산소 위험구간 진입 (${player.oxygen.toFixed(1)}%) — 감염 시작`, 'warn'); SoundManager.startLoop('oxygen_warn'); }
+    if (oxyZone === 'empty') { devLog(`🔴 산소 고갈 — 감염 가속 시작`, 'danger'); SoundManager.play('oxygen_critical'); }
+    if (oxyZone === 'safe')  { devLog(`산소 안전구간 복귀 (${player.oxygen.toFixed(1)}%)`, 'good'); SoundManager.stopLoop('oxygen_warn'); }
     _prevOxyZone = oxyZone;
+  }
+
+  // oxygen_warn 볼륨 — 산소 수치 낮을수록 크게
+  if (oxyZone === 'warn') {
+    const ratio = 1 - (player.oxygen / cfg.infectThreshold);
+    SoundManager.setLoopVolume('oxygen_warn', ratio * 0.3);
   }
 
   // 감염 증가 — 산소 60% 이하부터 시작
@@ -2383,11 +2437,11 @@ function updateOxygenInfection(dt) {
     }
   }
 
-  // 감염 구간 진입 로그
+  // 감염 구간 진입 로그 + 사운드
   const infZone = player.infection >= 75 ? 'high' : player.infection >= 40 ? 'mid' : 'low';
   if (infZone !== _prevInfZone) {
     if (infZone === 'mid')  devLog(`⚠ 감염 40% 돌파 (${player.infection.toFixed(1)}%)`, 'warn');
-    if (infZone === 'high') devLog(`🔴 감염 75% 위험 (${player.infection.toFixed(1)}%)`, 'danger');
+    if (infZone === 'high') { devLog(`🔴 감염 75% 위험 (${player.infection.toFixed(1)}%)`, 'danger'); SoundManager.play('infection_high'); }
     if (infZone === 'low')  devLog(`감염 감소 — 저위험 복귀`, 'good');
     _prevInfZone = infZone;
   }
