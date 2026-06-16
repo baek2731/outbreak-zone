@@ -856,8 +856,7 @@ const minigame = {
 // 미니게임 config (game.js 내부 상수)
 const MG = {
   dirs: ['up','down','left','right'],
-  keyToDir: { KeyW:'up', KeyS:'down', KeyA:'left', KeyD:'right',
-              ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right' },
+  keyToDir: { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right' },
   // 병원체 회수
   mineSuccessInfect:  3,    // 성공 시 감염도 증가
   mineFailInfect:    15,    // 실패 시 감염도 증가
@@ -1005,7 +1004,7 @@ function hasLOS(x0, y0, x1, y1) {
 const KEYS = {};
 const GAME_KEYS = new Set([
   'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
-  'KeyW','KeyA','KeyS','KeyD','KeyF','KeyG','KeyE','Space',
+  'KeyF','KeyG','KeyE','Space',
 ]);
 
 // ── 게임 상태 머신 ──────────────────────────────────────────────
@@ -1082,10 +1081,10 @@ function processKeys() {
 }
 
 function getHeldDir() {
-  if (KEYS['KeyW'] || KEYS['ArrowUp'])    return { dx:0,  dy:-1 };
-  if (KEYS['KeyS'] || KEYS['ArrowDown'])  return { dx:0,  dy: 1 };
-  if (KEYS['KeyA'] || KEYS['ArrowLeft'])  return { dx:-1, dy: 0 };
-  if (KEYS['KeyD'] || KEYS['ArrowRight']) return { dx: 1, dy: 0 };
+  if (KEYS['ArrowUp'])    return { dx:0,  dy:-1 };
+  if (KEYS['ArrowDown'])  return { dx:0,  dy: 1 };
+  if (KEYS['ArrowLeft'])  return { dx:-1, dy: 0 };
+  if (KEYS['ArrowRight']) return { dx: 1, dy: 0 };
   return null;
 }
 
