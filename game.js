@@ -1206,6 +1206,7 @@ window.addEventListener('keydown', e => {
           && minigame.combatGauge < MG.combatWinThreshold) {
         minigame.serumChoice      = true;
         minigame.serumChoiceTimer = CONFIG.serum.choiceTime;
+        if (window._updateTouchUI) window._updateTouchUI();
       }
       if (minigame.combatGauge >= MG.combatWinThreshold) endMinigame(true);
       return;
@@ -1226,7 +1227,8 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyN') {
     if (minigame.active && minigame.type === 'combat' && minigame.serumChoice) {
       minigame.serumChoice  = false;
-      minigame.serumChosen  = true; // 이번 전투에서 다시 뜨지 않음
+      minigame.serumChosen  = true;
+      if (window._updateTouchUI) window._updateTouchUI();
     }
     return;
   }
