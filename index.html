@@ -250,13 +250,14 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 }
 #touch-controls.show { display:flex; }
 
-/* 방향키 패드 */
-#dpad {
-  display:grid;
-  grid-template-columns: repeat(3, 52px);
-  grid-template-rows: repeat(3, 52px);
+/* 방향키 패드 — 미니게임 전용 */
+#minigame-dpad {
+  display:none;
+  grid-template-columns: repeat(3, 56px);
+  grid-template-rows: repeat(3, 56px);
   gap:4px; pointer-events:all;
 }
+#minigame-dpad.show { display:grid; }
 .dpad-btn {
   background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.12);
   border-radius:6px; color:rgba(255,255,255,0.6);
@@ -272,6 +273,29 @@ canvas#minimap { display:block; image-rendering:pixelated; }
   color:#00ff88;
 }
 .dpad-empty { visibility:hidden; }
+
+/* 조이스틱 */
+#joystick-wrap {
+  width:130px; height:130px;
+  position:relative; pointer-events:all;
+  flex-shrink:0;
+}
+#joystick-base {
+  width:130px; height:130px; border-radius:50%;
+  background:rgba(0,0,0,0.40);
+  border:1px solid rgba(255,255,255,0.10);
+  position:absolute; top:0; left:0;
+}
+#joystick-stick {
+  width:52px; height:52px; border-radius:50%;
+  background:rgba(0,255,136,0.25);
+  border:2px solid rgba(0,255,136,0.45);
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  transition:transform 0.05s;
+  pointer-events:none;
+}
 
 /* 액션 버튼 */
 #action-btns {
@@ -536,8 +560,13 @@ canvas#minimap { display:block; image-rendering:pixelated; }
     <!-- 인게임 볼륨 패널 -->
     <!-- 모바일 터치 조작 패널 -->
     <div id="touch-controls">
-      <!-- 방향키 패드 (좌하단) -->
-      <div id="dpad">
+      <!-- 조이스틱 (일반 이동용, 좌하단) -->
+      <div id="joystick-wrap">
+        <div id="joystick-base"></div>
+        <div id="joystick-stick"></div>
+      </div>
+      <!-- 미니게임 D-PAD (회수 패턴 입력용, 좌하단) -->
+      <div id="minigame-dpad">
         <div class="dpad-empty"></div>
         <button class="dpad-btn" id="dpad-up">▲</button>
         <div class="dpad-empty"></div>

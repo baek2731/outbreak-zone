@@ -1345,6 +1345,7 @@ function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
   if (type === 'combat') SoundManager.play('combat_start');
   if (type === 'mine') devLog(`병원체 회수 시작 — 패턴: ${minigame.pattern.join('-')}`, 'warn');
   else devLog(`전투 시작 [${zState}] — F키 연타로 게이지 채우기 (좀비 drain: ${drain}/s)`, 'warn');
+  if (window._updateTouchUI) window._updateTouchUI();
 }
 
 function minigameInput(dir) {
@@ -1468,6 +1469,7 @@ function updateMinigame(dt) {
       minigame.active = false;
       minigame.type   = null;
       revealAround(player.tx, player.ty, CONFIG.player.visionRad);
+      if (window._updateTouchUI) window._updateTouchUI();
     }
   }
 }
@@ -3263,76 +3265,112 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
 
 // ── 터치 이벤트 → 키 입력 변환 ───────────────────────────────────
 (function setupTouchControls() {
-  // 방향키 매핑
+  const ACTION_MAP = {
+    'touch-f': 'KeyF',
+    'touch-e': 'KeyE',
+    'touch-g': 'KeyG',
+  };
   const DPAD_MAP = {
     'dpad-up':    'ArrowUp',
     'dpad-down':  'ArrowDown',
     'dpad-left':  'ArrowLeft',
     'dpad-right': 'ArrowRight',
   };
-  // 액션 버튼 매핑
-  const ACTION_MAP = {
-    'touch-f': 'KeyF',
-    'touch-e': 'KeyE',
-    'touch-g': 'KeyG',
-  };
 
-  // 키 이벤트 시뮬레이션
   function fireKey(code, type) {
     const e = new KeyboardEvent(type, { code, bubbles: true, cancelable: true });
     window.dispatchEvent(e);
   }
 
-  // 방향키 — 누르는 동안 반복 이동 (moveTimer 방식과 맞추기 위해 keydown 유지)
-  const _dpadIntervals = {};
+  // ── 조이스틱 ───────────────────────────────────────────────────
+  const joystickWrap  = document.getElementById('joystick-wrap');
+  const joystickStick = document.getElementById('joystick-stick');
+  const minigameDpad  = document.getElementById('minigame-dpad');
 
+  let _joyActive  = false;
+  let _joyOriginX = 0;
+  let _joyOriginY = 0;
+  let _joyDir     = null;
+  const JOY_DEAD  = 18;
+  const JOY_MAX   = 48;
+
+  function calcDir(dx, dy) {
+    if (Math.hypot(dx, dy) < JOY_DEAD) return null;
+    return Math.abs(dx) > Math.abs(dy)
+      ? (dx > 0 ? 'ArrowRight' : 'ArrowLeft')
+      : (dy > 0 ? 'ArrowDown'  : 'ArrowUp');
+  }
+
+  function joyMove(cx, cy) {
+    const dx  = cx - _joyOriginX;
+    const dy  = cy - _joyOriginY;
+    const mag = Math.min(Math.hypot(dx, dy), JOY_MAX);
+    const ang = Math.atan2(dy, dx);
+    joystickStick.style.transform =
+      `translate(calc(-50% + ${Math.cos(ang)*mag}px), calc(-50% + ${Math.sin(ang)*mag}px))`;
+    const newDir = calcDir(dx, dy);
+    if (newDir === _joyDir) return;
+    if (_joyDir) { KEYS[_joyDir] = false; }
+    _joyDir = newDir;
+    if (_joyDir && GAME_STATE === 'PLAYING') KEYS[_joyDir] = true;
+  }
+
+  function joyEnd() {
+    if (!_joyActive) return;
+    _joyActive = false;
+    if (_joyDir) { KEYS[_joyDir] = false; _joyDir = null; }
+    joystickStick.style.transform = 'translate(-50%, -50%)';
+  }
+
+  joystickWrap.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    const r = joystickWrap.getBoundingClientRect();
+    _joyOriginX = r.left + r.width  / 2;
+    _joyOriginY = r.top  + r.height / 2;
+    _joyActive  = true;
+    joyMove(t.clientX, t.clientY);
+  }, { passive: false });
+
+  joystickWrap.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (!_joyActive) return;
+    joyMove(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+  }, { passive: false });
+
+  joystickWrap.addEventListener('touchend',    (e) => { e.preventDefault(); joyEnd(); }, { passive: false });
+  joystickWrap.addEventListener('touchcancel', (e) => { e.preventDefault(); joyEnd(); }, { passive: false });
+
+  // ── 미니게임 D-PAD ─────────────────────────────────────────────
   Object.entries(DPAD_MAP).forEach(([id, code]) => {
     const btn = document.getElementById(id);
     if (!btn) return;
-
-    const start = (e) => {
-      e.preventDefault();
-      if (_dpadIntervals[id]) return;
-      btn.classList.add('pressed');
-      if (GAME_STATE === 'PLAYING') KEYS[code] = true;
-      _dpadIntervals[id] = true;
-    };
-    const end = (e) => {
-      e.preventDefault();
-      btn.classList.remove('pressed');
-      KEYS[code] = false;
-      _dpadIntervals[id] = false;
-    };
-
+    const start = (e) => { e.preventDefault(); btn.classList.add('pressed'); fireKey(code, 'keydown'); };
+    const end   = (e) => { e.preventDefault(); btn.classList.remove('pressed'); };
     btn.addEventListener('touchstart', start, { passive: false });
     btn.addEventListener('touchend',   end,   { passive: false });
     btn.addEventListener('touchcancel',end,   { passive: false });
   });
 
-  // 액션 버튼 — F(소나 차징), E(회수), G(정밀소나)
-  const ACTION_LONG = new Set(['touch-f', 'touch-g']); // 차징 방식
+  // ── 미니게임 진입/종료 시 UI 전환 ────────────────────────────
+  window._updateTouchUI = function() {
+    if (!joystickWrap || !minigameDpad) return;
+    const isMinigame = minigame.active && minigame.type === 'mine';
+    joystickWrap.style.visibility  = isMinigame ? 'hidden' : 'visible';
+    minigameDpad.classList.toggle('show', isMinigame);
+  };
 
+  // ── 액션 버튼 ─────────────────────────────────────────────────
   Object.entries(ACTION_MAP).forEach(([id, code]) => {
     const btn = document.getElementById(id);
     if (!btn) return;
-
-    const start = (e) => {
-      e.preventDefault();
-      btn.classList.add('pressed');
-      fireKey(code, 'keydown');
-    };
-    const end = (e) => {
-      e.preventDefault();
-      btn.classList.remove('pressed');
-      fireKey(code, 'keyup');
-    };
-
+    const start = (e) => { e.preventDefault(); btn.classList.add('pressed');    fireKey(code, 'keydown'); };
+    const end   = (e) => { e.preventDefault(); btn.classList.remove('pressed'); fireKey(code, 'keyup');   };
     btn.addEventListener('touchstart', start, { passive: false });
     btn.addEventListener('touchend',   end,   { passive: false });
     btn.addEventListener('touchcancel',end,   { passive: false });
   });
-})();
-function closeIntro() {
+})();function closeIntro() {
   document.getElementById('stage-intro').classList.remove('show');
   GAME_STATE = 'PLAYING';
 }
