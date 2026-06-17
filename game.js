@@ -1650,6 +1650,8 @@ function showLobby() {
   SoundManager.crossfadeBGM('bgm_base');
   renderLobbyMeta();
   renderLobby('status');
+  // 버튼 포커스로 Space가 먹히는 문제 방지 — canvas로 포커스 이동
+  setTimeout(() => document.getElementById('canvas')?.focus(), 50);
 }
 
 function closeLobby() {

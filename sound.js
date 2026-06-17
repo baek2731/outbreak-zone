@@ -229,22 +229,27 @@ const SoundManager = (() => {
     gainNode.gain.setValueAtTime(Math.max(0, vol), _ctx.currentTime);
   }
 
-  // zombie_chase 1~3 중 랜덤 재생
+  // zombie_chase 1~3 중 랜덤 재생 — 2초 쿨타임
+  let _chaseCooldown = 0;
+
   function playZombieChase() {
     if (!_ensureCtx()) return;
+    const now = _ctx.currentTime;
+    if (now - _chaseCooldown < 2.0) return;  // 2초 이내 재생 금지
+    _chaseCooldown = now;
+
     const n   = Math.floor(Math.random() * 3) + 1;
     const id  = `zombie_chase_${n}`;
     const buf = _sfxBuffers[id];
     if (!buf) { console.warn(`[Sound] 버퍼 없음 [${id}]`); return; }
 
     const vol = SFX_VOL['zombie_chase'] ?? 0.85;
-    const t   = _ctx.currentTime + 0.01;
+    const t   = now + 0.01;
 
-    // 단일 채널 — 이전 chase 소리 정지 후 새로
     if (_soloSources['zombie_chase']) {
       try {
-        _soloSources['zombie_chase'].gain.cancelScheduledValues(_ctx.currentTime);
-        _soloSources['zombie_chase'].gain.setValueAtTime(0, _ctx.currentTime);
+        _soloSources['zombie_chase'].gain.cancelScheduledValues(now);
+        _soloSources['zombie_chase'].gain.setValueAtTime(0, now);
       } catch(e) {}
     }
     const gainNode = _ctx.createGain();
