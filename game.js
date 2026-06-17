@@ -1125,10 +1125,6 @@ window.addEventListener('keyup', e => {
   KEYS[e.code] = false;
 });
 
-function processKeys() {
-  if (player.dead) { sonar.charging = false; sonar.chargingPrecise = false; }
-}
-
 function getHeldDir() {
   if (KEYS['ArrowUp'])    return { dx:0,  dy:-1 };
   if (KEYS['ArrowDown'])  return { dx:0,  dy: 1 };
@@ -1161,7 +1157,7 @@ function tryMove(dx, dy) {
 
 function handleInput(dt) {
   moveTimer = Math.max(0, moveTimer - dt);
-  processKeys();
+  if (player.dead) { sonar.charging = false; sonar.chargingPrecise = false; }
   if (GAME_STATE !== 'PLAYING') return;
   if (player.moving || moveTimer > 0 || player.dead || minigame.active) return;
   const dir = getHeldDir();
@@ -1253,13 +1249,15 @@ function showGameOver(reason) {
   SoundManager.stopLoop('oxygen_warn');
 
   const isInfected = reason === 'infected';
+  // elapsed를 여기서 계산 — setTimeout 안에서 하면 딜레이만큼 오차 발생
+  const elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
+  const got     = saveRunRecord(isInfected ? 'infected' : 'death');
 
   if (isInfected) {
     // 감염(좀비화) — 보라 오버레이 서서히 물들고 패널 등장
     const infectFlash = document.getElementById('infect-flash');
     infectFlash.style.opacity = '0';
     infectFlash.style.display = 'block';
-    // 한 프레임 후 트랜지션 시작
     requestAnimationFrame(() => {
       requestAnimationFrame(() => { infectFlash.style.opacity = '1'; });
     });
@@ -1272,19 +1270,15 @@ function showGameOver(reason) {
         reasonEl.className = 'ov-title purple';
         reasonEl.textContent = '☣ 좀비 전환';
       }
-      const gotEl = document.getElementById('go-got');
-      const got   = saveRunRecord('infected');
-      const elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
       document.getElementById('go-mines').textContent = stats.minesHit;
       document.getElementById('go-time').textContent  = elapsed + '초';
+      const gotEl = document.getElementById('go-got');
       if (gotEl) gotEl.textContent = got;
       panel.classList.add('show');
     }, 700);
   } else {
     // 일반 사망
     SoundManager.play('gameover_death');
-    const got     = saveRunRecord('death');
-    const elapsed = Math.floor((Date.now() - stats.startTime) / 1000);
     document.getElementById('go-mines').textContent  = stats.minesHit;
     document.getElementById('go-time').textContent   = elapsed + '초';
     const reasonEl = document.getElementById('go-reason');
@@ -2339,7 +2333,6 @@ function spawnZombies() {
 
 // 좀비 충돌 반경 (렌더링과 일치)
 const ZOMBIE_RADIUS = 0.40;   // 타일 비율
-const ZOMBIE_FOV_RANGE_PAD = 0;
 
 function updateZombies(dt) {
   if (player.dead) return;
@@ -3084,7 +3077,7 @@ SLIDERS.forEach(([id, fn]) => {
 document.getElementById('d-regen').addEventListener('click', () => init());
 document.getElementById('d-reveal').addEventListener('click', () => {
   devRevealMines = !devRevealMines;
-  document.getElementById('d-reveal').textContent = '💣 지뢰 표시 ' + (devRevealMines ? 'ON' : 'OFF');
+  document.getElementById('d-reveal').textContent = '☣ 병원체 표시 ' + (devRevealMines ? 'ON' : 'OFF');
 });
 document.getElementById('d-fulloxy').addEventListener('click', () => {
   player.oxygen = CONFIG.oxygen.max; player.dead = false;
@@ -3235,7 +3228,6 @@ function applyTouchControls() {
   const el = document.getElementById('touch-controls');
   if (_touchControlsActive) {
     el.classList.add('show');
-    // 모바일이면 로그 패널 기본 숨김
     document.getElementById('log-panel').classList.add('hidden');
   } else {
     el.classList.remove('show');
@@ -3244,6 +3236,16 @@ function applyTouchControls() {
     '📱 터치 조작 ' + (_touchControlsActive ? 'ON' : 'OFF');
 }
 applyTouchControls();
+
+// resize 시 터치 여부 재감지
+window.addEventListener('resize', () => {
+  const shouldTouch = ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+                      && window.innerWidth < 1024;
+  if (shouldTouch !== _touchControlsActive) {
+    _touchControlsActive = shouldTouch;
+    applyTouchControls();
+  }
+});
 
 // DEV — 터치 조작 수동 토글
 document.getElementById('d-touch-toggle').addEventListener('click', () => {
@@ -3292,7 +3294,7 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
       e.preventDefault();
       if (_dpadIntervals[id]) return;
       btn.classList.add('pressed');
-      KEYS[code] = true;
+      if (GAME_STATE === 'PLAYING') KEYS[code] = true;
       _dpadIntervals[id] = true;
     };
     const end = (e) => {
