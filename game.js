@@ -1020,8 +1020,8 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  // ── LOBBY 상태: 스페이스로 작전 개시 ──────────────────────────
-  if (document.getElementById('lobby-screen').classList.contains('show')) {
+  // ── LOBBY(기지) 상태: 스페이스로 작전 개시 ───────────────────
+  if (GAME_STATE === 'LOBBY') {
     if (e.code === 'Space') startGame();
     return;
   }
@@ -1643,6 +1643,7 @@ function getUpgradeEffects() {
 
 // ── 기지 화면 열기/닫기 ──────────────────────────────────────────
 function showLobby() {
+  GAME_STATE = 'LOBBY';
   // 타이틀/게임오버/탈출 화면 모두 닫기
   ['title-screen','gameover','escaped','early-exit','stage-intro']
     .forEach(id => document.getElementById(id)?.classList.remove('show'));
