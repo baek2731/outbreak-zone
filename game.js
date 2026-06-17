@@ -483,16 +483,39 @@ function drawSonarPreciseMarks() {
       ctx.moveTo(wx + ts - 10, wy + 10); ctx.lineTo(wx + 10, wy + ts - 10);
       ctx.stroke();
     } else {
-      // 좀비: 주황 눈 아이콘 (타원 + 동공)
+      // 좀비: 진영별 색상 + 알파벳
+      const isInfected = m.faction === 'INFECTED';
+      const mainCol  = isInfected ? '#bb44ff' : '#ff4444';
+      const bgCol    = isInfected ? 'rgba(140,0,220,0.12)' : 'rgba(255,50,50,0.12)';
+      const label    = isInfected ? 'I' : 'C';
       const cx = wx + ts / 2, cy = wy + ts / 2;
-      ctx.fillStyle = 'rgba(255,140,0,0.12)'; ctx.fillRect(wx, wy, ts, ts);
-      ctx.strokeStyle = '#ff8c00'; ctx.lineWidth = 2;
+
+      // 배경
+      ctx.fillStyle = bgCol; ctx.fillRect(wx, wy, ts, ts);
+
+      // 눈 타원
+      ctx.strokeStyle = mainCol; ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.ellipse(cx, cy, ts * 0.28, ts * 0.18, 0, 0, Math.PI * 2);
       ctx.stroke();
+
+      // 동공
       ctx.beginPath();
       ctx.arc(cx, cy, ts * 0.08, 0, Math.PI * 2);
-      ctx.fillStyle = '#ff8c00'; ctx.fill();
+      ctx.fillStyle = mainCol; ctx.fill();
+
+      // [C] / [I] 레이블
+      ctx.font = `bold ${ts * 0.18}px monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = mainCol;
+      ctx.fillText(`[${label}]`, cx, cy + ts * 0.38);
+
+      // INFECTED + fallenUnit 인식표
+      if (isInfected && m.fallenUnit !== null) {
+        ctx.font = `${ts * 0.13}px monospace`;
+        ctx.fillStyle = 'rgba(187,68,255,0.8)';
+        ctx.fillText(`U-${String(m.fallenUnit).padStart(2,'0')}`, cx, cy + ts * 0.55);
+      }
     }
 
     ctx.restore();
@@ -619,6 +642,54 @@ function drawMinigame(ts) {
     ctx.textBaseline = 'middle';
     ctx.fillText('< F 연타 >', wx, gy + gh / 2);
     ctx.restore();
+
+    // ── 치료제 선택지 오버레이 ──────────────────────────────
+    if (minigame.serumChoice) {
+      const z        = minigame.combatZombie;
+      const faction  = z ? z.faction : null;
+      const identified = z ? z.identified : false;
+
+      // 배경 박스 (더 넓게)
+      const cw = 160, ch = 62;
+      const cx2 = wx - cw / 2, cy2 = by - ch - 6;
+      ctx.save();
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle   = '#0d0d1a';
+      ctx.strokeStyle = '#bb44ff';
+      ctx.lineWidth   = 1.5;
+      roundRect(ctx, cx2, cy2, cw, ch, 5);
+      ctx.fill(); ctx.stroke();
+
+      // 식별 상태 텍스트
+      ctx.globalAlpha = 1;
+      ctx.textAlign   = 'center';
+      ctx.font        = `bold ${ts * 0.16}px monospace`;
+      let identLabel, identCol;
+      if (!identified) {
+        identLabel = '정체 불명'; identCol = '#aaaaaa';
+      } else if (faction === 'INFECTED') {
+        identLabel = '감염자 확인됨'; identCol = '#bb44ff';
+      } else {
+        identLabel = '크리쳐 확인됨'; identCol = '#ff4444';
+      }
+      ctx.fillStyle = identCol;
+      ctx.fillText(identLabel, wx, cy2 + 12);
+
+      // Y/N 버튼
+      ctx.font      = `bold ${ts * 0.17}px monospace`;
+      ctx.fillStyle = '#bb44ff';
+      ctx.fillText('[Y] 치료제 투여', wx, cy2 + 30);
+      ctx.fillStyle = '#888888';
+      ctx.fillText('[N] 계속 싸우기', wx, cy2 + 46);
+
+      // 남은 시간 바
+      const tr = minigame.serumChoiceTimer / CONFIG.serum.choiceTime;
+      ctx.fillStyle = '#bb44ff';
+      ctx.globalAlpha = 0.4;
+      ctx.fillRect(cx2 + 4, cy2 + ch - 4, (cw - 8) * tr, 3);
+
+      ctx.restore();
+    }
   }
 
 }
@@ -816,15 +887,15 @@ const player = {
   tx:1, ty:1, px:0, py:0, targetX:0, targetY:0,
   moving:false, facing:'down',
   dead:false,
-  itemsFound:     0,   // 현재 스테이지 수집량
-  totalCollected: 0,   // 런 전체 누적 수집량
-  exitCooldown:   0,   // 재탐사 선택 후 출구 무시 쿨타임 (초)
-  recordSaved:    false, // 이번 런 기록 저장 여부 (중복 방지)
-  lastFinalCollected: 0, // 마지막 저장된 최종 획득량
-  // 산소 / 감염 시스템
+  itemsFound:     0,
+  totalCollected: 0,
+  exitCooldown:   0,
+  recordSaved:    false,
+  lastFinalCollected: 0,
   oxygen:    100,
   infection:   0,
   stage:       0,
+  serum:       1,   // 치료제 보유량 (초기 1개)
 };
 
 const sonar = {
@@ -852,20 +923,23 @@ let devZombieFov   = false;
 // type: 'mine' (병원체 회수) | 'combat' (좀비 전투) | null
 const minigame = {
   active:       false,
-  type:         null,       // 'mine' | 'combat'
-  pattern:      [],         // 입력해야 할 방향 시퀀스 ['up','down','left','right',...]
-  current:      0,          // 현재 입력 인덱스
-  result:       null,       // null | 'success' | 'fail'
-  resultTimer:  0,          // 결과 표시 후 자동 종료 타이머
-  flashTimer:   0,          // 틀렸을 때 빨간 플래시
-  mineTileIdx:  -1,         // 회수 대상 병원체 타일 인덱스
-  combatZombie: null,       // 전투 대상 좀비 참조
-  interruptedMine: false,   // 회수 중 급습 여부
-  postCooldown: 0,          // 전투 종료 후 무적 쿨타임
-  // 전투 게이지 전용
-  combatGauge:  0,          // 현재 게이지 (0~100)
-  combatDrain:  0,          // 좀비가 초당 깎는 양 (상태 기반)
-  mashTimer:    0,          // 전투 제한 시간 잔여
+  type:         null,
+  pattern:      [],
+  current:      0,
+  result:       null,
+  resultTimer:  0,
+  flashTimer:   0,
+  mineTileIdx:  -1,
+  combatZombie: null,
+  interruptedMine: false,
+  postCooldown: 0,
+  combatGauge:  0,
+  combatDrain:  0,
+  mashTimer:    0,
+  // 치료제 선택지
+  serumChoice:      false,  // 선택지 표시 중 여부
+  serumChoiceTimer: 0,      // 선택지 남은 시간
+  serumChosen:      false,  // 이미 선택했는지 (중복 방지)
 };
 
 // 미니게임 config (game.js 내부 상수)
@@ -873,23 +947,24 @@ const MG = {
   dirs: ['up','down','left','right'],
   keyToDir: { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right' },
   // 병원체 회수
-  mineSuccessInfect:  3,    // 성공 시 감염도 증가
-  mineFailInfect:    15,    // 실패 시 감염도 증가
+  mineSuccessInfect:  3,
+  mineFailInfect:    15,
   // 좀비 전투
-  combatSuccessOxy: -10,   // 성공 시 산소 소모
-  combatFailOxy:    -25,   // 실패 시 산소 소모
-  combatFailInfect:   8,   // 실패 시 감염도 증가
+  combatSuccessOxy: -10,
+  combatFailOxy:    -25,
+  combatFailInfect:   8,
   // 기타
-  postCooldown:     3.0,   // 전투 후 무적 시간 (초)
-  combatStunTime:   2.0,   // 전투 승리 후 좀비 무력화 시간 (초)
-  resultShowTime:   1.0,   // 결과 표시 후 자동 닫힘 (초)
-  visionRadMine:    2,     // 회수 중 시야 반경
-  // 전투 게이지 힘싸움
-  combatGaugeMax:      100,  // 게이지 최대값
-  combatPlayerPower:    18,  // F키 1회당 게이지 증가량
-  combatZombieDrainByState: { CHASE: 12, SEARCH: 7, WANDER: 4 }, // 좀비가 초당 깎는 양
-  combatMashTime:      4.0,  // 전투 제한 시간 (초)
-  combatWinThreshold: 100,   // 이 값 이상이면 성공
+  postCooldown:     3.0,
+  combatStunTime:   4.0,   // 전투 승리 후 좀비 무력화 시간 (초)
+  resultShowTime:   1.0,
+  visionRadMine:    2,
+  // 전투 게이지
+  combatGaugeMax:      100,
+  combatPlayerPower:    18,
+  combatZombieDrainByState: { CHASE: 12, SEARCH: 7, WANDER: 4 },
+  combatMashTime:      4.0,
+  combatWinThreshold: 100,
+  combatChoiceGauge:   80,   // 치료제 선택지 등장 게이지 임계값 (%)
 };
 
 // ── 패트롤 강화 상태 ─────────────────────────────────────────────
@@ -1097,9 +1172,15 @@ window.addEventListener('keydown', e => {
   // ── PLAYING 상태 ──────────────────────────────────────────────
   // 미니게임 중 입력
   if (minigame.active && !minigame.result) {
-    const dir = MG.keyToDir[e.code];
-    if (dir) { minigameInput(dir); return; }
-    if (e.code !== 'KeyF') return; // F키만 통과
+    // 치료제 선택지 중 Y/N은 통과
+    if (minigame.serumChoice) {
+      if (e.code === 'KeyY' || e.code === 'KeyN') { /* 아래서 처리 */ }
+      else return;
+    } else {
+      const dir = MG.keyToDir[e.code];
+      if (dir) { minigameInput(dir); return; }
+      if (e.code !== 'KeyF') return; // F키만 통과
+    }
   }
 
   if (e.code === 'KeyE') {
@@ -1113,15 +1194,46 @@ window.addEventListener('keydown', e => {
   }
   if (e.code === 'KeyF') {
     if (minigame.active && minigame.type === 'combat' && !minigame.result) {
-      if (e.repeat) return;  // 꾹 누름 무시 — 실제 연타만 인정
+      if (e.repeat) return;
+      // 선택지 표시 중이면 F 연타 차단
+      if (minigame.serumChoice) return;
       minigame.combatGauge = Math.min(MG.combatGaugeMax,
         minigame.combatGauge + minigame.playerPower);
       SoundManager.play('combat_mash');
+      // 80% 도달 + 치료제 보유 + 아직 선택 안 했으면 선택지 표시
+      if (!minigame.serumChosen && player.serum > 0
+          && minigame.combatGauge >= MG.combatChoiceGauge
+          && minigame.combatGauge < MG.combatWinThreshold) {
+        minigame.serumChoice      = true;
+        minigame.serumChoiceTimer = CONFIG.serum.choiceTime;
+      }
       if (minigame.combatGauge >= MG.combatWinThreshold) endMinigame(true);
       return;
     }
     if (!e.repeat && !sonar.charging && !player.dead && !minigame.active) {
       sonar.charging = true; sonar.chargeTime = 0;
+    }
+    return;
+  }
+  // Y — 치료제 투여
+  if (e.code === 'KeyY') {
+    if (minigame.active && minigame.type === 'combat' && minigame.serumChoice && !minigame.result) {
+      useSerumInCombat();
+    }
+    return;
+  }
+  // N — 계속 싸우기 (선택지 닫기)
+  if (e.code === 'KeyN') {
+    if (minigame.active && minigame.type === 'combat' && minigame.serumChoice) {
+      minigame.serumChoice  = false;
+      minigame.serumChosen  = true; // 이번 전투에서 다시 뜨지 않음
+    }
+    return;
+  }
+  // D — 자가 치료제 사용 (전투 외)
+  if (e.code === 'KeyD') {
+    if (!minigame.active && !player.dead && GAME_STATE === 'PLAYING') {
+      useSerumSelf();
     }
     return;
   }
@@ -1321,6 +1433,72 @@ function makePattern(len) {
   return Array.from({ length: len }, () => MG.dirs[Math.floor(Math.random() * 4)]);
 }
 
+// ── 치료제 시스템 ────────────────────────────────────────────────
+function useSerumSelf() {
+  if (player.serum <= 0) return;
+  player.serum--;
+  const heal = CONFIG.serum.selfHealAmount;
+  player.infection = Math.max(0, player.infection - heal);
+  addPopup(`💉 감염 -${heal}%`, '#bb44ff', 0);
+  addPopup(`치료제 잔여 ${player.serum}개`, '#888888', 0.2);
+  updateSerumHUD();
+  devLog(`치료제 자가 사용 — 감염 -${heal}% (잔여 ${player.serum}개)`, 'good');
+}
+
+function useSerumInCombat() {
+  if (!minigame.combatZombie || player.serum <= 0) return;
+  player.serum--;
+  minigame.serumChoice = false;
+  minigame.serumChosen = true;
+
+  const z       = minigame.combatZombie;
+  const faction = z.faction;
+
+  if (faction === 'INFECTED') {
+    const dnaBonus = CONFIG.serum.infectedDnaBonus;
+    try {
+      const prevDna = parseInt(localStorage.getItem(DNA_KEY) || '0');
+      localStorage.setItem(DNA_KEY, String(prevDna + dnaBonus));
+    } catch(e) {}
+    const idx = zombies.indexOf(z);
+    if (idx !== -1) zombies.splice(idx, 1);
+    minigame.result      = 'success';
+    minigame.resultTimer = MG.resultShowTime;
+    minigame.postCooldown = MG.postCooldown;
+    addPopup('안식 성공 ✦', '#bb44ff', 0);
+    addPopup(`DNA +${dnaBonus}`, '#cc66ff', 0.2);
+    addNotice('그는 마침내 안식에 들었다', '#bb44ff', 3.0);
+    SoundManager.play('combat_win');
+    devLog(`치료제 투여 성공 — 감염자 안식 + DNA +${dnaBonus}`, 'good');
+  } else {
+    const oxyLoss = Math.abs(MG.combatFailOxy);
+    const infGain = MG.combatFailInfect;
+    applyOxygenDamage(oxyLoss);
+    player.infection = Math.min(100, player.infection + infGain);
+    const idx = zombies.indexOf(z);
+    if (idx !== -1) zombies.splice(idx, 1);
+    spawnExtraZombie(true); // 크리쳐 치료제 무효 → 새 크리쳐 강제 스폰
+    minigame.result      = 'fail';
+    minigame.resultTimer = MG.resultShowTime;
+    minigame.postCooldown = MG.postCooldown;
+    addPopup('치료제 무효', '#ff4444', 0);
+    addPopup(`산소 -${oxyLoss}%`, '#ff3333', 0.2);
+    addPopup(`오염 +${infGain}%`, '#ff3333', 0.4);
+    SoundManager.play('combat_lose');
+    triggerFlash('red');
+    devLog('치료제 투여 — 크리쳐 무효, 전투 실패 처리', 'danger');
+  }
+  updateSerumHUD();
+  if (player.infection >= 100 && !player.dead) showGameOver('infected');
+}
+
+function updateSerumHUD() {
+  const el = document.getElementById('hud-serum');
+  if (el) el.textContent = '💉 ' + player.serum;
+  const dBtn = document.getElementById('touch-d');
+  if (dBtn) dBtn.style.display = (_touchControlsActive && player.serum > 0 && !minigame.active) ? '' : 'none';
+}
+
 function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
   // 회수 중 급습이면 기존 mine 미니게임 강제 종료
   if (minigame.active && type === 'combat') {
@@ -1355,6 +1533,7 @@ function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
     combatGauge: 0, combatDrain: drain,
     playerPower: stagePlayerPower,
     mashTimer: MG.combatMashTime,
+    serumChoice: false, serumChoiceTimer: 0, serumChosen: false,
   });
   if (type === 'mine') revealAround(player.tx, player.ty, MG.visionRadMine);
   triggerFlash('red');
@@ -1404,10 +1583,12 @@ function endMinigame(success) {
         updateGuardHomePoints();
       }
       const fx = getUpgradeEffects();
-      if (!fx.noInfectOnSuccess) {
-        player.infection = Math.min(100, player.infection + MG.mineSuccessInfect);
+      const resistRate = Math.min(1, fx.infectResistRate || 0);
+      const infectAmt  = Math.floor(MG.mineSuccessInfect * (1 - resistRate));
+      if (infectAmt > 0) {
+        player.infection = Math.min(100, player.infection + infectAmt);
         addPopup('병원체 +1', '#00ff88', 0);
-        addPopup(`오염 +${MG.mineSuccessInfect}%`, '#ff8800', 0.18);
+        addPopup(`오염 +${infectAmt}%`, '#ff8800', 0.18);
       } else {
         addPopup('병원체 +1', '#00ff88', 0);
         addPopup('오염 저항', '#bb88ff', 0.18);
@@ -1417,7 +1598,7 @@ function endMinigame(success) {
       for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remain2++;
       if (remain2 === 0) addNotice('전 병원체 회수 완료 — 출구로', '#00ffcc', 3.5);
       revealAround(player.tx, player.ty, CONFIG.player.visionRad);
-      devLog(`병원체 회수 성공 — 감염 ${fx.noInfectOnSuccess ? '+0%(저항)' : '+'+MG.mineSuccessInfect+'%'}`, 'good');
+      devLog(`병원체 회수 성공 — 감염 +${infectAmt}% (저항 ${Math.round(resistRate*100)}%)`, 'good');
     } else {
       SoundManager.play('collect_fail');
       // 실패 — 감염 대폭 증가 + 소음
@@ -1474,6 +1655,17 @@ function updateMinigame(dt) {
 
   // 전투 게이지 힘싸움
   if (minigame.type === 'combat' && !minigame.result) {
+    // 치료제 선택지 표시 중 — 게이지 감소/타임아웃 정지
+    if (minigame.serumChoice) {
+      minigame.serumChoiceTimer -= dt;
+      if (minigame.serumChoiceTimer <= 0) {
+        // 시간 초과 → N 선택과 동일 (계속 싸우기)
+        minigame.serumChoice = false;
+        minigame.serumChosen = true;
+        if (window._updateTouchUI) window._updateTouchUI();
+      }
+      return;
+    }
     // 좀비가 게이지를 지속적으로 깎음
     minigame.combatGauge = Math.max(0, minigame.combatGauge - minigame.combatDrain * dt);
     // 제한 시간
@@ -1725,19 +1917,17 @@ function showEscaped(exitType) {
 // ── 런 기록 저장 ─────────────────────────────────────────────────
 // exitType: 'retire'(전부회수) | 'early'(조기탈출) | 'death'(사망) | 'infected'(좀비화)
 function saveRunRecord(exitType) {
-  // 중복 저장 방지 — 한 런에서 1회만
   if (player.recordSaved) return player.lastFinalCollected || 0;
   player.recordSaved = true;
 
   const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
   const elapsed  = Math.floor((Date.now() - stats.startTime) / 1000);
 
-  // 복귀 방식별 최종 회수량
   let finalCollected;
   if (exitType === 'death' || exitType === 'infected') {
-    finalCollected = Math.floor(player.totalCollected / 2); // 사망/좀비화 = 절반
+    finalCollected = Math.floor(player.totalCollected / 2);
   } else {
-    finalCollected = player.totalCollected; // 복귀/조기탈출 = 모은 것 전부
+    finalCollected = player.totalCollected;
   }
   player.lastFinalCollected = finalCollected;
 
@@ -1757,10 +1947,15 @@ function saveRunRecord(exitType) {
     const prev = JSON.parse(localStorage.getItem(RECORDS_KEY) || '[]');
     prev.push(record);
     localStorage.setItem(RECORDS_KEY, JSON.stringify(prev));
-    // 누적 DNA 총량도 별도 키로 관리
     const prevDna = parseInt(localStorage.getItem(DNA_KEY) || '0');
     localStorage.setItem(DNA_KEY, String(prevDna + finalCollected));
   } catch(e) { console.warn('기록 저장 실패', e); }
+
+  // 감염사 → 전사자 풀 등록 (다음 런에 감염자로 증원)
+  if (exitType === 'infected') {
+    addToFallenPool(getCurrentUnit(), stageIdx + 1);
+    devLog(`UNIT-${String(getCurrentUnit()).padStart(2,'0')} 전사자 풀 등록`, 'warn');
+  }
 
   const label = { retire:'복귀', early:'조기탈출', death:'사망', infected:'좀비화' }[exitType] || exitType;
   devLog(`기록 저장 [${label}] ${stageIdx+1}층 / 획득 ${finalCollected}개 (회수 ${player.totalCollected})`, 'good');
@@ -1776,6 +1971,38 @@ const UPGRADE_KEY  = 'outbreak_upgrades';
 const RECORDS_KEY  = 'outbreak_records';
 const DNA_KEY      = 'outbreak_total_dna';
 const UNIT_KEY     = 'outbreak_unit_number'; // 현재 요원 번호
+const FALLEN_KEY   = 'outbreak_fallen_pool'; // 전사자 풀 (감염자 증원용)
+
+// ── 전사자 풀 관리 ────────────────────────────────────────────────
+function loadFallenPool() {
+  try { return JSON.parse(localStorage.getItem(FALLEN_KEY) || '[]'); } catch(e) { return []; }
+}
+function saveFallenPool(pool) {
+  try { localStorage.setItem(FALLEN_KEY, JSON.stringify(pool)); } catch(e) {}
+}
+function addToFallenPool(unitNum, stage) {
+  const pool = loadFallenPool();
+  // 층당 최대 N명 제한
+  const stagePool = pool.filter(f => f.stage === stage);
+  if (stagePool.length >= CONFIG.fallen.maxPerStage) return;
+  // 중복 방지
+  if (pool.find(f => f.unit === unitNum)) return;
+  pool.push({ unit: unitNum, stage });
+  saveFallenPool(pool);
+}
+function clearFallenPool() {
+  try { localStorage.removeItem(FALLEN_KEY); } catch(e) {}
+}
+
+// [방법A - 튜토리얼 대체] UNIT-00 강제 등록
+// 튜토리얼 완성 후 이 함수를 튜토리얼 사망 처리로 교체할 것
+function ensureUnit00Fallen() {
+  const pool = loadFallenPool();
+  if (!pool.find(f => f.unit === 0)) {
+    pool.push({ unit: 0, stage: 1 }); // UNIT-00, 1층에서 감염사
+    saveFallenPool(pool);
+  }
+}
 
 function loadUpgrades() {
   try { return JSON.parse(localStorage.getItem(UPGRADE_KEY) || '{}'); }
@@ -1800,16 +2027,16 @@ function incrementUnit() {
 function getUpgradeEffects() {
   const ups = loadUpgrades();
   const fx = {
-    oxygenMaxBonus:      0,
-    oxygenDrainMult:     1.0,
-    infectThresholdBonus:0,
-    combatPowerBonus:    0,
-    postCooldownBonus:   0,
-    capsuleHealBonus:    0,
-    patternLenMinus:     0,
-    noiseRadiusMinus:    0,
-    sonarRadiusBonus:    0,
-    noInfectOnSuccess:   false,
+    oxygenMaxBonus:       0,
+    oxygenDrainMult:      1.0,
+    infectThresholdBonus: 0,
+    combatPowerBonus:     0,
+    postCooldownBonus:    0,
+    capsuleHealBonus:     0,
+    patternLenMinus:      0,
+    noiseRadiusMinus:     0,
+    sonarRadiusBonus:     0,
+    infectResistRate:     0,   // 회수 성공 시 감염 증가 감소율 (0~1)
   };
   const all = [...LOBBY.status, ...LOBBY.trait];
   for (const item of all) {
@@ -2030,7 +2257,6 @@ function applyUpgradeEffects() {
 }
 
 function startGame() {
-  // 기지/타이틀 화면 닫기
   ['title-screen','lobby-screen'].forEach(id =>
     document.getElementById(id)?.classList.remove('show'));
   incrementUnit();
@@ -2039,8 +2265,11 @@ function startGame() {
   player.infection      = 0;
   player.totalCollected = 0;
   player.recordSaved    = false;
+  player.serum          = CONFIG.serum.initialCount; // 치료제 초기화
   applyUpgradeEffects();
   player.oxygen = CONFIG.oxygen.max;
+  // [방법A] UNIT-00 강제 등록 — 튜토리얼 완성 후 이 줄 제거
+  ensureUnit00Fallen();
   SoundManager.crossfadeBGM('bgm_stage12');
   init();
 }
@@ -2112,7 +2341,7 @@ function updateGuardHomePoints() {
   }
 }
 
-function spawnExtraZombie() {
+function spawnExtraZombie(forceCreature = false) {
   const { tiles, width, height } = MAP;
   const ts   = CONFIG.map.tileSize;
   const minD = CONFIG.zombie.spawnDist;
@@ -2124,16 +2353,32 @@ function spawnExtraZombie() {
   }
   if (candidates.length === 0) return;
   const pick = candidates[Math.floor(Math.random() * candidates.length)];
-  const ez = makeZombieObj(pick[0], pick[1], ts, 'BASIC');
+
+  // forceCreature = true면 무조건 크리쳐 (치료제 크리쳐 사용 시)
+  let faction = 'CREATURE';
+  let fallenUnit = null;
+  if (!forceCreature) {
+    const pool      = loadFallenPool();
+    const stageIdx  = Math.min(player.stage, CONFIG.stages.length - 1);
+    const stagePool = pool.filter(f => f.stage <= stageIdx + 1);
+    if (stagePool.length > 0) {
+      const pick2 = stagePool[Math.floor(Math.random() * stagePool.length)];
+      faction     = 'INFECTED';
+      fallenUnit  = pick2.unit;
+    }
+  }
+
+  const ez = makeZombieObj(pick[0], pick[1], ts, 'BASIC', faction);
   ez.state       = 'SEARCH';
   ez.targetWx    = player.px + ts / 2;
   ez.targetWy    = player.py + ts / 2;
   ez.hasTarget   = true;
   ez.wanderTimer = 0;
   ez.memoryTimer = CONFIG.zombie.chaseMemory;
+  if (fallenUnit !== null) ez.fallenUnit = fallenUnit;
   zombies.push(ez);
   SoundManager.play('zombie_spawn');
-  devLog(`증원 좀비 스폰 @ (${pick[0]},${pick[1]}) — 총 ${zombies.length}마리`, 'warn');
+  devLog(`증원 좀비 스폰 [${faction}${fallenUnit !== null ? ' UNIT-'+String(fallenUnit).padStart(2,'0') : ''}] @ (${pick[0]},${pick[1]})`, 'warn');
 }
 
 // ── 소나 ─────────────────────────────────────────────────────────
@@ -2217,14 +2462,22 @@ function fireSonar(isPrecise) {
         newMarks.push({ tx:nx, ty:ny, dist, kind:'mine', lit:false, alpha:0, timer:cfg.pingDuration * 1.5 });
       }
     }
-    // 정밀 소나: 좀비 위치 눈 표시
+    // 정밀 소나: 좀비 위치 눈 표시 + 진영 식별
     for (const z of zombies) {
       const zdx = z.tx - player.tx, zdy = z.ty - player.ty;
       if (Math.hypot(zdx, zdy) > radius + 0.5) continue;
       const dist = Math.hypot(zdx, zdy) * ts;
       const existing = newMarks.find(m => m.tx === z.tx && m.ty === z.ty);
+      z.identified = true; // 정밀 소나로만 식별
       if (!existing)
-        newMarks.push({ tx:z.tx, ty:z.ty, dist, kind:'zombie', lit:false, alpha:0, timer:cfg.pingDuration * 1.5 });
+        newMarks.push({
+          tx: z.tx, ty: z.ty, dist,
+          kind: 'zombie',
+          faction: z.faction,
+          fallenUnit: z.fallenUnit ?? null,
+          lit: false, alpha: 0,
+          timer: cfg.pingDuration * 1.5
+        });
     }
   }
 
@@ -2283,19 +2536,20 @@ function updateSonar(dt) {
 }
 
 // ── 좀비 ─────────────────────────────────────────────────────────
-function makeZombieObj(tx, ty, ts, type) {
+function makeZombieObj(tx, ty, ts, type, faction) {
   return {
     tx, ty,
     px: tx * ts, py: ty * ts,
     type: type || 'BASIC',
+    faction: faction || 'CREATURE',  // 'CREATURE' | 'INFECTED'
+    identified: false,               // 정밀 소나로 식별됐는지
     state: 'WANDER',
     facingAngle: Math.random() * Math.PI * 2,
     targetWx: 0, targetWy: 0,
     hasTarget: false,
     wanderTimer: Math.random() * 2,
     memoryTimer: 0,
-    stunTimer:   0,   // 전투 승리 후 무력화 남은 시간 (초)
-    // GUARD 전용: 순찰 홈 타일
+    stunTimer:   0,
     homeTx: tx, homeTy: ty,
   };
 }
@@ -3001,6 +3255,8 @@ function updateHUD() {
   document.getElementById('hud-pos').textContent     = `${player.tx},${player.ty}`;
   document.getElementById('hud-basic').textContent   = sonar.charging ? 'CHARGE' : 'READY';
   document.getElementById('hud-precise').textContent = '📡 ' + sonar.precise;
+  const serumEl = document.getElementById('hud-serum');
+  if (serumEl) serumEl.textContent = '💉 ' + player.serum;
 
   // 산소 게이지
   const oxyFill = document.getElementById('hud-oxygen-fill');
@@ -3120,6 +3376,18 @@ document.getElementById('d-clearinf').addEventListener('click', () => {
 document.getElementById('d-addprecise').addEventListener('click', () => { sonar.precise++; });
 document.getElementById('d-additem').addEventListener('click', () => {
   player.itemsFound++;
+});
+document.getElementById('d-add-serum').addEventListener('click', () => {
+  player.serum++;
+  updateSerumHUD();
+  devLog(`DEV: 치료제 +1 (현재 ${player.serum}개)`, 'good');
+});
+document.getElementById('d-add-dna').addEventListener('click', () => {
+  try {
+    const prev = parseInt(localStorage.getItem(DNA_KEY) || '0');
+    localStorage.setItem(DNA_KEY, String(prev + 20));
+  } catch(e) {}
+  devLog('DEV: DNA +20', 'good');
 });
 document.getElementById('d-collect-all').addEventListener('click', () => {
   if (!MAP || GAME_STATE !== 'PLAYING') return;
@@ -3403,15 +3671,64 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
     btn.addEventListener('touchcancel',end,   { passive: false });
   });
 
-  // ── 미니게임 진입/종료 시 UI 전환 ────────────────────────────
+  // ── 미니게임 진입/종료 / 선택지 UI 전환 ─────────────────────
   window._updateTouchUI = function() {
     if (!joystickWrap || !minigameDpad) return;
-    const isMinigame = minigame.active && minigame.type === 'mine';
-    joystickWrap.style.visibility  = isMinigame ? 'hidden' : 'visible';
+    const isMinigame   = minigame.active && minigame.type === 'mine';
+    const isCombat     = minigame.active && minigame.type === 'combat';
+    const isChoice     = isCombat && minigame.serumChoice;
+
+    // 조이스틱 / D-PAD 전환
+    joystickWrap.style.display  = isMinigame ? 'none' : '';
     minigameDpad.classList.toggle('show', isMinigame);
+
+    // D 버튼 — 치료제 보유 + 전투/미니게임 외
+    const dBtn = document.getElementById('touch-d');
+    if (dBtn) dBtn.style.display = (player.serum > 0 && !minigame.active) ? '' : 'none';
+
+    // 전투 선택지 Y/N 버튼
+    const choiceEl = document.getElementById('touch-serum-choice');
+    const normalBtns = document.getElementById('action-btns').querySelectorAll(':scope > div:not(#touch-serum-choice)');
+    if (choiceEl) {
+      choiceEl.style.display = isChoice ? 'flex' : 'none';
+      normalBtns.forEach(el => { el.style.display = isChoice ? 'none' : ''; });
+    }
   };
 
-  // ── 액션 버튼 ─────────────────────────────────────────────────
+  // ── D 버튼 (자가 치료제) ──────────────────────────────────────
+  const dBtn = document.getElementById('touch-d');
+  if (dBtn) {
+    dBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault(); dBtn.classList.add('pressed'); fireKey('KeyD', 'keydown');
+    }, { passive: false });
+    dBtn.addEventListener('touchend', (e) => {
+      e.preventDefault(); dBtn.classList.remove('pressed');
+    }, { passive: false });
+  }
+
+  // ── Y/N 버튼 (전투 치료제 선택지) ────────────────────────────
+  const yBtn = document.getElementById('touch-y');
+  const nBtn = document.getElementById('touch-n');
+  if (yBtn) {
+    yBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault(); yBtn.classList.add('pressed'); fireKey('KeyY', 'keydown');
+    }, { passive: false });
+    yBtn.addEventListener('touchend', (e) => {
+      e.preventDefault(); yBtn.classList.remove('pressed');
+      if (window._updateTouchUI) window._updateTouchUI();
+    }, { passive: false });
+  }
+  if (nBtn) {
+    nBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault(); nBtn.classList.add('pressed'); fireKey('KeyN', 'keydown');
+    }, { passive: false });
+    nBtn.addEventListener('touchend', (e) => {
+      e.preventDefault(); nBtn.classList.remove('pressed');
+      if (window._updateTouchUI) window._updateTouchUI();
+    }, { passive: false });
+  }
+
+  // ── 액션 버튼 (F/E/G) ─────────────────────────────────────────
   Object.entries(ACTION_MAP).forEach(([id, code]) => {
     const btn = document.getElementById(id);
     if (!btn) return;
@@ -3473,7 +3790,9 @@ document.getElementById('d-records').addEventListener('click', () => {
 document.getElementById('d-clearrecords').addEventListener('click', () => {
   localStorage.removeItem(RECORDS_KEY);
   localStorage.removeItem(DNA_KEY);
-  devLog('수집 기록 전체 초기화됨', 'warn');
+  localStorage.removeItem(UNIT_KEY);
+  localStorage.removeItem(FALLEN_KEY);
+  devLog('수집 기록 + 유닛번호 + 전사자 풀 전체 초기화됨', 'warn');
 });
 
 // DEV — 기지 UI 폰트 크기 조절
