@@ -913,12 +913,16 @@ let W_px, H_px;
 
 function resize() {
   const area = document.getElementById('game-area');
-  W_px = canvas.width  = area.clientWidth;
-  H_px = canvas.height = area.clientHeight;
+  const w = area.clientWidth  || window.innerWidth;
+  const h = area.clientHeight || window.innerHeight;
+  W_px = canvas.width  = w;
+  H_px = canvas.height = h;
   mmCanvas.width = mmCanvas.height = CONFIG.minimap.size;
-  vignetteGradient = ctx.createRadialGradient(W_px/2, H_px/2, H_px*0.18, W_px/2, H_px/2, H_px*0.78);
-  vignetteGradient.addColorStop(0, 'rgba(0,0,0,0)');
-  vignetteGradient.addColorStop(1, 'rgba(0,0,0,0.72)');
+  if (W_px > 0 && H_px > 0) {
+    vignetteGradient = ctx.createRadialGradient(W_px/2, H_px/2, H_px*0.18, W_px/2, H_px/2, H_px*0.78);
+    vignetteGradient.addColorStop(0, 'rgba(0,0,0,0)');
+    vignetteGradient.addColorStop(1, 'rgba(0,0,0,0.72)');
+  }
 }
 window.addEventListener('resize', resize);
 
@@ -2655,6 +2659,7 @@ function updateOxygenInfection(dt) {
 
 // ── 렌더링 ───────────────────────────────────────────────────────
 function render() {
+  if (!MAP || !MAP.width || !W_px || !H_px) return;
   const ts = CONFIG.map.tileSize;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W_px, H_px);
   ctx.save();
@@ -3175,7 +3180,7 @@ function loop(ts) {
   const dt = Math.min((ts - lastTs) / 1000, 0.1); lastTs = ts; lastDt = dt;
   frameCount++; fpsTimer += dt;
   if (fpsTimer >= 1) { fps = frameCount; frameCount = 0; fpsTimer = 0; }
-  if (GAME_STATE !== 'TITLE') {
+  if (GAME_STATE === 'PLAYING' || GAME_STATE === 'ESCAPED' || GAME_STATE === 'GAMEOVER') {
     handleInput(dt); updateSonar(dt); update(dt);
     render(); renderMinimap(); updateHUD(); updateDevInfo();
   }
@@ -3189,6 +3194,8 @@ player.stage          = 0;
 player.totalCollected = 0;
 player.recordSaved    = false;
 resize();
+// CSS 완전 로드 후 resize 재호출 (GitHub Pages 타이밍 이슈 방지)
+window.addEventListener('load', () => { resize(); });
 // 타이틀 화면으로 시작 (init은 작전 개시 후)
 showTitle();
 
