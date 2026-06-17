@@ -34,8 +34,13 @@ body {
 #main { display:flex; flex:1; overflow:hidden; }
 #game-area { flex:1; position:relative; overflow:hidden; }
 canvas#canvas { display:block; }
+/* ── PC 기본 ── */
 #minimap-wrap { position:absolute; bottom:10px; right:10px; border:1px solid rgba(0,255,136,0.2); }
 canvas#minimap { display:block; image-rendering:pixelated; }
+
+/* ── 모바일 전용 — JS에서 #game-area에 .mobile 클래스 토글 ── */
+#game-area.mobile #minimap-wrap { bottom:auto; top:10px; right:10px; }
+#game-area.mobile #vol-panel    { display:none; }
 #flash {
   position:absolute; inset:0; pointer-events:none; opacity:0;
   background:rgba(255,50,50,0.45); transition:opacity 0.08s;

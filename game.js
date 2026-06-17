@@ -3256,14 +3256,26 @@ const _isTouchDevice = ('ontouchstart' in window || navigator.maxTouchPoints > 0
 
 let _touchControlsActive = _isTouchDevice;
 
+// ── 모바일 / PC 레이아웃 분리 ──────────────────────────────────────
 function applyTouchControls() {
-  const el = document.getElementById('touch-controls');
+  const gameArea   = document.getElementById('game-area');
+  const touchEl    = document.getElementById('touch-controls');
+  const logPanel   = document.getElementById('log-panel');
+
   if (_touchControlsActive) {
-    el.classList.add('show');
-    document.getElementById('log-panel').classList.add('hidden');
+    // ── 모바일 전용 ──────────────────────────────────────
+    gameArea.classList.add('mobile');        // CSS: 미니맵 우상단, 볼륨 숨김
+    touchEl.classList.add('show');           // 터치 컨트롤 표시
+    logPanel.classList.add('hidden');        // 이벤트 로그 숨김
+    CONFIG.camera.smooth = 0.18;             // 카메라 스무스 강화 (플레이어 중앙 고정감)
   } else {
-    el.classList.remove('show');
+    // ── PC 전용 ──────────────────────────────────────────
+    gameArea.classList.remove('mobile');     // CSS: 미니맵 우하단, 볼륨 표시
+    touchEl.classList.remove('show');        // 터치 컨트롤 숨김
+    CONFIG.camera.smooth = 0.12;             // 카메라 스무스 기본값
+    // 로그 패널은 PC에서 상태 유지 (숨김 토글 별도)
   }
+
   document.getElementById('d-touch-toggle').textContent =
     '📱 터치 조작 ' + (_touchControlsActive ? 'ON' : 'OFF');
 }
