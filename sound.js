@@ -58,6 +58,7 @@ const SoundManager = (() => {
     all_clear:         0.85,
     upgrade_buy:       0.55,
     collect_key:       0.70,
+    zombie_chase:      0.85,  // 볼륨 기준값 (1~3 공통)
   };
 
   // 개별 BGM 볼륨
@@ -136,7 +137,12 @@ const SoundManager = (() => {
   }
 
   function _loadAll() {
-    Object.keys(SFX_VOL).forEach(id => _loadSFX(id));
+    Object.keys(SFX_VOL).forEach(id => {
+      if (id === 'zombie_chase') return; // 아래서 별도 처리
+      _loadSFX(id);
+    });
+    // zombie_chase 1~3 별도 로드
+    [1, 2, 3].forEach(n => _loadSFX(`zombie_chase_${n}`));
     Object.keys(BGM_VOL).forEach(id => _loadBGMFile(id));
   }
 
@@ -221,6 +227,34 @@ const SoundManager = (() => {
     const gainNode = _loopGains[id];
     gainNode.gain.cancelScheduledValues(_ctx.currentTime);
     gainNode.gain.setValueAtTime(Math.max(0, vol), _ctx.currentTime);
+  }
+
+  // zombie_chase 1~3 중 랜덤 재생
+  function playZombieChase() {
+    if (!_ensureCtx()) return;
+    const n   = Math.floor(Math.random() * 3) + 1;
+    const id  = `zombie_chase_${n}`;
+    const buf = _sfxBuffers[id];
+    if (!buf) { console.warn(`[Sound] 버퍼 없음 [${id}]`); return; }
+
+    const vol = SFX_VOL['zombie_chase'] ?? 0.85;
+    const t   = _ctx.currentTime + 0.01;
+
+    // 단일 채널 — 이전 chase 소리 정지 후 새로
+    if (_soloSources['zombie_chase']) {
+      try {
+        _soloSources['zombie_chase'].gain.cancelScheduledValues(_ctx.currentTime);
+        _soloSources['zombie_chase'].gain.setValueAtTime(0, _ctx.currentTime);
+      } catch(e) {}
+    }
+    const gainNode = _ctx.createGain();
+    gainNode.gain.setValueAtTime(vol, t);
+    gainNode.connect(_sfxGain);
+    const source = _ctx.createBufferSource();
+    source.buffer = buf;
+    source.connect(gainNode);
+    source.start(t);
+    _soloSources['zombie_chase'] = gainNode;
   }
 
   // 방향별 피치로 재생 (병원체 채집 키 입력)
@@ -368,6 +402,7 @@ const SoundManager = (() => {
     init,
     play,
     playKeyed,
+    playZombieChase,
     startLoop,
     stopLoop,
     setLoopVolume,

@@ -1004,7 +1004,7 @@ function hasLOS(x0, y0, x1, y1) {
 const KEYS = {};
 const GAME_KEYS = new Set([
   'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
-  'KeyF','KeyG','KeyE','Space',
+  'KeyF','KeyG','KeyE','Space','Enter',
 ]);
 
 // ── 게임 상태 머신 ──────────────────────────────────────────────
@@ -1059,8 +1059,13 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  // ── GAMEOVER 상태: 키 차단 ────────────────────────────────────
-  if (GAME_STATE === 'GAMEOVER') return;
+  // ── GAMEOVER 상태: Space → 기지 복귀 ────────────────────────
+  if (GAME_STATE === 'GAMEOVER') {
+    if (e.code === 'Space') {
+      document.getElementById('go-base-btn').click();
+    }
+    return;
+  }
 
   // ── PLAYING 상태 ──────────────────────────────────────────────
   // 미니게임 중 입력
@@ -2288,12 +2293,15 @@ function zombieSense(z, c, zcx, zcy, distTiles) {
   const inProximity = distTiles <= 0.7;
 
   if (inSight || inProximity) {
-    // 플레이어 직접 인지 → CHASE, 목표 = 플레이어 실시간 위치
+    // 플레이어 직접 인지 → CHASE
+    const wasChase = z.state === 'CHASE';
     z.state = 'CHASE';
     z.targetWx = c.pcx;
     z.targetWy = c.pcy;
     z.hasTarget = true;
     z.memoryTimer = c.chaseMemory;
+    // 새로 CHASE 진입 시만 효과음
+    if (!wasChase) SoundManager.playZombieChase();
     return;
   }
 
