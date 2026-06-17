@@ -172,6 +172,21 @@ function drawZombie(z, ts) {
     ctx.globalAlpha = 1;
   }
 
+  // 스턴 표시 — 번개 아이콘이 서서히 사라짐
+  if (z.stunTimer > 0) {
+    const ratio = z.stunTimer / MG.combatStunTime;  // 1→0
+    // 노란 오버레이 (점점 희미해짐)
+    ctx.globalAlpha = 0.35 * ratio;
+    ctx.beginPath(); ctx.arc(cx, cy, r * 1.1, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffee44'; ctx.fill();
+    // ⚡ 아이콘 (페이드아웃)
+    ctx.globalAlpha = ratio;
+    ctx.font = `${ts * 0.3}px monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('⚡', cx, cy - r * 1.6);
+    ctx.globalAlpha = 1;
+  }
+
   ctx.restore();
 }
 
@@ -866,6 +881,7 @@ const MG = {
   combatFailInfect:   8,   // 실패 시 감염도 증가
   // 기타
   postCooldown:     3.0,   // 전투 후 무적 시간 (초)
+  combatStunTime:   2.0,   // 전투 승리 후 좀비 무력화 시간 (초)
   resultShowTime:   1.0,   // 결과 표시 후 자동 닫힘 (초)
   visionRadMine:    2,     // 회수 중 시야 반경
   // 전투 게이지 힘싸움
@@ -1424,6 +1440,12 @@ function endMinigame(success) {
       if (interrupted) player.infection = Math.min(100, player.infection + 5);
       addPopup(`산소 -${oxyLoss}%`, '#ffaa00', 0);
       if (interrupted) addPopup('오염 +5%', '#ff8800', 0.18);
+      // 전투 대상 좀비 무력화
+      if (minigame.combatZombie) {
+        minigame.combatZombie.stunTimer = MG.combatStunTime;
+        minigame.combatZombie.state     = 'WANDER';
+        minigame.combatZombie.hasTarget = false;
+      }
       devLog(`전투 성공 — 산소 -${oxyLoss}%${interrupted ? ' (급습 패널티)' : ''}`, 'warn');
     } else {
       SoundManager.play('combat_lose');
@@ -2272,6 +2294,7 @@ function makeZombieObj(tx, ty, ts, type) {
     hasTarget: false,
     wanderTimer: Math.random() * 2,
     memoryTimer: 0,
+    stunTimer:   0,   // 전투 승리 후 무력화 남은 시간 (초)
     // GUARD 전용: 순찰 홈 타일
     homeTx: tx, homeTy: ty,
   };
@@ -2344,6 +2367,12 @@ function updateZombies(dt) {
 
 
   for (const z of zombies) {
+    // 스턴 처리 — 이동/감지/접촉 전부 스킵
+    if (z.stunTimer > 0) {
+      z.stunTimer = Math.max(0, z.stunTimer - dt);
+      continue;
+    }
+
     // 타입별 파라미터 적용
     const zt  = CONFIG.zombieTypes[z.type] || CONFIG.zombieTypes.BASIC;
     const spd = (ts / CONFIG.player.moveDelay) * zt.speed * patrol.speedMult * dt;
@@ -2706,6 +2735,7 @@ function circleWallCollide(cx, cy, r, ts, width, height, tiles) {
 
 // ── ③ 접촉 → 전투 미니게임 진입 ───────────────────────────────
 function zombieContact(z, c, zcx, zcy) {
+  if (z.stunTimer > 0) return;                     // 스턴 중인 좀비는 접촉 없음
   if (minigame.postCooldown > 0) return;          // 무적 쿨타임 중
   if (minigame.active && minigame.type === 'combat') return; // 전투 중 중복 차단
   // 출구 처리 중이거나 탈출/게임오버 상태면 전투 차단

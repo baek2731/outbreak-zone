@@ -253,9 +253,11 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 /* 방향키 패드 — 미니게임 전용 */
 #minigame-dpad {
   display:none;
-  grid-template-columns: repeat(3, 56px);
-  grid-template-rows: repeat(3, 56px);
-  gap:4px; pointer-events:all;
+  width:130px; height:130px;
+  grid-template-columns: repeat(3, 40px);
+  grid-template-rows: repeat(3, 40px);
+  gap:5px; pointer-events:all;
+  align-content:center; justify-content:center;
 }
 #minigame-dpad.show { display:grid; }
 .dpad-btn {
