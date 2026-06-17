@@ -482,6 +482,7 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
     </div>
     <div class="hud-item"><div class="hud-label">탐지기[F]</div><div class="hud-val" id="hud-basic">READY</div></div>
     <div class="hud-item"><div class="hud-label">정밀탐지[G]</div><div class="hud-val" id="hud-precise">📡 2</div></div>
+    <div class="hud-item"><div class="hud-label">치료제[D]</div><div class="hud-val" id="hud-serum" style="color:#bb44ff;">💉 1</div></div>
     <div class="hud-item"><div class="hud-label">☣ 병원체</div><div class="hud-val" id="hud-mines" style="color:#ff6644;">0/0</div></div>
     <div class="hud-item"><div class="hud-label">캡슐</div><div class="hud-val" id="hud-items">0/3</div></div>
     <div class="hud-item"><div class="hud-label">EXPLORED</div><div class="hud-val" id="hud-explored">0%</div></div>
@@ -616,10 +617,27 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
             <span class="btn-label">회수</span>
           </button>
         </div>
-        <button class="action-btn" id="touch-f" style="width:72px;border-radius:10px;">
-          <span class="btn-key">F</span>
-          <span class="btn-label">소나</span>
-        </button>
+        <div style="display:flex;gap:8px;">
+          <button class="action-btn" id="touch-d" style="display:none;background:rgba(120,0,180,0.4);border-color:rgba(187,68,255,0.5);">
+            <span class="btn-key">D</span>
+            <span class="btn-label">치료제</span>
+          </button>
+          <button class="action-btn" id="touch-f" style="border-radius:10px;">
+            <span class="btn-key">F</span>
+            <span class="btn-label">소나</span>
+          </button>
+        </div>
+        <!-- 전투 선택지 버튼 (평소 숨김) -->
+        <div id="touch-serum-choice" style="display:none;flex-direction:column;gap:6px;align-items:flex-end;">
+          <button class="action-btn" id="touch-y" style="width:80px;border-radius:8px;background:rgba(120,0,180,0.5);border-color:#bb44ff;">
+            <span class="btn-key" style="font-size:0.7rem;">Y</span>
+            <span class="btn-label">치료제 투여</span>
+          </button>
+          <button class="action-btn" id="touch-n" style="width:80px;border-radius:8px;">
+            <span class="btn-key" style="font-size:0.7rem;">N</span>
+            <span class="btn-label">계속 싸우기</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -745,6 +763,8 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
       <button class="dev-btn" id="d-addprecise">📡 정밀 소나 +1</button>
       <button class="dev-btn" id="d-additem">🔑 아이템 +1 획득</button>
       <button class="dev-btn" id="d-collect-all">☣ 전체 병원체 회수</button>
+      <button class="dev-btn" id="d-add-serum">💉 치료제 +1</button>
+      <button class="dev-btn" id="d-add-dna">🧬 DNA +20</button>
       <button class="dev-btn" id="d-invincible">🛡 무적 모드 OFF</button>
       <button class="dev-btn" id="d-revealall">👁 전체 밝히기 OFF</button>
       <button class="dev-btn" id="d-killzombies">☠ 좀비 전체 제거</button>
