@@ -45,6 +45,83 @@ canvas#minimap { display:block; image-rendering:pixelated; }
   box-shadow:inset 0 0 60px rgba(0,255,136,0.5);
   transition:opacity 0.06s;
 }
+/* 감염 보라 오버레이 */
+#infect-flash {
+  position:absolute; inset:0; pointer-events:none; opacity:0;
+  background:rgba(120,0,200,0.45);
+  transition:opacity 0.6s ease;
+  z-index:19;
+}
+
+/* ── 엔딩 화면 ── */
+#ending-screen {
+  display:none; position:absolute; inset:0;
+  background:#000; flex-direction:column;
+  align-items:center; justify-content:center;
+  z-index:25; overflow:hidden;
+}
+#ending-screen.show { display:flex; }
+
+/* 터미널 텍스트 */
+#terminal-box {
+  font-family:'Courier New', monospace; font-size:0.72rem;
+  color:#00cc66; text-align:left; line-height:2.0;
+  max-width:420px; width:90%;
+  border:1px solid #0a3a1a; padding:20px 24px;
+  background:rgba(0,10,0,0.85);
+  white-space:pre-wrap;
+}
+#terminal-cursor {
+  display:inline-block; width:8px; height:1em;
+  background:#00cc66; animation:blink 0.8s step-end infinite;
+  vertical-align:text-bottom; margin-left:2px;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* 빨리감기 힌트 */
+#terminal-hint {
+  font-size:0.55rem; color:#2a5a3a; margin-top:8px;
+  letter-spacing:0.1em;
+}
+
+/* 눈 */
+#origin-eyes {
+  display:none; position:absolute; inset:0;
+  align-items:center; justify-content:center;
+  gap:48px; background:#000;
+  z-index:26;
+}
+#origin-eyes.show { display:flex; }
+.origin-eye {
+  width:10px; height:10px; border-radius:50%;
+  background:#ff1111;
+  box-shadow:0 0 12px 4px #ff1111, 0 0 30px 8px #880000;
+  opacity:0; transition:opacity 1.2s ease;
+}
+.origin-eye.lit { opacity:1; }
+
+/* TO BE CONTINUED 패널 */
+#tbc-screen {
+  display:none; position:absolute; inset:0;
+  flex-direction:column; align-items:center; justify-content:center;
+  gap:18px; background:rgba(0,0,0,0.95); z-index:26;
+}
+#tbc-screen.show { display:flex; }
+#tbc-title {
+  font-size:1.2rem; letter-spacing:0.4em; color:#aaaaaa;
+  text-shadow:0 0 18px #555;
+}
+#tbc-sub {
+  font-size:0.62rem; color:#444; letter-spacing:0.2em;
+}
+#tbc-stats {
+  font-size:0.65rem; color:#333; text-align:center;
+  line-height:2.2; border-top:1px solid #1a1a1a;
+  padding-top:12px; margin-top:4px;
+}
+#tbc-stats span { color:#555; }
+.ov-title.purple { color:#bb44ff; text-shadow:0 0 20px #8800cc; }
+#gameover.infected { background:rgba(10,0,20,0.94); }
 
 /* ── 인게임 볼륨 패널 ── */
 #vol-panel {
@@ -129,7 +206,15 @@ canvas#minimap { display:block; image-rendering:pixelated; }
   width: 280px; flex-shrink:0;
   background:#0a0a0a; border-left:1px solid #1a1a1a;
   display:flex; flex-direction:column; overflow:hidden;
+  transition: width 0.15s;
 }
+#log-panel.hidden { width: 0; overflow: hidden; }
+#log-toggle-btn {
+  background:none; border:1px solid #333; color:#555;
+  font-family:monospace; font-size:0.7rem; padding:3px 8px;
+  cursor:pointer; border-radius:2px;
+}
+#log-toggle-btn:hover { border-color:#ff8800; color:#ff8800; }
 #log-header {
   display:flex; justify-content:space-between; align-items:center;
   padding:6px 10px; border-bottom:1px solid #1a1a1a; flex-shrink:0;
@@ -153,7 +238,65 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 .log-entry.danger { color:#ff3333; }
 .log-entry.good   { color:#00ff88; }
 
-/* ── 기지 화면 ── */
+/* ── 모바일 터치 조작 ── */
+#touch-controls {
+  display:none;
+  position:absolute; bottom:0; left:0; right:0;
+  height:160px; pointer-events:none;
+  z-index:30; padding:10px 16px;
+  box-sizing:border-box;
+  justify-content:space-between;
+  align-items:flex-end;
+}
+#touch-controls.show { display:flex; }
+
+/* 방향키 패드 */
+#dpad {
+  display:grid;
+  grid-template-columns: repeat(3, 52px);
+  grid-template-rows: repeat(3, 52px);
+  gap:4px; pointer-events:all;
+}
+.dpad-btn {
+  background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.12);
+  border-radius:6px; color:rgba(255,255,255,0.6);
+  font-size:1.2rem; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  user-select:none; -webkit-user-select:none;
+  touch-action:none;
+  transition:background 0.06s;
+}
+.dpad-btn:active, .dpad-btn.pressed {
+  background:rgba(0,255,136,0.18);
+  border-color:rgba(0,255,136,0.4);
+  color:#00ff88;
+}
+.dpad-empty { visibility:hidden; }
+
+/* 액션 버튼 */
+#action-btns {
+  display:flex; flex-direction:column;
+  gap:8px; pointer-events:all;
+  align-items:flex-end;
+}
+.action-btn {
+  width:56px; height:56px;
+  background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.12);
+  border-radius:50%; color:rgba(255,255,255,0.7);
+  font-family:monospace; font-size:0.62rem; font-weight:bold;
+  cursor:pointer; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:1px;
+  user-select:none; -webkit-user-select:none;
+  touch-action:none; letter-spacing:0.05em;
+  transition:background 0.06s;
+}
+.action-btn:active, .action-btn.pressed {
+  background:rgba(0,255,136,0.18);
+  border-color:rgba(0,255,136,0.4);
+  color:#00ff88;
+}
+.action-btn .btn-key { font-size:0.8rem; }
+.action-btn .btn-label { font-size:0.48rem; color:rgba(255,255,255,0.4); }
 :root { --lb-base: 13px; }
 #lobby-screen {
   display:none; position:absolute; inset:0;
@@ -364,8 +507,66 @@ canvas#minimap { display:block; image-rendering:pixelated; }
     <div id="minimap-wrap"><canvas id="minimap"></canvas></div>
     <div id="flash"></div>
     <div id="item-flash"></div>
+    <div id="infect-flash"></div>
+
+    <!-- 엔딩 시퀀스 — 터미널 + 눈 -->
+    <div id="ending-screen">
+      <div id="terminal-box"><span id="terminal-text"></span><span id="terminal-cursor"></span></div>
+      <div id="terminal-hint">[ Space / 클릭 — 빨리감기 ]</div>
+    </div>
+
+    <!-- ORIGIN 눈 -->
+    <div id="origin-eyes">
+      <div class="origin-eye" id="eye-left"></div>
+      <div class="origin-eye" id="eye-right"></div>
+    </div>
+
+    <!-- TO BE CONTINUED -->
+    <div id="tbc-screen">
+      <div id="tbc-title">— TO BE CONTINUED —</div>
+      <div id="tbc-sub">OUTBREAK ZONE</div>
+      <div id="tbc-stats">
+        총 회수 병원체: <span id="tbc-collected">0</span>개<br>
+        전사한 요원: <span id="tbc-units">0</span>명<br>
+        누적 런: <span id="tbc-runs">0</span>회
+      </div>
+      <button class="ov-btn green" id="tbc-btn" style="margin-top:8px;">기지로 복귀</button>
+    </div>
 
     <!-- 인게임 볼륨 패널 -->
+    <!-- 모바일 터치 조작 패널 -->
+    <div id="touch-controls">
+      <!-- 방향키 패드 (좌하단) -->
+      <div id="dpad">
+        <div class="dpad-empty"></div>
+        <button class="dpad-btn" id="dpad-up">▲</button>
+        <div class="dpad-empty"></div>
+        <button class="dpad-btn" id="dpad-left">◀</button>
+        <div class="dpad-empty"></div>
+        <button class="dpad-btn" id="dpad-right">▶</button>
+        <div class="dpad-empty"></div>
+        <button class="dpad-btn" id="dpad-down">▼</button>
+        <div class="dpad-empty"></div>
+      </div>
+      <!-- 액션 버튼 (우하단) -->
+      <div id="action-btns">
+        <div style="display:flex;gap:8px;">
+          <button class="action-btn" id="touch-g">
+            <span class="btn-key">G</span>
+            <span class="btn-label">정밀소나</span>
+          </button>
+          <button class="action-btn" id="touch-e">
+            <span class="btn-key">E</span>
+            <span class="btn-label">회수</span>
+          </button>
+        </div>
+        <button class="action-btn" id="touch-f" style="width:72px;border-radius:10px;">
+          <span class="btn-key">F</span>
+          <span class="btn-label">소나</span>
+        </button>
+      </div>
+    </div>
+
     <div id="vol-panel">
       <div class="vol-title">🔊 볼륨</div>
       <div class="vol-row">
@@ -445,7 +646,10 @@ canvas#minimap { display:block; image-rendering:pixelated; }
   <div id="log-panel">
     <div id="log-header">
       <span>EVENT LOG</span>
-      <button id="log-clear">CLR</button>
+      <div style="display:flex;gap:6px;">
+        <button id="log-clear">CLR</button>
+        <button id="log-toggle-btn">✕</button>
+      </div>
     </div>
     <div id="log-body"></div>
   </div>
@@ -484,10 +688,13 @@ canvas#minimap { display:block; image-rendering:pixelated; }
       <button class="dev-btn" id="d-clearinf">🧬 감염도 초기화</button>
       <button class="dev-btn" id="d-addprecise">📡 정밀 소나 +1</button>
       <button class="dev-btn" id="d-additem">🔑 아이템 +1 획득</button>
+      <button class="dev-btn" id="d-collect-all">☣ 전체 병원체 회수</button>
       <button class="dev-btn" id="d-invincible">🛡 무적 모드 OFF</button>
       <button class="dev-btn" id="d-revealall">👁 전체 밝히기 OFF</button>
       <button class="dev-btn" id="d-killzombies">☠ 좀비 전체 제거</button>
       <button class="dev-btn" id="d-zombiefov">👁 좀비 시야 표시 OFF</button>
+      <button class="dev-btn" id="d-touch-toggle">📱 터치 조작 OFF</button>
+      <button class="dev-btn" id="d-log-toggle">📋 이벤트 로그 ON</button>
       <button class="dev-btn" id="d-records">📋 수집 기록 보기</button>
       <button class="dev-btn" id="d-clearrecords">🗑 기록 초기화</button>
       <div class="dev-section">기지 UI 폰트</div>
