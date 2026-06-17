@@ -2981,13 +2981,11 @@ function renderMinimap() {
     mmCtx.globalAlpha = alpha * 0.85;
     for (const z of zombies) {
       const distTiles = Math.hypot(z.tx - player.tx, z.ty - player.ty);
-      if (distTiles > sonar.radarRadius + 0.5) continue;  // 반경 밖 좀비 제외
-      const zs = Math.max(s, 2.5);
+      if (distTiles > sonar.radarRadius + 0.5) continue;
+      const zs  = Math.max(s, 2.5);
       const col = z.state === 'CHASE' ? '#ff3333' : z.state === 'SEARCH' ? '#ff8800' : '#ff6644';
       mmCtx.fillStyle = col;
-      mmCtx.beginPath();
-      mmCtx.arc(z.tx * s + s / 2, z.ty * s + s / 2, zs, 0, Math.PI * 2);
-      mmCtx.fill();
+      mmCtx.fillRect(z.tx * s + s/2 - zs/2, z.ty * s + s/2 - zs/2, zs, zs);
     }
     mmCtx.restore();
   }
