@@ -8,10 +8,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
+html { height:100%; touch-action:none; }
 body {
   background:#000; color:#ccc; font-family:monospace;
-  height:100vh; overflow:hidden;
+  height:100dvh; overflow:hidden;
   display:flex; flex-direction:column; user-select:none;
+  touch-action:none;
 }
 #header {
   display:flex; align-items:center; justify-content:space-between;
@@ -35,12 +37,29 @@ body {
 #game-area { flex:1; position:relative; overflow:hidden; }
 canvas#canvas { display:block; }
 /* ── PC 기본 ── */
-#minimap-wrap { position:absolute; bottom:10px; right:10px; border:1px solid rgba(0,255,136,0.2); }
+#minimap-wrap {
+  position:absolute; bottom:10px; right:10px;
+  border:1px solid rgba(0,255,136,0.2);
+  opacity:0.82;
+  transition:opacity 0.2s;
+}
+#minimap-wrap:hover { opacity:1; }
 canvas#minimap { display:block; image-rendering:pixelated; }
 
 /* ── 모바일 전용 — JS에서 #game-area에 .mobile 클래스 토글 ── */
 #game-area.mobile #minimap-wrap { bottom:auto; top:10px; right:10px; }
 #game-area.mobile #vol-panel    { display:none; }
+
+/* 모바일 HUD 축소 */
+#game-area.mobile ~ * #header,
+body.mobile-ui #header {
+  padding:3px 8px;
+}
+body.mobile-ui #title        { font-size:0.62rem; }
+body.mobile-ui #hud          { gap:8px; font-size:0.6rem; }
+body.mobile-ui .hud-label    { font-size:0.48rem; }
+body.mobile-ui .hud-val      { font-size:0.68rem; }
+body.mobile-ui .hud-gauge-wrap { width:52px; }
 #flash {
   position:absolute; inset:0; pointer-events:none; opacity:0;
   background:rgba(255,50,50,0.45); transition:opacity 0.08s;
@@ -255,9 +274,10 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 }
 #touch-controls.show { display:flex; }
 
-/* 방향키 패드 — 미니게임 전용 */
+/* 방향키 패드 — 미니게임 전용, 절대 위치로 조이스틱과 동일 위치 고정 */
 #minigame-dpad {
   display:none;
+  position:absolute; left:16px; bottom:10px;  /* 조이스틱과 동일 위치 */
   width:130px; height:130px;
   grid-template-columns: repeat(3, 40px);
   grid-template-rows: repeat(3, 40px);

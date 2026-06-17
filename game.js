@@ -3256,24 +3256,35 @@ const _isTouchDevice = ('ontouchstart' in window || navigator.maxTouchPoints > 0
 
 let _touchControlsActive = _isTouchDevice;
 
+// ── 전체화면 요청 (모바일 주소표시줄 방지) ────────────────────────
+function requestFullscreenOnce() {
+  const el = document.documentElement;
+  if (el.requestFullscreen)            el.requestFullscreen();
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen(); // iOS Safari 미지원, 무시
+}
+
 // ── 모바일 / PC 레이아웃 분리 ──────────────────────────────────────
 function applyTouchControls() {
-  const gameArea   = document.getElementById('game-area');
-  const touchEl    = document.getElementById('touch-controls');
-  const logPanel   = document.getElementById('log-panel');
+  const gameArea = document.getElementById('game-area');
+  const touchEl  = document.getElementById('touch-controls');
+  const logPanel = document.getElementById('log-panel');
 
   if (_touchControlsActive) {
     // ── 모바일 전용 ──────────────────────────────────────
     gameArea.classList.add('mobile');        // CSS: 미니맵 우상단, 볼륨 숨김
+    document.body.classList.add('mobile-ui'); // CSS: HUD 크기 축소
     touchEl.classList.add('show');           // 터치 컨트롤 표시
     logPanel.classList.add('hidden');        // 이벤트 로그 숨김
-    CONFIG.camera.smooth = 0.18;             // 카메라 스무스 강화 (플레이어 중앙 고정감)
+    CONFIG.camera.smooth = 0.18;             // 카메라 스무스 강화
+
+    // 첫 터치 시 전체화면 요청 (주소표시줄 숨김)
+    document.addEventListener('touchstart', requestFullscreenOnce, { once: true });
   } else {
     // ── PC 전용 ──────────────────────────────────────────
-    gameArea.classList.remove('mobile');     // CSS: 미니맵 우하단, 볼륨 표시
-    touchEl.classList.remove('show');        // 터치 컨트롤 숨김
+    gameArea.classList.remove('mobile');
+    document.body.classList.remove('mobile-ui');
+    touchEl.classList.remove('show');
     CONFIG.camera.smooth = 0.12;             // 카메라 스무스 기본값
-    // 로그 패널은 PC에서 상태 유지 (숨김 토글 별도)
   }
 
   document.getElementById('d-touch-toggle').textContent =
