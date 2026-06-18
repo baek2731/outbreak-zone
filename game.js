@@ -21,8 +21,10 @@ const DMAZE = [[0,-2],[2,0],[0,2],[-2,0]];
 // ================================================================
 
 function drawPlayer(ts) {
-  const cx = player.px + ts / 2;
-  const cy = player.py + ts / 2;
+  const kx = player.knockback ? player.knockback.ox : 0;
+  const ky = player.knockback ? player.knockback.oy : 0;
+  const cx = player.px + ts / 2 + kx;
+  const cy = player.py + ts / 2 + ky;
   const r  = ts * 0.34;
   ctx.save();
   ctx.globalAlpha = 0.12; ctx.beginPath(); ctx.arc(cx, cy, r * 1.8, 0, Math.PI * 2);
@@ -38,8 +40,11 @@ function drawPlayer(ts) {
 }
 
 function drawZombie(z, ts) {
-  const cx = z.px + ts / 2;
-  const cy = z.py + ts / 2;
+  if (z.hidden) return;  // 워프 이펙트 재생 중 숨김
+  const kx = z.knockback ? z.knockback.ox : 0;
+  const ky = z.knockback ? z.knockback.oy : 0;
+  const cx = z.px + ts / 2 + kx;
+  const cy = z.py + ts / 2 + ky;
   const r  = ts * 0.30;
   const zt = CONFIG.zombieTypes[z.type] || CONFIG.zombieTypes.BASIC;
   const typeColor = zt.color;
@@ -935,6 +940,54 @@ function updateZombieFX(dt) {
   }
 }
 
+// ── 넉백 오프셋 업데이트 ────────────────────────────────────────
+// obj.knockback = { ox, oy, vx, vy, vibTimer }
+// 스프링 감쇠 + 진동 처리
+function updateKnockback(obj, dt) {
+  if (!obj.knockback) return;
+  const kb = obj.knockback;
+
+  // 진동 구간 (vibTimer > 0)
+  if (kb.vibTimer > 0) {
+    kb.vibTimer -= dt;
+    const freq = 28;
+    const amp  = 2.5 * (kb.vibTimer / kb.vibMaxTime);
+    kb.ox = Math.sin(kb.vibTimer * freq) * amp * kb.vibDirX;
+    kb.oy = Math.sin(kb.vibTimer * freq) * amp * kb.vibDirY;
+    if (kb.vibTimer <= 0) obj.knockback = null;
+    return;
+  }
+
+  // 스프링 감쇠 복귀
+  const SPRING = 18, DAMP = 0.75;
+  kb.vx += (-kb.ox * SPRING - kb.vx * DAMP * 10) * dt;
+  kb.vy += (-kb.oy * SPRING - kb.vy * DAMP * 10) * dt;
+  kb.ox += kb.vx * dt;
+  kb.oy += kb.vy * dt;
+  kb.timer -= dt;
+
+  // 넉백 끝나면 진동으로 전환
+  if (kb.timer <= 0) {
+    const VIB_DUR = 0.22;
+    kb.vibTimer    = VIB_DUR;
+    kb.vibMaxTime  = VIB_DUR;
+    // 진동 방향: 넉백 방향 기준
+    const len = Math.hypot(kb.ox, kb.oy) || 1;
+    kb.vibDirX = kb.ox / len;
+    kb.vibDirY = kb.oy / len;
+  }
+}
+
+function startKnockback(obj, ox, oy, duration = 0.12) {
+  obj.knockback = {
+    ox, oy,
+    vx: 0, vy: 0,
+    timer: duration,
+    vibTimer: 0, vibMaxTime: 0,
+    vibDirX: 0, vibDirY: 0,
+  };
+}
+
 function drawZombieFX(ts) {
   for (const fx of zombieFX) {
     const t     = Math.max(0, fx.life / fx.maxLife); // 1→0
@@ -1011,6 +1064,22 @@ function drawZombieFX(ts) {
 }
 
 let camX = 0, camY = 0, moveTimer = 0;
+
+// ── 카메라 흔들림 ──────────────────────────────────────────────
+const camShake = { ox: 0, oy: 0, timer: 0, intensity: 0 };
+
+function triggerShake(intensity = 4, duration = 0.2) {
+  camShake.intensity = intensity;
+  camShake.timer     = duration;
+}
+
+function updateCamShake(dt) {
+  if (camShake.timer <= 0) { camShake.ox = 0; camShake.oy = 0; return; }
+  camShake.timer -= dt;
+  const decay = Math.max(0, camShake.timer);
+  camShake.ox = (Math.random() - 0.5) * camShake.intensity * 2 * decay;
+  camShake.oy = (Math.random() - 0.5) * camShake.intensity * 2 * decay;
+}
 let devRevealMines = false;
 let devInvincible  = false;
 let devRevealAll   = false;
@@ -1732,18 +1801,38 @@ function endMinigame(success) {
 
       const cz = minigame.combatZombie;
       if (cz) {
+        // ── 넉백 연출 — 플레이어 ↔ 크리쳐 서로 밀쳐냄 ──────────
+        const ts  = CONFIG.map.tileSize;
+        const dx  = cz.px - player.px;
+        const dy  = cz.py - player.py;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx  = dx / len, ny = dy / len;   // 플레이어 → 크리쳐 방향
+        const PUSH = ts * 0.28;                 // 넉백 거리 (픽셀)
+
+        startKnockback(player, -nx * PUSH, -ny * PUSH, 0.10); // 플레이어: 반대 방향
+        startKnockback(cz,      nx * PUSH,  ny * PUSH, 0.10); // 크리쳐:   플레이어 반대
+
+        // 카메라 흔들림
+        if (typeof triggerShake === 'function') triggerShake(4, 0.22);
+
         if (cz.faction === 'INFECTED') {
-          // ── 감염자: 소멸 ───────────────────────────────────────
-          dissolveInfected(cz);
+          // ── 감염자: 넉백 후 소멸 ───────────────────────────────
+          setTimeout(() => {
+            if (!zombies.includes(cz)) return;
+            dissolveInfected(cz);
+          }, 180);
           showRegretNotice(
             cz.fallenUnit != null
               ? `UNIT-${String(cz.fallenUnit).padStart(2, '0')}`
               : null
           );
         } else {
-          // ── 크리쳐: ORIGIN에게 회수 (워프 이탈) ────────────────
-          warpZombie(cz);
-          addPopup('워프 이탈', '#bb44ff', 0.15);
+          // ── 크리쳐: 넉백 후 워프 이탈 ─────────────────────────
+          setTimeout(() => {
+            if (!zombies.includes(cz)) return;
+            warpZombie(cz);
+          }, 220);
+          addPopup('뿌리쳤다', '#bb44ff', 0.20);
         }
       }
       devLog(`전투 성공 — 산소 -${oxyLoss}%${interrupted ? ' (급습 패널티)' : ''}`, 'warn');
@@ -2481,41 +2570,56 @@ function updateGuardHomePoints() {
 function warpZombie(z) {
   const { tiles, width, height } = MAP;
   const ts   = CONFIG.map.tileSize;
-  const minD = CONFIG.zombie.spawnDist + 3;   // 플레이어에서 충분히 멀리
+  const minD = CONFIG.zombie.spawnDist + 3;
 
-  // 후보 타일: FLOOR이고 플레이어에서 minD 이상 떨어진 곳
   const candidates = [];
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     if (tiles[y * width + x] !== T.FLOOR) continue;
     if (Math.hypot(x - player.tx, y - player.ty) < minD) continue;
     candidates.push([x, y]);
   }
-  if (candidates.length === 0) return;   // 워프 실패 시 그냥 스턴 유지
+  if (candidates.length === 0) {
+    z.stunTimer = 1.8;
+    z.state     = 'WANDER';
+    z.hasTarget = false;
+    return;
+  }
 
   const dest = candidates[Math.floor(Math.random() * candidates.length)];
 
-  // 워프 아웃 이펙트 (현재 위치)
+  // ① 워프 아웃 이펙트 (현재 위치에서 수축)
   addZombieFX('warp', z.px + ts / 2, z.py + ts / 2, '#bb44ff');
 
-  // 사운드 — 50% 확률로 ORIGIN 웃음소리 (현재 슬롯만 예약, mp3 추가 후 활성화)
+  // ② 이펙트 재생 중 본체 숨김 — drawZombie가 스킵
+  z.hidden    = true;
+  z.state     = 'WANDER';
+  z.hasTarget = false;
+
+  // ③ 이펙트 종료 후 실제 이동 + 재출현
+  const WARP_DELAY = 620;
+  setTimeout(() => {
+    if (!zombies.includes(z)) return;
+
+    z.px = dest[0] * ts;
+    z.py = dest[1] * ts;
+    z.tx = dest[0];
+    z.ty = dest[1];
+
+    addZombieFX('warpIn', z.px + ts / 2, z.py + ts / 2, '#bb44ff');
+
+    z.hidden    = false;
+    z.stunTimer = 1.8;
+    z.state     = 'WANDER';
+    z.hasTarget = false;
+
+    devLog(`크리쳐 워프 완료 → (${dest[0]},${dest[1]}) [ORIGIN 회수]`, 'warn');
+  }, WARP_DELAY);
+
+  // 사운드 슬롯 — mp3 추가 후 주석 해제
   // const laughChance = 0.3 + (player.stage / CONFIG.stages.length) * 0.5;
   // if (Math.random() < laughChance) SoundManager.play('origin_laugh');
 
-  // 이동
-  z.px = dest[0] * ts;
-  z.py = dest[1] * ts;
-  z.tx = dest[0];
-  z.ty = dest[1];
-
-  // 워프 후 짧은 스턴 (재즉시접촉 방지)
-  z.stunTimer  = 1.8;
-  z.state      = 'WANDER';
-  z.hasTarget  = false;
-
-  // 워프 인 이펙트 (도착 위치)
-  addZombieFX('warpIn', z.px + ts / 2, z.py + ts / 2, '#bb44ff');
-
-  devLog(`크리쳐 워프 이탈 → (${dest[0]},${dest[1]}) [ORIGIN 회수]`, 'warn');
+  devLog('크리쳐 워프 시작 — 이펙트 재생 중', 'warn');
 }
 
 // ── 감염자 소멸 처리 ─────────────────────────────────────────────
@@ -2822,6 +2926,9 @@ function updateZombies(dt) {
 
 
   for (const z of zombies) {
+    // 워프 이펙트 재생 중 — AI/이동/접촉 전부 스킵
+    if (z.hidden) continue;
+
     // 스턴 처리 — 이동/감지/접촉 전부 스킵
     if (z.stunTimer > 0) {
       z.stunTimer = Math.max(0, z.stunTimer - dt);
@@ -3231,6 +3338,11 @@ function update(dt) {
   updateMinigame(dt);
   updateOxygenInfection(dt);
   updateZombieFX(dt);
+  updateCamShake(dt);
+
+  // 넉백 오프셋 업데이트
+  updateKnockback(player, dt);
+  for (const z of zombies) updateKnockback(z, dt);
   if (player.exitCooldown > 0) player.exitCooldown -= dt;
 
   // 소음 파동 업데이트
@@ -3306,7 +3418,7 @@ function render() {
   const ts = CONFIG.map.tileSize;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W_px, H_px);
   ctx.save();
-  ctx.translate(-camX, -camY);
+  ctx.translate(-camX + camShake.ox, -camY + camShake.oy);
 
   const tx0 = Math.max(0, Math.floor(camX / ts) - 1);
   const ty0 = Math.max(0, Math.floor(camY / ts) - 1);
