@@ -348,6 +348,13 @@ function addNotice(text, color = '#00ffcc', duration = 3.0) {
   });
 }
 
+// ── "그는 사람이었어" 연출 ────────────────────────────────────────
+// 감염자(전사자)와 전투 패배 시 — 화면 중앙 하단에 보라빛 텍스트 표시
+function showRegretNotice(unitLabel) {
+  const line1 = unitLabel ? `${unitLabel} — 그는 사람이었어.` : '그는 사람이었어.';
+  addNotice(line1, '#cc88ff', 4.0);
+}
+
 function drawPopups(dt) {
   // ctx.restore() 이후 화면 좌표계에서 호출됨
   // player 화면 좌표 = player.px - camX, player.py - camY
@@ -1471,6 +1478,14 @@ function useSerumInCombat() {
     addPopup(`DNA +${dnaBonus}`, '#cc66ff', 0.2);
     addNotice('그는 마침내 안식에 들었다', '#bb44ff', 3.0);
     SoundManager.play('combat_win');
+    // ── 전사자 풀 청소 ──────────────────────────────────────────
+    if (z.fallenUnit != null) {
+      const cleaned = removeFromFallenPool(z.fallenUnit);
+      if (cleaned) {
+        const unitLabel = `UNIT-${String(z.fallenUnit).padStart(2, '0')}`;
+        devLog(`${unitLabel} 안식 완료 — 전사자 풀에서 제거`, 'good');
+      }
+    }
     devLog(`치료제 투여 성공 — 감염자 안식 + DNA +${dnaBonus}`, 'good');
   } else {
     const oxyLoss = Math.abs(MG.combatFailOxy);
@@ -1638,6 +1653,14 @@ function endMinigame(success) {
       player.infection = Math.min(100, player.infection + infGain2);
       addPopup(`산소 -${oxyLoss2}%`, '#ff3333', 0);
       addPopup(`오염 +${infGain2}%`, '#ff3333', 0.18);
+      // ── "그는 사람이었어" 연출 — 감염자(전사자)와 전투 패배 시 ──
+      const cz = minigame.combatZombie;
+      if (cz && cz.faction === 'INFECTED') {
+        const unitLabel = cz.fallenUnit != null
+          ? `UNIT-${String(cz.fallenUnit).padStart(2, '0')}`
+          : null;
+        showRegretNotice(unitLabel);
+      }
       devLog(`전투 실패 — 산소 대량 소모, 감염 증가${interrupted ? ' (급습 패널티)' : ''}`, 'danger');
     }
     triggerFlash('red');
@@ -1991,6 +2014,14 @@ function addToFallenPool(unitNum, stage) {
   if (pool.find(f => f.unit === unitNum)) return;
   pool.push({ unit: unitNum, stage });
   saveFallenPool(pool);
+}
+function removeFromFallenPool(unitNum) {
+  const pool = loadFallenPool();
+  const idx  = pool.findIndex(f => f.unit === unitNum);
+  if (idx === -1) return false;
+  pool.splice(idx, 1);
+  saveFallenPool(pool);
+  return true;
 }
 function clearFallenPool() {
   try { localStorage.removeItem(FALLEN_KEY); } catch(e) {}
