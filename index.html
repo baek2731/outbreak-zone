@@ -77,24 +77,12 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
   z-index:19;
 }
 
-/* ORIGIN 암전 오버레이 */
+/* ORIGIN 충격 연출 — 암전 → 화이트아웃 */
 #origin-flash {
   position:absolute; inset:0; pointer-events:none; opacity:0;
   background:#000;
-  transition:opacity 0.08s ease;
+  transition:opacity 0.08s ease, background-color 0.06s ease;
   z-index:22;
-  display:flex; align-items:center; justify-content:center;
-}
-#origin-eyes {
-  opacity:0;
-  transition:opacity 0.06s ease;
-  display:flex; gap:28px; align-items:center;
-}
-.origin-eye {
-  width:14px; height:14px;
-  border-radius:50%;
-  background:radial-gradient(circle, #ff6666 0%, #cc0000 60%, #880000 100%);
-  box-shadow:0 0 12px 4px rgba(255,0,0,0.9), 0 0 24px 8px rgba(180,0,0,0.5);
 }
 
 /* ── 엔딩 화면 ── */
@@ -580,12 +568,7 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
     <div id="flash"></div>
     <div id="item-flash"></div>
     <div id="infect-flash"></div>
-    <div id="origin-flash">
-      <div id="origin-eyes">
-        <div class="origin-eye"></div>
-        <div class="origin-eye"></div>
-      </div>
-    </div>
+    <div id="origin-flash"></div>
 
     <!-- 엔딩 시퀀스 — 터미널 + 눈 -->
     <div id="ending-screen">

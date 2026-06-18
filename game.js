@@ -1555,29 +1555,32 @@ function triggerOriginFlash() {
   originFlash.usedThisStage = true;
 
   const overlay = document.getElementById('origin-flash');
-  const eyes    = document.getElementById('origin-eyes');
-  if (!overlay || !eyes) return;
+  if (!overlay) return;
 
   // ① 급격한 암전
-  overlay.style.transition = 'opacity 0.10s ease';
-  overlay.style.opacity    = '1';
+  overlay.style.transition       = 'opacity 0.08s ease, background-color 0.06s ease';
+  overlay.style.backgroundColor  = '#000000';
+  overlay.style.opacity          = '1';
 
-  // ② 암전 유지 0.3초 후 눈빛 등장
+  // ② 암전 유지 후 화이트아웃으로 충격 전환
   setTimeout(() => {
-    eyes.style.opacity = '1';
+    overlay.style.backgroundColor = '#ffffff';
+  }, 250);
+
+  // ③ 웃음소리 — 화이트아웃 직후
+  setTimeout(() => {
     SoundManager.play('origin_laugh');
-  }, 400);
+  }, 320);
 
-  // ③ 눈빛 소멸 → 재등장 (깜빡)
-  setTimeout(() => { eyes.style.opacity = '0'; }, 700);
-  setTimeout(() => { eyes.style.opacity = '1'; }, 820);
-
-  // ④ 눈빛 소멸 + 암전 복귀
+  // ④ 천천히 복귀
   setTimeout(() => {
-    eyes.style.opacity       = '0';
-    overlay.style.transition = 'opacity 0.30s ease';
+    overlay.style.transition = 'opacity 0.40s ease';
     overlay.style.opacity    = '0';
-  }, 1050);
+    // 복귀 완료 후 배경색 초기화
+    setTimeout(() => {
+      overlay.style.backgroundColor = '#000000';
+    }, 450);
+  }, 430);
 }
 
 function resetOriginFlash() {
