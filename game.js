@@ -1199,11 +1199,10 @@ const mmCtx    = mmCanvas.getContext('2d');
 let W_px, H_px;
 
 function resize() {
-  const area = document.getElementById('game-area');
-  const w = area.clientWidth  || window.innerWidth;
-  const h = area.clientHeight || window.innerHeight;
-  W_px = canvas.width  = w;
-  H_px = canvas.height = h;
+  // 960×540 (16:9) 고정 — CrazyGames 권장 비율
+  const GAME_W = 960, GAME_H = 540;
+  W_px = canvas.width  = GAME_W;
+  H_px = canvas.height = GAME_H;
   mmCanvas.width = mmCanvas.height = CONFIG.minimap.size;
   if (W_px > 0 && H_px > 0) {
     vignetteGradient = ctx.createRadialGradient(W_px/2, H_px/2, H_px*0.18, W_px/2, H_px/2, H_px*0.78);

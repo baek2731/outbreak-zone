@@ -8,361 +8,217 @@
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
-html { height:100%; touch-action:none; }
-body {
-  background:#000; color:#ccc; font-family:monospace;
-  height:100dvh; overflow:hidden;
-  display:flex; flex-direction:column; user-select:none;
-  touch-action:none;
+html,body { height:100%; background:#111; touch-action:none; user-select:none; overflow:hidden; font-family:monospace; color:#ccc; }
+
+/* ── 전체 레이아웃: 게임 + 사이드바 ── */
+#layout {
+  display:flex; width:100%; height:100dvh;
+  align-items:stretch;
 }
-#header {
-  display:flex; align-items:center; justify-content:space-between;
-  padding:6px 14px; background:#000;
-  border-bottom:1px solid #1a1a1a; flex-shrink:0; gap:12px;
+
+/* ── 게임 컨테이너 (960×540 고정, 화면 중앙) ── */
+#game-wrap {
+  flex:1; display:flex; align-items:center; justify-content:center;
+  background:#0a0a0a; overflow:hidden;
+  min-width:0;
 }
-#title { color:#ff3333; font-size:0.9rem; letter-spacing:0.2em; flex-shrink:0; }
-#hud { display:flex; gap:18px; font-size:0.75rem; align-items:center; }
-.hud-item { display:flex; flex-direction:column; align-items:center; gap:2px; }
-.hud-label { color:#666; font-size:0.6rem; letter-spacing:0.1em; text-transform:uppercase; }
-.hud-val { color:#00ff88; font-size:0.85rem; }
-.hud-val.warn { color:#ffaa00; }
-.hud-val.dim  { color:#555; }
-#dev-toggle {
-  background:none; border:1px solid #333; color:#555;
-  font-family:monospace; font-size:0.58rem;
-  padding:4px 10px; cursor:pointer; border-radius:2px; flex-shrink:0;
+#game-area {
+  position:relative;
+  width:960px; height:540px;
+  flex-shrink:0;
+  overflow:hidden;
+  background:#000;
 }
-#dev-toggle:hover, #dev-toggle.on { border-color:#ffaa00; color:#ffaa00; }
-#main { display:flex; flex:1; overflow:hidden; }
-#game-area { flex:1; position:relative; overflow:hidden; }
-canvas#canvas { display:block; }
-/* ── PC 기본 ── */
+canvas#canvas { display:block; width:960px; height:540px; }
+
+/* ── 인게임 HUD 오버레이 ── */
+#hud-overlay {
+  position:absolute; inset:0; pointer-events:none;
+  z-index:10;
+}
+
+/* 좌상단: 산소 + 감염 게이지 */
+#hud-left {
+  position:absolute; top:10px; left:10px;
+  display:flex; flex-direction:column; gap:5px;
+  pointer-events:none;
+}
+.hud-gauge-row {
+  display:flex; align-items:center; gap:6px;
+}
+.hud-gauge-label {
+  color:#555; font-size:0.52rem; letter-spacing:0.1em;
+  width:24px; text-align:right; flex-shrink:0;
+}
+.hud-gauge-bg {
+  position:relative; width:90px; height:5px;
+  background:#1a1a1a; border:1px solid #2a2a2a; border-radius:2px; overflow:visible;
+}
+.hud-gauge-fill {
+  height:100%; border-radius:2px;
+  transition:width 0.3s, background 0.5s;
+}
+.hud-gauge-threshold {
+  position:absolute; top:-2px; bottom:-2px; width:1px;
+  background:#ff8800; opacity:0.7; left:60%;
+}
+.hud-gauge-val {
+  color:#00ff88; font-size:0.58rem;
+  min-width:30px;
+}
+
+/* 우상단: 치료제 / 소나 / 병원체 / DNA */
+#hud-right {
+  position:absolute; top:10px; right:10px;
+  display:flex; flex-direction:column; gap:4px; align-items:flex-end;
+  pointer-events:none;
+}
+.hud-chip {
+  background:rgba(0,0,0,0.65); border:1px solid #1a1a1a;
+  padding:2px 7px; font-size:0.6rem;
+  display:flex; gap:6px; align-items:center;
+  border-radius:2px;
+}
+.hud-chip-label { color:#444; font-size:0.5rem; letter-spacing:0.08em; }
+.hud-chip-val { color:#00ff88; }
+
+/* 하단 중앙: 스테이지 이름 */
+#hud-stage {
+  position:absolute; bottom:8px; left:50%;
+  transform:translateX(-50%);
+  font-size:0.52rem; color:#333; letter-spacing:0.15em;
+  pointer-events:none;
+}
+
+/* ── 미니맵 ── */
 #minimap-wrap {
   position:absolute; bottom:10px; right:10px;
-  border:1px solid rgba(0,255,136,0.2);
-  opacity:0.82;
-  transition:opacity 0.2s;
+  border:1px solid rgba(0,255,136,0.15);
+  opacity:0.82; transition:opacity 0.2s; z-index:11;
 }
 #minimap-wrap:hover { opacity:1; }
 canvas#minimap { display:block; image-rendering:pixelated; }
 
-/* ── 모바일 전용 — JS에서 #game-area에 .mobile 클래스 토글 ── */
-#game-area.mobile #minimap-wrap { bottom:auto; top:10px; right:10px; }
-#game-area.mobile #vol-panel    { display:none; }
-
-/* 모바일 HUD 축소 */
-#game-area.mobile ~ * #header,
-body.mobile-ui #header {
-  padding:3px 8px;
-}
-body.mobile-ui #title        { font-size:0.62rem; }
-body.mobile-ui #hud          { gap:8px; font-size:0.6rem; }
-body.mobile-ui .hud-label    { font-size:0.48rem; }
-body.mobile-ui .hud-val      { font-size:0.68rem; }
-body.mobile-ui .hud-gauge-wrap { width:52px; }
-#flash {
-  position:absolute; inset:0; pointer-events:none; opacity:0;
-  background:rgba(255,50,50,0.45); transition:opacity 0.08s;
-}
-#item-flash {
-  position:absolute; inset:0; pointer-events:none; opacity:0;
-  box-shadow:inset 0 0 60px rgba(0,255,136,0.5);
-  transition:opacity 0.06s;
-}
-/* 감염 보라 오버레이 */
-#infect-flash {
-  position:absolute; inset:0; pointer-events:none; opacity:0;
-  background:rgba(120,0,200,0.45);
-  transition:opacity 0.6s ease;
-  z-index:19;
-}
-
-/* ORIGIN 충격 연출 — 암전 → 화이트아웃 */
-#origin-flash {
-  position:absolute; inset:0; pointer-events:none; opacity:0;
-  background:#000;
-  transition:opacity 0.08s ease, background-color 0.06s ease;
-  z-index:22;
-}
-
-/* ── 엔딩 화면 ── */
-#ending-screen {
-  display:none; position:absolute; inset:0;
-  background:#000; flex-direction:column;
-  align-items:center; justify-content:center;
-  z-index:25; overflow:hidden;
-}
-#ending-screen.show { display:flex; }
-
-/* 터미널 텍스트 */
-#terminal-box {
-  font-family:'Courier New', monospace; font-size:0.72rem;
-  color:#00cc66; text-align:left; line-height:2.0;
-  max-width:420px; width:90%;
-  border:1px solid #0a3a1a; padding:20px 24px;
-  background:rgba(0,10,0,0.85);
-  white-space:pre-wrap;
-}
-#terminal-cursor {
-  display:inline-block; width:8px; height:1em;
-  background:#00cc66; animation:blink 0.8s step-end infinite;
-  vertical-align:text-bottom; margin-left:2px;
-}
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-
-/* 빨리감기 힌트 */
-#terminal-hint {
-  font-size:0.55rem; color:#2a5a3a; margin-top:8px;
-  letter-spacing:0.1em;
-}
-
-/* 눈 */
-#origin-eyes {
-  display:none; position:absolute; inset:0;
-  align-items:center; justify-content:center;
-  gap:48px; background:#000;
-  z-index:26;
-}
-#origin-eyes.show { display:flex; }
-.origin-eye {
-  width:10px; height:10px; border-radius:50%;
-  background:#ff1111;
-  box-shadow:0 0 12px 4px #ff1111, 0 0 30px 8px #880000;
-  opacity:0; transition:opacity 1.2s ease;
-}
-.origin-eye.lit { opacity:1; }
-
-/* TO BE CONTINUED 패널 */
-#tbc-screen {
-  display:none; position:absolute; inset:0;
-  flex-direction:column; align-items:center; justify-content:center;
-  gap:18px; background:rgba(0,0,0,0.95); z-index:26;
-}
-#tbc-screen.show { display:flex; }
-#tbc-title {
-  font-size:1.2rem; letter-spacing:0.4em; color:#aaaaaa;
-  text-shadow:0 0 18px #555;
-}
-#tbc-sub {
-  font-size:0.62rem; color:#444; letter-spacing:0.2em;
-}
-#tbc-stats {
-  font-size:0.65rem; color:#333; text-align:center;
-  line-height:2.2; border-top:1px solid #1a1a1a;
-  padding-top:12px; margin-top:4px;
-}
-#tbc-stats span { color:#555; }
-.ov-title.purple { color:#bb44ff; text-shadow:0 0 20px #8800cc; }
-#gameover.infected { background:rgba(10,0,20,0.94); }
-
-/* ── 인게임 볼륨 패널 ── */
+/* ── 볼륨 패널 ── */
 #vol-panel {
   position:absolute; bottom:10px; left:10px;
   background:rgba(0,0,0,0.75); border:1px solid #222;
   padding:8px 10px; font-size:0.6rem; color:#666;
   min-width:140px; z-index:10;
 }
-#vol-panel .vol-title {
-  color:#ffaa00; font-size:0.58rem; letter-spacing:0.1em;
-  margin-bottom:6px; text-transform:uppercase;
-}
-#vol-panel .vol-row {
-  display:flex; align-items:center; gap:6px; margin:3px 0;
-}
+#vol-panel .vol-title { color:#ffaa00; font-size:0.58rem; letter-spacing:0.1em; margin-bottom:6px; text-transform:uppercase; }
+#vol-panel .vol-row { display:flex; align-items:center; gap:6px; margin:3px 0; }
 #vol-panel .vol-row label { color:#888; width:36px; flex-shrink:0; }
-#vol-panel .vol-row input[type=range] {
-  width:72px; accent-color:#ffaa00; cursor:pointer;
-}
+#vol-panel .vol-row input[type=range] { width:72px; accent-color:#ffaa00; cursor:pointer; }
 #vol-panel .vol-val { color:#ffaa00; min-width:24px; text-align:right; font-size:0.58rem; }
-.overlay {
-  display:none; position:absolute; inset:0; background:rgba(0,0,0,0.88);
-  flex-direction:column; align-items:center; justify-content:center;
-  gap:14px; z-index:20;
+
+/* ── 플래시 오버레이 ── */
+#flash { position:absolute; inset:0; pointer-events:none; opacity:0; background:rgba(255,50,50,0.45); transition:opacity 0.08s; }
+#item-flash { position:absolute; inset:0; pointer-events:none; opacity:0; box-shadow:inset 0 0 60px rgba(0,255,136,0.5); transition:opacity 0.06s; }
+#infect-flash { position:absolute; inset:0; pointer-events:none; opacity:0; background:rgba(120,0,200,0.45); transition:opacity 0.6s ease; z-index:19; }
+#origin-flash { position:absolute; inset:0; pointer-events:none; opacity:0; background:#000; transition:opacity 0.08s ease, background-color 0.06s ease; z-index:22; }
+
+/* ── 사이드바 (DEV + LOG) ── */
+#sidebar {
+  display:flex; flex-direction:row;
+  flex-shrink:0; height:100%;
+  background:#050505; border-left:1px solid #111;
 }
+#dev-panel {
+  width:0; background:#050505; border-left:1px solid #1a1a1a;
+  overflow:hidden; flex-shrink:0; transition:width 0.15s;
+}
+#dev-panel.open { width:260px; }
+#dev-inner { padding:12px; min-width:260px; overflow-y:auto; max-height:100vh; }
+.dev-row input[type=range].snd { width:90px; accent-color:#ff8800; }
+.dev-row { display:flex; align-items:center; gap:6px; font-size:0.6rem; color:#555; margin:3px 0; }
+.dev-row input[type=range] { width:80px; accent-color:#00ff88; cursor:pointer; }
+.dev-val { font-size:0.66rem; color:#00ff88; min-width:32px; text-align:right; }
+.dev-btn { width:100%; margin-top:5px; text-align:left; background:none; border:1px solid #222; color:#444; font-family:monospace; font-size:0.6rem; padding:4px 8px; cursor:pointer; }
+.dev-btn:hover { border-color:#555; color:#aaa; }
+.dev-info { font-size:0.63rem; color:#444; line-height:2.0; margin-top:10px; border-top:1px solid #1a1a1a; padding-top:8px; }
+.dev-log-box { font-size:0.58rem; color:#555; line-height:1.8; max-height:120px; overflow-y:auto; }
+#log-panel { width:280px; flex-shrink:0; border-left:1px solid #111; transition:width 0.15s; }
+#log-panel.hidden { width:0; overflow:hidden; }
+#log-inner { padding:10px; overflow-y:auto; height:100%; }
+
+/* DEV 토글 버튼 — 게임 우하단 절대위치 */
+#dev-toggle {
+  position:absolute; bottom:10px; left:50%;
+  transform:translateX(-50%);
+  background:none; border:1px solid #1a1a1a; color:#2a2a2a;
+  font-family:monospace; font-size:0.52rem;
+  padding:3px 8px; cursor:pointer; border-radius:2px;
+  z-index:15; pointer-events:all;
+}
+#dev-toggle:hover, #dev-toggle.on { border-color:#ffaa00; color:#ffaa00; }
+
+/* ── 오버레이 공통 ── */
+.overlay { display:none; position:absolute; inset:0; background:rgba(0,0,0,0.88); flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:20; }
 .overlay.show { display:flex; }
 .ov-title { font-size:1.4rem; font-weight:bold; letter-spacing:0.25em; }
 .ov-title.red   { color:#ff3333; text-shadow:0 0 20px #ff3333; }
 .ov-title.green { color:#00ff88; text-shadow:0 0 20px #00ff88; }
+.ov-title.purple { color:#bb44ff; text-shadow:0 0 20px #8800cc; }
 .ov-stats { font-size:0.75rem; color:#888; text-align:center; line-height:2.0; }
 .ov-stats span { color:#ff8888; }
 .ov-stats span.g { color:#00ff88; }
-.ov-btn {
-  background:none; font-family:monospace; font-size:0.7rem;
-  padding:9px 26px; cursor:pointer; border-radius:2px; letter-spacing:0.15em;
-}
+.ov-btn { background:none; font-family:monospace; font-size:0.7rem; padding:9px 26px; cursor:pointer; border-radius:2px; letter-spacing:0.15em; }
 .ov-btn.red   { border:1px solid #ff3333; color:#ff3333; }
 .ov-btn.red:hover   { background:rgba(255,50,50,0.1); }
 .ov-btn.green { border:1px solid #00ff88; color:#00ff88; }
 .ov-btn.green:hover { background:rgba(0,255,136,0.1); }
 .ov-stage { font-size:0.85rem; color:#00ff88; letter-spacing:0.15em; margin-top:-6px; }
 .intro-location { font-size:0.78rem; color:#555; letter-spacing:0.2em; margin-top:-4px; margin-bottom:4px; }
-.intro-stats { display:flex; flex-direction:column; gap:8px; margin:6px 0; }
-.intro-row { display:flex; align-items:center; gap:10px; font-size:0.75rem; color:#aaa; }
 .intro-icon { font-size:1rem; width:20px; text-align:center; }
 
-/* ── DEV 패널 (넓게) ── */
-#dev-panel {
-  width:0; background:#0d0d0d; border-left:1px solid #1a1a1a;
-  overflow:hidden; flex-shrink:0; transition:width 0.15s;
-}
-#dev-panel.open { width:260px; }
-#dev-inner { padding:12px; min-width:260px; overflow-y:auto; max-height:100vh; }
-.dev-row input[type=range].snd { width:90px; accent-color:#ff8800; }
-.dev-val.snd { color:#ff8800; }
-.dev-title { color:#ffaa00; font-size:0.72rem; letter-spacing:0.15em; border-bottom:1px solid #222; padding-bottom:6px; margin-bottom:10px; }
-.dev-section { color:#555; font-size:0.6rem; text-transform:uppercase; letter-spacing:0.1em; margin:9px 0 4px; }
-.dev-row { display:flex; justify-content:space-between; align-items:center; gap:6px; margin:4px 0; }
-.dev-row label { font-size:0.66rem; color:#bbb; flex:1; }
-.dev-row input[type=range] { width:80px; accent-color:#00ff88; cursor:pointer; }
-.dev-val { font-size:0.66rem; color:#00ff88; min-width:32px; text-align:right; }
-.dev-btn {
-  background:none; border:1px solid #333; color:#bbb; font-family:monospace;
-  font-size:0.64rem; padding:4px 8px; cursor:pointer; border-radius:2px;
-  width:100%; margin-top:5px; text-align:left;
-}
-.dev-btn:hover { border-color:#00ff88; color:#00ff88; }
-.dev-info { font-size:0.63rem; color:#444; line-height:2.0; margin-top:10px; border-top:1px solid #1a1a1a; padding-top:8px; }
-.dev-info span { color:#00ff88; }
-#dev-log {
-  font-size:0.58rem; color:#555; line-height:1.8;
-  max-height:120px; overflow-y:auto;
-  border-top:1px solid #1a1a1a; padding-top:6px; margin-top:4px;
-}
-#dev-log .log-entry { color:#888; }
-#dev-log .log-entry.warn  { color:#ff8800; }
-#dev-log .log-entry.danger{ color:#ff3333; }
-#dev-log .log-entry.good  { color:#00ff88; }
+/* ── 엔딩 ── */
+#ending-screen { display:none; position:absolute; inset:0; background:#000; flex-direction:column; align-items:center; justify-content:center; z-index:25; overflow:hidden; }
+#ending-screen.show { display:flex; }
+#terminal-box { font-family:'Courier New',monospace; font-size:0.72rem; color:#00cc66; text-align:left; line-height:2.0; max-width:420px; width:90%; border:1px solid #0a3a1a; padding:20px 24px; background:rgba(0,10,0,0.85); white-space:pre-wrap; }
+#terminal-cursor { display:inline-block; width:8px; height:1em; background:#00cc66; animation:blink 0.8s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+#terminal-hint { font-size:0.55rem; color:#2a5a3a; margin-top:8px; letter-spacing:0.1em; }
+#origin-eyes { display:none; position:absolute; inset:0; align-items:center; justify-content:center; gap:48px; background:#000; z-index:26; }
+#origin-eyes.show { display:flex; }
+.origin-eye { width:10px; height:10px; border-radius:50%; background:#ff1111; box-shadow:0 0 12px 4px #ff1111, 0 0 30px 8px #880000; opacity:0; transition:opacity 1.2s ease; }
+.origin-eye.lit { opacity:1; }
+#tbc-screen { display:none; position:absolute; inset:0; flex-direction:column; align-items:center; justify-content:center; gap:18px; background:rgba(0,0,0,0.95); z-index:26; }
+#tbc-screen.show { display:flex; }
+#tbc-title { font-size:1.2rem; letter-spacing:0.4em; color:#aaaaaa; text-shadow:0 0 18px #555; }
+#tbc-sub { font-size:0.62rem; color:#444; letter-spacing:0.2em; }
+#tbc-stats { font-size:0.65rem; color:#333; text-align:center; line-height:2.2; border-top:1px solid #1a1a1a; padding-top:12px; margin-top:4px; }
+#tbc-stats span { color:#555; }
+#gameover.infected { background:rgba(10,0,20,0.94); }
 
-/* ── 로그 패널 ── */
-#log-panel {
-  width: 280px; flex-shrink:0;
-  background:#0a0a0a; border-left:1px solid #1a1a1a;
-  display:flex; flex-direction:column; overflow:hidden;
-  transition: width 0.15s;
-}
-#log-panel.hidden { width: 0; overflow: hidden; }
-#log-toggle-btn {
-  background:none; border:1px solid #333; color:#555;
-  font-family:monospace; font-size:0.7rem; padding:3px 8px;
-  cursor:pointer; border-radius:2px;
-}
-#log-toggle-btn:hover { border-color:#ff8800; color:#ff8800; }
-#log-header {
-  display:flex; justify-content:space-between; align-items:center;
-  padding:6px 10px; border-bottom:1px solid #1a1a1a; flex-shrink:0;
-  color:#ffaa00; font-size:0.78rem; letter-spacing:0.12em;
-}
-#log-clear {
-  background:none; border:1px solid #333; color:#555;
-  font-family:monospace; font-size:0.7rem; padding:3px 8px;
-  cursor:pointer; border-radius:2px;
-}
-#log-clear:hover { border-color:#ffaa00; color:#ffaa00; }
-#log-body {
-  flex:1; overflow-y:auto; padding:6px 8px;
-  display:flex; flex-direction:column-reverse;
-}
-.log-entry {
-  font-size:0.74rem; color:#888; line-height:1.7;
-  border-bottom:1px solid #111; padding:1px 0;
-}
-.log-entry.warn   { color:#ff8800; }
-.log-entry.danger { color:#ff3333; }
-.log-entry.good   { color:#00ff88; }
-
-/* ── 모바일 터치 조작 ── */
-#touch-controls {
-  display:none;
-  position:absolute; bottom:0; left:0; right:0;
-  height:160px; pointer-events:none;
-  z-index:30; padding:10px 16px;
-  box-sizing:border-box;
-  justify-content:space-between;
-  align-items:flex-end;
-}
+/* ── 모바일 터치 컨트롤 ── */
+#touch-controls { display:none; position:absolute; inset:0; pointer-events:none; padding:16px; box-sizing:border-box; justify-content:space-between; align-items:flex-end; }
 #touch-controls.show { display:flex; }
-
-/* 방향키 패드 — 미니게임 전용, 절대 위치로 조이스틱과 동일 위치 고정 */
-#minigame-dpad {
-  display:none;
-  position:absolute; left:16px; bottom:10px;  /* 조이스틱과 동일 위치 */
-  width:130px; height:130px;
-  grid-template-columns: repeat(3, 40px);
-  grid-template-rows: repeat(3, 40px);
-  gap:5px; pointer-events:all;
-  align-content:center; justify-content:center;
-}
+#minigame-dpad { display:none; position:absolute; left:16px; bottom:10px; width:130px; height:130px; grid-template-columns:repeat(3,40px); grid-template-rows:repeat(3,40px); gap:5px; pointer-events:all; align-content:center; justify-content:center; }
 #minigame-dpad.show { display:grid; }
-.dpad-btn {
-  background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.12);
-  border-radius:6px; color:rgba(255,255,255,0.6);
-  font-size:1.2rem; cursor:pointer;
-  display:flex; align-items:center; justify-content:center;
-  user-select:none; -webkit-user-select:none;
-  touch-action:none;
-  transition:background 0.06s;
-}
-.dpad-btn:active, .dpad-btn.pressed {
-  background:rgba(0,255,136,0.18);
-  border-color:rgba(0,255,136,0.4);
-  color:#00ff88;
-}
+.dpad-btn { background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.12); border-radius:6px; color:rgba(255,255,255,0.6); font-size:1.2rem; cursor:pointer; display:flex; align-items:center; justify-content:center; user-select:none; touch-action:none; transition:background 0.06s; }
+.dpad-btn:active, .dpad-btn.pressed { background:rgba(0,255,136,0.18); border-color:rgba(0,255,136,0.4); color:#00ff88; }
 .dpad-empty { visibility:hidden; }
-
-/* 조이스틱 */
-#joystick-wrap {
-  width:130px; height:130px;
-  position:relative; pointer-events:all;
-  flex-shrink:0;
-}
-#joystick-base {
-  width:130px; height:130px; border-radius:50%;
-  background:rgba(0,0,0,0.40);
-  border:1px solid rgba(255,255,255,0.10);
-  position:absolute; top:0; left:0;
-}
-#joystick-stick {
-  width:52px; height:52px; border-radius:50%;
-  background:rgba(0,255,136,0.25);
-  border:2px solid rgba(0,255,136,0.45);
-  position:absolute;
-  top:50%; left:50%;
-  transform:translate(-50%,-50%);
-  transition:transform 0.05s;
-  pointer-events:none;
-}
-
-/* 액션 버튼 */
-#action-btns {
-  display:flex; flex-direction:column;
-  gap:8px; pointer-events:all;
-  align-items:flex-end;
-}
-.action-btn {
-  width:56px; height:56px;
-  background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.12);
-  border-radius:50%; color:rgba(255,255,255,0.7);
-  font-family:monospace; font-size:0.62rem; font-weight:bold;
-  cursor:pointer; display:flex; flex-direction:column;
-  align-items:center; justify-content:center; gap:1px;
-  user-select:none; -webkit-user-select:none;
-  touch-action:none; letter-spacing:0.05em;
-  transition:background 0.06s;
-}
-.action-btn:active, .action-btn.pressed {
-  background:rgba(0,255,136,0.18);
-  border-color:rgba(0,255,136,0.4);
-  color:#00ff88;
-}
+#joystick-wrap { width:130px; height:130px; position:relative; pointer-events:all; flex-shrink:0; }
+#joystick-base { width:130px; height:130px; border-radius:50%; background:rgba(0,0,0,0.40); border:1px solid rgba(255,255,255,0.10); position:absolute; top:0; left:0; }
+#joystick-stick { width:52px; height:52px; border-radius:50%; background:rgba(0,255,136,0.25); border:2px solid rgba(0,255,136,0.45); position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); transition:transform 0.05s; pointer-events:none; }
+#action-btns { display:flex; flex-direction:column; gap:8px; pointer-events:all; align-items:flex-end; }
+.action-btn { width:56px; height:56px; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.12); border-radius:50%; color:rgba(255,255,255,0.7); font-family:monospace; font-size:0.62rem; font-weight:bold; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; user-select:none; touch-action:none; letter-spacing:0.05em; transition:background 0.06s; }
+.action-btn:active, .action-btn.pressed { background:rgba(0,255,136,0.18); border-color:rgba(0,255,136,0.4); color:#00ff88; }
 .action-btn .btn-key { font-size:0.8rem; }
 .action-btn .btn-label { font-size:0.48rem; color:rgba(255,255,255,0.4); }
-:root { --lb-base: 13px; }
-#lobby-screen {
-  display:none; position:absolute; inset:0;
-  background:#000; z-index:45;
-  font-family:'Press Start 2P',monospace;
-  flex-direction:column;
-}
+
+/* ── 모바일 전용 조정 ── */
+#game-area.mobile #minimap-wrap { bottom:auto; top:10px; right:10px; }
+#game-area.mobile #vol-panel    { display:none; }
+body.mobile-ui #game-area { width:100vw; height:100dvh; }
+body.mobile-ui canvas#canvas { width:100vw; height:100dvh; }
+body.mobile-ui #sidebar { display:none; }
+body.mobile-ui #dev-toggle { display:none; }
+
+/* ── 기지(로비) 화면 ── */
+:root { --lb-base:13px; }
+#lobby-screen { display:none; position:absolute; inset:0; background:#000; z-index:45; font-family:'Press Start 2P',monospace; flex-direction:column; }
 #lobby-screen.show { display:flex; }
 .lb { display:flex; flex-direction:column; height:100%; }
 .lb-header { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid #1a1a1a; flex-shrink:0; }
@@ -375,7 +231,7 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
 .lb-avatar { width:56px; height:56px; border:2px solid #222; margin:0 auto 6px; display:flex; align-items:center; justify-content:center; font-size:18px; color:#444; }
 .lb-agent-name { color:#00ff88; font-size:calc(var(--lb-base) + 1px); letter-spacing:0.1em; margin-bottom:3px; }
 .lb-agent-runs { color:#444; font-size:calc(var(--lb-base) - 1px); }
-.lb-sb-btn { font-size:calc(var(--lb-base) + 1px); padding:8px 10px; padding:6px 8px; background:none; border:1px solid #1a1a1a; color:#333; cursor:pointer; font-family:'Press Start 2P',monospace; text-align:left; letter-spacing:0.05em; }
+.lb-sb-btn { font-size:calc(var(--lb-base) + 1px); padding:6px 8px; background:none; border:1px solid #1a1a1a; color:#333; cursor:pointer; font-family:'Press Start 2P',monospace; text-align:left; letter-spacing:0.05em; }
 .lb-sb-btn:hover { border-color:#555; color:#555; }
 .lb-sb-btn.on { color:#00ff88; border-color:#00ff88; }
 .lb-sb-btn.primary { color:#00ff88; border-color:#00ff88; }
@@ -389,7 +245,7 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
 .lb-card { background:#050505; border:1px solid #0d0d0d; padding:14px; }
 .lb-card.trait { border-color:#1a1200; }
 .lb-card-name { font-size:calc(var(--lb-base) + 2px); color:#777; margin-bottom:4px; }
-.lb-card.trait .lb-card-name { color:#ffaa00; font-size:calc(var(--lb-base) + 2px); }
+.lb-card.trait .lb-card-name { color:#ffaa00; }
 .lb-card-desc { font-size:var(--lb-base); color:#222; margin-bottom:4px; line-height:1.8; }
 .lb-card-eff { font-size:var(--lb-base); color:#00ff88; margin-bottom:7px; line-height:1.8; }
 .lb-card.trait .lb-card-eff { color:#ffaa00; }
@@ -398,7 +254,7 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
 .lb-dot.on { background:#00ff88; border-color:#00ff88; }
 .lb-dot.trait-on { background:#ffaa00; border-color:#ffaa00; }
 .lb-cost { font-size:var(--lb-base); color:#cc66ff; margin-left:auto; }
-.lb-btn { font-size:var(--lb-base); padding:5px 10px; padding:4px 7px; background:none; border:1px solid #222; color:#444; cursor:pointer; font-family:'Press Start 2P',monospace; }
+.lb-btn { font-size:var(--lb-base); padding:4px 7px; background:none; border:1px solid #222; color:#444; cursor:pointer; font-family:'Press Start 2P',monospace; }
 .lb-btn:hover:not(:disabled) { border-color:#00ff88; color:#00ff88; }
 .lb-btn.trait:hover:not(:disabled) { border-color:#ffaa00; color:#ffaa00; }
 .lb-btn:disabled { border-color:#0a0a0a; color:#1a1a1a; cursor:default; }
@@ -412,21 +268,11 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
 .mem-empty { font-size:calc(var(--lb-base) + 2px); color:#1a1a1a; text-align:center; padding:30px 0; letter-spacing:0.1em; }
 
 /* ── 타이틀 화면 ── */
-#title-screen {
-  display:none; position:absolute; inset:0;
-  background:#000; z-index:50;
-  flex-direction:column; align-items:center; justify-content:center;
-  font-family:'Press Start 2P',monospace;
-  overflow:hidden;
-}
+#title-screen { display:none; position:absolute; inset:0; background:#000; z-index:50; flex-direction:column; align-items:center; justify-content:center; font-family:'Press Start 2P',monospace; overflow:hidden; }
 #title-screen.show { display:flex; }
-.ts-scanline {
-  position:absolute; inset:0; pointer-events:none;
-  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.1) 2px,rgba(0,0,0,0.1) 4px);
-}
+.ts-scanline { position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.1) 2px,rgba(0,0,0,0.1) 4px); }
 .ts-corner { position:absolute; color:#1a1a1a; font-size:6px; font-family:'Press Start 2P',monospace; }
-.ts-corner.tl{top:12px;left:16px;} .ts-corner.tr{top:12px;right:16px;}
-.ts-corner.bl{bottom:12px;left:16px;} .ts-corner.br{bottom:12px;right:16px;}
+.ts-corner.tl{top:12px;left:16px;} .ts-corner.tr{top:12px;right:16px;} .ts-corner.bl{bottom:12px;left:16px;} .ts-corner.br{bottom:12px;right:16px;}
 .ts-version { position:absolute; top:12px; right:16px; color:#222; font-size:6px; }
 .ts-bio { font-size:52px; margin-bottom:20px; animation:ts-pulse 2s infinite; }
 @keyframes ts-pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
@@ -436,11 +282,7 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
 .ts-press { color:#aaa; font-size:11px; letter-spacing:0.2em; margin-bottom:32px; animation:ts-blink 1.2s step-end infinite; }
 @keyframes ts-blink { 0%,100%{opacity:1} 50%{opacity:0} }
 .ts-menu { display:flex; flex-direction:column; align-items:center; gap:12px; margin-bottom:32px; }
-.ts-menu-item {
-  color:#555; font-size:13px; letter-spacing:0.15em; cursor:pointer;
-  padding:6px 16px; border:1px solid transparent;
-  transition:color 0.1s, border-color 0.1s;
-}
+.ts-menu-item { color:#555; font-size:13px; letter-spacing:0.15em; cursor:pointer; padding:6px 16px; border:1px solid transparent; transition:color 0.1s,border-color 0.1s; }
 .ts-menu-item:hover, .ts-menu-item.active { color:#00ff88; border-color:#00ff88; }
 .ts-menu-item.active::before { content:'▶  '; }
 .ts-divider { width:180px; border:none; border-top:1px solid #1a1a1a; margin:0 0 20px; }
@@ -448,59 +290,70 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
 .ts-stat { text-align:center; }
 .ts-stat-label { color:#333; font-size:10px; letter-spacing:0.1em; margin-bottom:5px; }
 .ts-stat-val { color:#00ff88; font-size:13px; }
-
-/* ── 산소/감염 게이지 ── */
-.hud-gauge-wrap { min-width:80px; }
-.hud-gauge-bg {
-  position:relative; width:80px; height:6px;
-  background:#1a1a1a; border:1px solid #333; border-radius:2px; overflow:visible;
-}
-.hud-gauge-fill {
-  height:100%; border-radius:2px;
-  transition:width 0.3s, background 0.5s;
-}
-/* 산소 60% 위험선 마커 */
-.hud-gauge-threshold {
-  position:absolute; top:-2px; bottom:-2px; width:1px;
-  background:#ff8800; opacity:0.7;
-  left:60%; /* infectThreshold=60 */
-}
 </style>
 </head>
 <body>
 
-<div id="header">
-  <div id="title">OUTBREAK ZONE</div>
-  <div id="hud">
-    <div class="hud-item"><div class="hud-label">POS</div><div class="hud-val" id="hud-pos">1,1</div></div>
-    <div class="hud-item hud-gauge-wrap">
-      <div class="hud-label">산소</div>
-      <div class="hud-gauge-bg">
-        <div class="hud-gauge-fill" id="hud-oxygen-fill" style="width:100%;background:#44aaff"></div>
-        <div class="hud-gauge-threshold" id="hud-oxygen-threshold"></div>
-      </div>
-      <div class="hud-val" id="hud-oxygen">100%</div>
-    </div>
-    <div class="hud-item hud-gauge-wrap">
-      <div class="hud-label">감염</div>
-      <div class="hud-gauge-bg">
-        <div class="hud-gauge-fill" id="hud-infection-fill" style="width:0%;background:#00ff88"></div>
-      </div>
-      <div class="hud-val" id="hud-infection">0%</div>
-    </div>
-    <div class="hud-item"><div class="hud-label">탐지기[F]</div><div class="hud-val" id="hud-basic">READY</div></div>
-    <div class="hud-item"><div class="hud-label">정밀탐지[G]</div><div class="hud-val" id="hud-precise">📡 2</div></div>
-    <div class="hud-item"><div class="hud-label">치료제[D]</div><div class="hud-val" id="hud-serum" style="color:#bb44ff;">💉 1</div></div>
-    <div class="hud-item"><div class="hud-label">☣ 병원체</div><div class="hud-val" id="hud-mines" style="color:#ff6644;">0/0</div></div>
-    <div class="hud-item"><div class="hud-label">캡슐</div><div class="hud-val" id="hud-items">0/3</div></div>
-    <div class="hud-item"><div class="hud-label">EXPLORED</div><div class="hud-val" id="hud-explored">0%</div></div>
-    <div class="hud-item"><div class="hud-label">🧬 DNA</div><div class="hud-val" id="hud-dna" style="color:#cc66ff;">0</div></div>
-  </div>
-  <button id="dev-toggle">⚙ DEV</button>
-</div>
+<div id="layout">
 
-<div id="main">
-  <div id="game-area">
+  <!-- ── 게임 영역 ── -->
+  <div id="game-wrap">
+    <div id="game-area">
+
+      <!-- HUD 오버레이 -->
+      <div id="hud-overlay">
+        <!-- 좌상단: 산소 + 감염 -->
+        <div id="hud-left">
+          <div class="hud-gauge-row">
+            <span class="hud-gauge-label">O₂</span>
+            <div class="hud-gauge-bg">
+              <div class="hud-gauge-fill" id="hud-oxygen-fill" style="width:100%;background:#44aaff"></div>
+              <div class="hud-gauge-threshold" id="hud-oxygen-threshold"></div>
+            </div>
+            <span class="hud-gauge-val" id="hud-oxygen">100%</span>
+          </div>
+          <div class="hud-gauge-row">
+            <span class="hud-gauge-label">☣</span>
+            <div class="hud-gauge-bg">
+              <div class="hud-gauge-fill" id="hud-infection-fill" style="width:0%;background:#00ff88"></div>
+            </div>
+            <span class="hud-gauge-val" id="hud-infection">0%</span>
+          </div>
+        </div>
+
+        <!-- 우상단: 치료제 / 소나 / 병원체 / DNA -->
+        <div id="hud-right">
+          <div class="hud-chip">
+            <span class="hud-chip-label">치료제[D]</span>
+            <span class="hud-chip-val" id="hud-serum" style="color:#bb44ff;">💉 1</span>
+          </div>
+          <div class="hud-chip">
+            <span class="hud-chip-label">소나[F]</span>
+            <span class="hud-chip-val" id="hud-basic">READY</span>
+          </div>
+          <div class="hud-chip">
+            <span class="hud-chip-label">정밀[G]</span>
+            <span class="hud-chip-val" id="hud-precise">📡 2</span>
+          </div>
+          <div class="hud-chip">
+            <span class="hud-chip-label">☣ 병원체</span>
+            <span class="hud-chip-val" id="hud-mines" style="color:#ff6644;">0/0</span>
+          </div>
+          <div class="hud-chip">
+            <span class="hud-chip-label">💨 캡슐</span>
+            <span class="hud-chip-val" id="hud-items">0/3</span>
+          </div>
+          <div class="hud-chip">
+            <span class="hud-chip-label">🧬 DNA</span>
+            <span class="hud-chip-val" id="hud-dna" style="color:#cc66ff;">0</span>
+          </div>
+        </div>
+
+        <!-- 하단 중앙: 스테이지 이름 + DEV 토글 -->
+        <div id="hud-stage" id="hud-pos">1,1</div>
+        <button id="dev-toggle">⚙ DEV</button>
+      </div>
+
     <!-- 기지 화면 -->
     <div id="lobby-screen">
       <div class="lb">
@@ -568,7 +421,6 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
     <div id="flash"></div>
     <div id="item-flash"></div>
     <div id="infect-flash"></div>
-    <div id="origin-flash"></div>
 
     <!-- 엔딩 시퀀스 — 터미널 + 눈 -->
     <div id="ending-screen">
@@ -726,7 +578,12 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
     </div>
   </div>
 
-  <div id="log-panel">
+    </div>
+  </div>
+
+  <!-- ── 사이드바 (DEV / LOG) ── -->
+  <div id="sidebar">
+    <div id="log-panel">
     <div id="log-header">
       <span>EVENT LOG</span>
       <div style="display:flex;gap:6px;">
@@ -736,8 +593,7 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
     </div>
     <div id="log-body"></div>
   </div>
-
-  <div id="dev-panel">
+    <div id="dev-panel">
     <div id="dev-inner">
       <div class="dev-title">⚙ DEV</div>
 
@@ -850,10 +706,12 @@ body.mobile-ui .hud-gauge-wrap { width:52px; }
       <div id="dev-log"></div>
     </div>
   </div>
+  </div>
+
 </div>
 
 <script src="config.js"></script>
 <script src="sound.js"></script>
 <script src="game.js"></script>
+
 </body>
-</html>
