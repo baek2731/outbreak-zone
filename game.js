@@ -1497,8 +1497,8 @@ function useSerumInCombat() {
 function updateSerumHUD() {
   const el = document.getElementById('hud-serum');
   if (el) el.textContent = '💉 ' + player.serum;
-  const dBtn = document.getElementById('touch-d');
-  if (dBtn) dBtn.style.display = (_touchControlsActive && player.serum > 0 && !minigame.active) ? '' : 'none';
+  // D 버튼 표시는 _updateTouchUI에서 통합 관리
+  if (window._updateTouchUI) window._updateTouchUI();
 }
 
 function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
@@ -3559,8 +3559,7 @@ function applyTouchControls() {
     '📱 터치 조작 ' + (_touchControlsActive ? 'ON' : 'OFF');
 }
 applyTouchControls();
-
-// resize 시 터치 여부 재감지
+updateSerumHUD(); // D 버튼 초기 상태 설정
 window.addEventListener('resize', () => {
   const shouldTouch = ('ontouchstart' in window || navigator.maxTouchPoints > 0)
                       && window.innerWidth < 1024;
