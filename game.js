@@ -21,10 +21,8 @@ const DMAZE = [[0,-2],[2,0],[0,2],[-2,0]];
 // ================================================================
 
 function drawPlayer(ts) {
-  const kx = player.knockback ? player.knockback.ox : 0;
-  const ky = player.knockback ? player.knockback.oy : 0;
-  const cx = player.px + ts / 2 + kx;
-  const cy = player.py + ts / 2 + ky;
+  const cx = player.px + ts / 2;
+  const cy = player.py + ts / 2;
   const r  = ts * 0.34;
   ctx.save();
   ctx.globalAlpha = 0.12; ctx.beginPath(); ctx.arc(cx, cy, r * 1.8, 0, Math.PI * 2);
@@ -41,10 +39,8 @@ function drawPlayer(ts) {
 
 function drawZombie(z, ts) {
   if (z.hidden) return;  // 워프 이펙트 재생 중 숨김
-  const kx = z.knockback ? z.knockback.ox : 0;
-  const ky = z.knockback ? z.knockback.oy : 0;
-  const cx = z.px + ts / 2 + kx;
-  const cy = z.py + ts / 2 + ky;
+  const cx = z.px + ts / 2;
+  const cy = z.py + ts / 2;
   const r  = ts * 0.30;
   const zt = CONFIG.zombieTypes[z.type] || CONFIG.zombieTypes.BASIC;
   const typeColor = zt.color;
@@ -940,53 +936,7 @@ function updateZombieFX(dt) {
   }
 }
 
-// ── 넉백 오프셋 업데이트 ────────────────────────────────────────
-// obj.knockback = { ox, oy, vx, vy, vibTimer }
-// 스프링 감쇠 + 진동 처리
-function updateKnockback(obj, dt) {
-  if (!obj.knockback) return;
-  const kb = obj.knockback;
 
-  // 진동 구간 (vibTimer > 0)
-  if (kb.vibTimer > 0) {
-    kb.vibTimer -= dt;
-    const freq = 28;
-    const amp  = 2.5 * (kb.vibTimer / kb.vibMaxTime);
-    kb.ox = Math.sin(kb.vibTimer * freq) * amp * kb.vibDirX;
-    kb.oy = Math.sin(kb.vibTimer * freq) * amp * kb.vibDirY;
-    if (kb.vibTimer <= 0) obj.knockback = null;
-    return;
-  }
-
-  // 스프링 감쇠 복귀
-  const SPRING = 18, DAMP = 0.75;
-  kb.vx += (-kb.ox * SPRING - kb.vx * DAMP * 10) * dt;
-  kb.vy += (-kb.oy * SPRING - kb.vy * DAMP * 10) * dt;
-  kb.ox += kb.vx * dt;
-  kb.oy += kb.vy * dt;
-  kb.timer -= dt;
-
-  // 넉백 끝나면 진동으로 전환
-  if (kb.timer <= 0) {
-    const VIB_DUR = 0.22;
-    kb.vibTimer    = VIB_DUR;
-    kb.vibMaxTime  = VIB_DUR;
-    // 진동 방향: 넉백 방향 기준
-    const len = Math.hypot(kb.ox, kb.oy) || 1;
-    kb.vibDirX = kb.ox / len;
-    kb.vibDirY = kb.oy / len;
-  }
-}
-
-function startKnockback(obj, ox, oy, duration = 0.12) {
-  obj.knockback = {
-    ox, oy,
-    vx: 0, vy: 0,
-    timer: duration,
-    vibTimer: 0, vibMaxTime: 0,
-    vibDirX: 0, vibDirY: 0,
-  };
-}
 
 function drawZombieFX(ts) {
   for (const fx of zombieFX) {
@@ -1065,21 +1015,6 @@ function drawZombieFX(ts) {
 
 let camX = 0, camY = 0, moveTimer = 0;
 
-// ── 카메라 흔들림 ──────────────────────────────────────────────
-const camShake = { ox: 0, oy: 0, timer: 0, intensity: 0 };
-
-function triggerShake(intensity = 4, duration = 0.2) {
-  camShake.intensity = intensity;
-  camShake.timer     = duration;
-}
-
-function updateCamShake(dt) {
-  if (camShake.timer <= 0) { camShake.ox = 0; camShake.oy = 0; return; }
-  camShake.timer -= dt;
-  const decay = Math.max(0, camShake.timer);
-  camShake.ox = (Math.random() - 0.5) * camShake.intensity * 2 * decay;
-  camShake.oy = (Math.random() - 0.5) * camShake.intensity * 2 * decay;
-}
 let devRevealMines = false;
 let devInvincible  = false;
 let devRevealAll   = false;
@@ -1801,20 +1736,6 @@ function endMinigame(success) {
 
       const cz = minigame.combatZombie;
       if (cz) {
-        // ── 넉백 연출 — 플레이어 ↔ 크리쳐 서로 밀쳐냄 ──────────
-        const ts  = CONFIG.map.tileSize;
-        const dx  = cz.px - player.px;
-        const dy  = cz.py - player.py;
-        const len = Math.hypot(dx, dy) || 1;
-        const nx  = dx / len, ny = dy / len;   // 플레이어 → 크리쳐 방향
-        const PUSH = ts * 0.28;                 // 넉백 거리 (픽셀)
-
-        startKnockback(player, -nx * PUSH, -ny * PUSH, 0.10); // 플레이어: 반대 방향
-        startKnockback(cz,      nx * PUSH,  ny * PUSH, 0.10); // 크리쳐:   플레이어 반대
-
-        // 카메라 흔들림
-        if (typeof triggerShake === 'function') triggerShake(4, 0.22);
-
         if (cz.faction === 'INFECTED') {
           // ── 감염자: 넉백 후 소멸 ───────────────────────────────
           setTimeout(() => {
@@ -3338,11 +3259,6 @@ function update(dt) {
   updateMinigame(dt);
   updateOxygenInfection(dt);
   updateZombieFX(dt);
-  updateCamShake(dt);
-
-  // 넉백 오프셋 업데이트
-  updateKnockback(player, dt);
-  for (const z of zombies) updateKnockback(z, dt);
   if (player.exitCooldown > 0) player.exitCooldown -= dt;
 
   // 소음 파동 업데이트
@@ -3418,7 +3334,7 @@ function render() {
   const ts = CONFIG.map.tileSize;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W_px, H_px);
   ctx.save();
-  ctx.translate(-camX + camShake.ox, -camY + camShake.oy);
+  ctx.translate(-camX, -camY);
 
   const tx0 = Math.max(0, Math.floor(camX / ts) - 1);
   const ty0 = Math.max(0, Math.floor(camY / ts) - 1);
