@@ -351,6 +351,37 @@ function addNotice(text, color = '#00ffcc', duration = 3.0) {
 
 // ── "그는 사람이었어" 연출 ────────────────────────────────────────
 // 감염자(전사자)와 전투 패배 시 — 화면 중앙 하단에 보라빛 텍스트 표시
+// ── 플레이어 대사 ────────────────────────────────────────────────
+const VOICE = {
+  // 감염자 안식 성공 (치료제 Y)
+  restSuccess: {
+    ko: ['잘 가', '쉬어'],
+    en: ['Goodbye', 'Rest'],
+  },
+  // 감염자 전투 승리 (소멸 — 구하지 못한 것)
+  infectedDown: {
+    ko: ['미안', '어쩔 수 없었어'],
+    en: ['Sorry', 'No choice'],
+  },
+  // 크리쳐 치료제 낭비
+  serumWasted: {
+    ko: ['사람이 아니야'],
+    en: ['Not human'],
+  },
+  // 크리쳐 전투 승리 (워프 이탈)
+  creatureWarp: {
+    ko: ['사라졌어', '어디로…'],
+    en: ['Gone', 'Where…'],
+  },
+};
+
+function pickVoice(key) {
+  const lang = 'ko';   // TODO: 다국어 전환 시 'en'으로 교체
+  const arr  = VOICE[key]?.[lang];
+  if (!arr || arr.length === 0) return null;
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 function showRegretNotice(unitLabel) {
   const line1 = unitLabel ? `${unitLabel} — 그는 사람이었어.` : '그는 사람이었어.';
   addNotice(line1, '#cc88ff', 4.0);
@@ -1572,6 +1603,8 @@ function useSerumInCombat() {
     addPopup('안식 성공 ✦', '#bb44ff', 0);
     addPopup(`DNA +${dnaBonus}`, '#cc66ff', 0.2);
     addNotice('그는 마침내 안식에 들었다', '#bb44ff', 3.0);
+    const voiceRest = pickVoice('restSuccess');
+    if (voiceRest) addPopup(voiceRest, '#cc88ff', 0.4);
     SoundManager.play('combat_win');
     // ── 전사자 풀 청소 ──────────────────────────────────────────
     if (z.fallenUnit != null) {
@@ -1596,6 +1629,8 @@ function useSerumInCombat() {
     addPopup('치료제 무효', '#ff4444', 0);
     addPopup(`산소 -${oxyLoss}%`, '#ff3333', 0.2);
     addPopup(`오염 +${infGain}%`, '#ff3333', 0.4);
+    const voiceWasted = pickVoice('serumWasted');
+    if (voiceWasted) addPopup(voiceWasted, '#ff8888', 0.6);
     SoundManager.play('combat_lose');
     triggerFlash('red');
     devLog('치료제 투여 — 크리쳐 무효, 전투 실패 처리', 'danger');
@@ -1737,7 +1772,7 @@ function endMinigame(success) {
       const cz = minigame.combatZombie;
       if (cz) {
         if (cz.faction === 'INFECTED') {
-          // ── 감염자: 넉백 후 소멸 ───────────────────────────────
+          // ── 감염자: 소멸 ───────────────────────────────────────
           setTimeout(() => {
             if (!zombies.includes(cz)) return;
             dissolveInfected(cz);
@@ -1747,13 +1782,16 @@ function endMinigame(success) {
               ? `UNIT-${String(cz.fallenUnit).padStart(2, '0')}`
               : null
           );
+          const voiceDown = pickVoice('infectedDown');
+          if (voiceDown) addPopup(voiceDown, '#cc88ff', 0.25);
         } else {
-          // ── 크리쳐: 넉백 후 워프 이탈 ─────────────────────────
+          // ── 크리쳐: 워프 이탈 ─────────────────────────────────
           setTimeout(() => {
             if (!zombies.includes(cz)) return;
             warpZombie(cz);
           }, 220);
-          addPopup('뿌리쳤다', '#bb44ff', 0.20);
+          const voiceWarp = pickVoice('creatureWarp');
+          if (voiceWarp) addPopup(voiceWarp, '#bb44ff', 0.20);
         }
       }
       devLog(`전투 성공 — 산소 -${oxyLoss}%${interrupted ? ' (급습 패널티)' : ''}`, 'warn');
