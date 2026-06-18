@@ -1547,10 +1547,10 @@ const originFlash = { usedThisStage: false };
 function triggerOriginFlash() {
   if (originFlash.usedThisStage) return;
 
-  // 층별 확률: 1층 10% → 5층 60%
-  const stageIdx  = Math.min(player.stage, CONFIG.stages.length - 1);
-  const chance    = 0.10 + stageIdx * 0.125;  // 0.10 / 0.225 / 0.35 / 0.475 / 0.60
-  if (Math.random() > chance) return;
+  // [DEV] 테스트용 무조건 발동 — 확인 후 아래 확률 코드로 교체
+  // const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
+  // const chance   = 0.10 + stageIdx * 0.125;
+  // if (Math.random() > chance) return;
 
   originFlash.usedThisStage = true;
 
@@ -1559,25 +1559,25 @@ function triggerOriginFlash() {
   if (!overlay || !eyes) return;
 
   // ① 급격한 암전
-  overlay.style.transition = 'opacity 0.08s ease';
+  overlay.style.transition = 'opacity 0.10s ease';
   overlay.style.opacity    = '1';
 
-  // ② 암전 피크 — 눈빛 + 웃음소리
+  // ② 암전 유지 0.3초 후 눈빛 등장
   setTimeout(() => {
     eyes.style.opacity = '1';
-    SoundManager.play('origin_laugh');  // mp3 추가 후 활성화
-  }, 100);
+    SoundManager.play('origin_laugh');
+  }, 400);
 
-  // ③ 눈빛 깜빡 (한 번 더)
-  setTimeout(() => { eyes.style.opacity = '0'; }, 220);
-  setTimeout(() => { eyes.style.opacity = '1'; }, 310);
+  // ③ 눈빛 소멸 → 재등장 (깜빡)
+  setTimeout(() => { eyes.style.opacity = '0'; }, 700);
+  setTimeout(() => { eyes.style.opacity = '1'; }, 820);
 
-  // ④ 복귀
+  // ④ 눈빛 소멸 + 암전 복귀
   setTimeout(() => {
     eyes.style.opacity       = '0';
-    overlay.style.transition = 'opacity 0.15s ease';
+    overlay.style.transition = 'opacity 0.30s ease';
     overlay.style.opacity    = '0';
-  }, 420);
+  }, 1050);
 }
 
 function resetOriginFlash() {
@@ -4183,9 +4183,10 @@ document.getElementById('d-records').addEventListener('click', () => {
 document.getElementById('d-clearrecords').addEventListener('click', () => {
   localStorage.removeItem(RECORDS_KEY);
   localStorage.removeItem(DNA_KEY);
-  localStorage.removeItem(UNIT_KEY);
+  localStorage.setItem(UNIT_KEY, '1');   // UNIT-00 = 튜토리얼 사망, 플레이어는 UNIT-01부터
   localStorage.removeItem(FALLEN_KEY);
-  devLog('수집 기록 + 유닛번호 + 전사자 풀 전체 초기화됨', 'warn');
+  ensureUnit00Fallen();                  // 즉시 등록 — 새로고침 불필요
+  devLog('수집 기록 초기화 — UNIT-01부터 시작 / UNIT-00 전사자 풀 등록됨', 'warn');
 });
 
 // DEV — 기지 UI 폰트 크기 조절
