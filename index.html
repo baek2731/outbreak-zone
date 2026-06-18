@@ -39,19 +39,19 @@ canvas#canvas { display:block; width:960px; height:540px; }
 
 /* 좌상단: 산소 + 감염 게이지 */
 #hud-left {
-  position:absolute; top:10px; left:10px;
-  display:flex; flex-direction:column; gap:5px;
+  position:absolute; top:12px; left:12px;
+  display:flex; flex-direction:column; gap:7px;
   pointer-events:none;
 }
 .hud-gauge-row {
-  display:flex; align-items:center; gap:6px;
+  display:flex; align-items:center; gap:8px;
 }
 .hud-gauge-label {
-  color:#555; font-size:0.52rem; letter-spacing:0.1em;
+  color:#888; font-size:0.72rem; letter-spacing:0.05em;
   width:24px; text-align:right; flex-shrink:0;
 }
 .hud-gauge-bg {
-  position:relative; width:90px; height:5px;
+  position:relative; width:120px; height:8px;
   background:#1a1a1a; border:1px solid #2a2a2a; border-radius:2px; overflow:visible;
 }
 .hud-gauge-fill {
@@ -63,30 +63,30 @@ canvas#canvas { display:block; width:960px; height:540px; }
   background:#ff8800; opacity:0.7; left:60%;
 }
 .hud-gauge-val {
-  color:#00ff88; font-size:0.58rem;
-  min-width:30px;
+  color:#00ff88; font-size:0.78rem;
+  min-width:38px;
 }
 
 /* 우상단: 치료제 / 소나 / 병원체 / DNA */
 #hud-right {
-  position:absolute; top:10px; right:10px;
-  display:flex; flex-direction:column; gap:4px; align-items:flex-end;
+  position:absolute; top:12px; right:12px;
+  display:flex; flex-direction:column; gap:5px; align-items:flex-end;
   pointer-events:none;
 }
 .hud-chip {
   background:rgba(0,0,0,0.65); border:1px solid #1a1a1a;
-  padding:2px 7px; font-size:0.6rem;
-  display:flex; gap:6px; align-items:center;
-  border-radius:2px;
+  padding:4px 9px; font-size:0.74rem;
+  display:flex; gap:8px; align-items:center;
+  border-radius:3px;
 }
-.hud-chip-label { color:#444; font-size:0.5rem; letter-spacing:0.08em; }
-.hud-chip-val { color:#00ff88; }
+.hud-chip-label { color:#666; font-size:0.62rem; letter-spacing:0.05em; }
+.hud-chip-val { color:#00ff88; font-size:0.78rem; }
 
-/* 하단 중앙: 스테이지 이름 */
+/* 하단 중앙: 위치 */
 #hud-stage {
-  position:absolute; bottom:8px; left:50%;
+  position:absolute; bottom:10px; left:50%;
   transform:translateX(-50%);
-  font-size:0.52rem; color:#333; letter-spacing:0.15em;
+  font-size:0.62rem; color:#444; letter-spacing:0.15em;
   pointer-events:none;
 }
 
@@ -141,6 +141,13 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 #log-panel { width:280px; flex-shrink:0; border-left:1px solid #111; transition:width 0.15s; }
 #log-panel.hidden { width:0; overflow:hidden; }
 #log-inner { padding:10px; overflow-y:auto; height:100%; }
+#log-header { display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid #1a1a1a; font-size:0.62rem; color:#666; letter-spacing:0.1em; }
+#log-header button { background:none; border:1px solid #222; color:#444; font-family:monospace; font-size:0.55rem; padding:2px 6px; cursor:pointer; }
+#log-header button:hover { border-color:#555; color:#888; }
+#log-body { padding:8px 10px; overflow-y:auto; height:calc(100% - 34px); font-size:0.6rem; line-height:1.7; color:#555; }
+.dev-title { color:#ffaa00; font-size:0.72rem; letter-spacing:0.1em; margin-bottom:10px; }
+.dev-section { font-size:0.58rem; color:#444; letter-spacing:0.08em; margin:10px 0 4px; text-transform:uppercase; }
+.dev-row label { color:#666; font-size:0.6rem; flex:1; }
 
 /* DEV 토글 버튼 — 게임 우하단 절대위치 */
 #dev-toggle {
@@ -344,15 +351,22 @@ body.mobile-ui #dev-toggle { display:none; }
             <span class="hud-chip-val" id="hud-items">0/3</span>
           </div>
           <div class="hud-chip">
+            <span class="hud-chip-label">탐험</span>
+            <span class="hud-chip-val" id="hud-explored">0%</span>
+          </div>
+          <div class="hud-chip">
             <span class="hud-chip-label">🧬 DNA</span>
             <span class="hud-chip-val" id="hud-dna" style="color:#cc66ff;">0</span>
           </div>
         </div>
 
-        <!-- 하단 중앙: 스테이지 이름 + DEV 토글 -->
-        <div id="hud-stage" id="hud-pos">1,1</div>
+        <!-- 하단 중앙: 위치 + DEV 토글 -->
+        <div id="hud-stage"><span id="hud-pos">1,1</span></div>
         <button id="dev-toggle">⚙ DEV</button>
       </div>
+
+      <!-- 플래시 오버레이 -->
+      <div id="origin-flash"></div>
 
     <!-- 기지 화면 -->
     <div id="lobby-screen">
@@ -583,7 +597,7 @@ body.mobile-ui #dev-toggle { display:none; }
 
   <!-- ── 사이드바 (DEV / LOG) ── -->
   <div id="sidebar">
-    <div id="log-panel">
+    <div id="log-panel" class="hidden">
     <div id="log-header">
       <span>EVENT LOG</span>
       <div style="display:flex;gap:6px;">
