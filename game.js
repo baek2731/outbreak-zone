@@ -393,12 +393,12 @@ function drawVoicePopup(dt) {
   if (voicePopups.length === 0) return;
   const ts  = CONFIG.map.tileSize;
 
-  // 플레이어 화면 좌표
-  const spx = player.px - camX + ts / 2;
-  const spy = player.py - camY + ts / 2;
+  // 플레이어 화면 좌표 (줌 반영)
+  const spx = worldToScreenX(player.px + ts / 2);
+  const spy = worldToScreenY(player.py + ts / 2);
 
-  // 좌측 오프셋 — 플레이어 반지름 + 여백
-  const OFFSET_X = ts * 0.9;
+  // 좌측 오프셋 — 플레이어 반지름 + 여백 (줌 반영)
+  const OFFSET_X = ts * 0.9 * ZOOM;
   const OFFSET_Y = 0;
 
   ctx.save();
@@ -436,11 +436,10 @@ function drawVoicePopup(dt) {
 }
 
 function drawPopups(dt) {
-  // ctx.restore() 이후 화면 좌표계에서 호출됨
-  // player 화면 좌표 = player.px - camX, player.py - camY
+  // ctx.restore() 이후 화면 좌표계에서 호출됨 (줌 반영)
   const ts  = CONFIG.map.tileSize;
-  const spx = player.px - camX + ts / 2;  // 플레이어 화면 x 중앙
-  const spy = player.py - camY;            // 플레이어 화면 y 상단
+  const spx = worldToScreenX(player.px + ts / 2);  // 플레이어 화면 x 중앙
+  const spy = worldToScreenY(player.py);            // 플레이어 화면 y 상단
 
   ctx.save();
   ctx.textAlign    = 'center';
@@ -1094,6 +1093,15 @@ function drawZombieFX(ts) {
 
 let camX = 0, camY = 0, moveTimer = 0;
 
+// 카메라 줌 — 플레이어를 더 크게, 시야를 더 폐쇄적으로
+const ZOOM = 1.5;
+// 줌 반영 뷰포트 크기 (월드 단위)
+function viewW() { return W_px / ZOOM; }
+function viewH() { return H_px / ZOOM; }
+// 월드 좌표 → 화면(스크린) 좌표 — restore 이후 오버레이용
+function worldToScreenX(wx) { return (wx - camX) * ZOOM; }
+function worldToScreenY(wy) { return (wy - camY) * ZOOM; }
+
 let devRevealMines = false;
 let devInvincible  = false;
 let devRevealAll   = false;
@@ -1236,8 +1244,8 @@ function init() {
     combatGauge:0, combatDrain:0, playerPower: MG.combatPlayerPower, mashTimer:0,
   });
   revealAround(1, 1, CONFIG.player.visionRad);
-  camX = player.px + CONFIG.map.tileSize / 2 - W_px / 2;
-  camY = player.py + CONFIG.map.tileSize / 2 - H_px / 2;
+  camX = player.px + CONFIG.map.tileSize / 2 - viewW() / 2;
+  camY = player.py + CONFIG.map.tileSize / 2 - viewH() / 2;
   spawnZombies();
   document.getElementById('gameover').classList.remove('show');
   document.getElementById('gameover').classList.remove('infected');
@@ -1330,13 +1338,13 @@ window.addEventListener('keydown', e => {
   if (GAME_STATE === 'ESCAPED') {
     const earlyEl = document.getElementById('early-exit');
     if (earlyEl.classList.contains('show')) {
-      // F키 → 기지 복귀
-      if (e.code === 'KeyF') {
+      // Enter → 기지 복귀 (집에 간다)
+      if (e.code === 'Enter') {
         earlyEl.classList.remove('show');
         showEscaped('early');
         return;
       }
-      // 스페이스 → 재탐사(미회수) or 다음 층(전부회수)
+      // 스페이스 → 재탐사(미회수) or 다음 층(전부회수) — 진행
       if (e.code === 'Space') {
         const nextBtn  = document.getElementById('exit-next-btn');
         const rescanBtn = document.getElementById('exit-rescan-btn');
@@ -1613,7 +1621,7 @@ function triggerFlash(color) {
 function pauseGame() {
   if (GAME_STATE !== 'PLAYING') return;
   GAME_STATE = 'PAUSED';
-  document.getElementById('settings-menu').classList.add('show');
+  document.getElementById('settings-menu')?.classList.add('show');
   // 이동 입력 정리 — 재개 시 잔류 입력 방지
   for (const k in KEYS) KEYS[k] = false;
 }
@@ -1621,7 +1629,7 @@ function pauseGame() {
 function resumeGame() {
   if (GAME_STATE !== 'PAUSED') return;
   GAME_STATE = 'PLAYING';
-  document.getElementById('settings-menu').classList.remove('show');
+  document.getElementById('settings-menu')?.classList.remove('show');
 }
 
 function showGameOver(reason) {
@@ -3427,8 +3435,8 @@ function update(dt) {
     if (noisePulses[i].r > noisePulses[i].maxR * 1.4) noisePulses.splice(i, 1);
   }
   const ts = CONFIG.map.tileSize;
-  camX += (player.px + ts / 2 - W_px / 2 - camX) * CONFIG.camera.smooth;
-  camY += (player.py + ts / 2 - H_px / 2 - camY) * CONFIG.camera.smooth;
+  camX += (player.px + ts / 2 - viewW() / 2 - camX) * CONFIG.camera.smooth;
+  camY += (player.py + ts / 2 - viewH() / 2 - camY) * CONFIG.camera.smooth;
 }
 
 // ── 산소 / 감염 업데이트 ─────────────────────────────────────────
@@ -3493,12 +3501,13 @@ function render() {
   const ts = CONFIG.map.tileSize;
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W_px, H_px);
   ctx.save();
+  ctx.scale(ZOOM, ZOOM);
   ctx.translate(-camX, -camY);
 
   const tx0 = Math.max(0, Math.floor(camX / ts) - 1);
   const ty0 = Math.max(0, Math.floor(camY / ts) - 1);
-  const tx1 = Math.min(MAP.width,  Math.ceil((camX + W_px) / ts) + 1);
-  const ty1 = Math.min(MAP.height, Math.ceil((camY + H_px) / ts) + 1);
+  const tx1 = Math.min(MAP.width,  Math.ceil((camX + viewW()) / ts) + 1);
+  const ty1 = Math.min(MAP.height, Math.ceil((camY + viewH()) / ts) + 1);
 
   for (let ty = ty0; ty < ty1; ty++) for (let tx = tx0; tx < tx1; tx++) {
     const sx   = tx * ts, sy = ty * ts;
@@ -4294,7 +4303,11 @@ document.getElementById('d-sound-export').addEventListener('click', () => {
 })();
 
 // ESC 설정 메뉴 — 계속하기 버튼
-document.getElementById('settings-resume').addEventListener('click', resumeGame);
+document.getElementById('settings-resume')?.addEventListener('click', resumeGame);
+// 모바일 일시정지 버튼
+document.getElementById('mobile-pause')?.addEventListener('click', () => {
+  if (GAME_STATE === 'PLAYING') pauseGame();
+});
 
 // ── 메인 루프 ────────────────────────────────────────────────────
 let lastTs = 0, fps = 0, frameCount = 0, fpsTimer = 0, lastDt = 0;
