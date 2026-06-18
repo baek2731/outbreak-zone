@@ -1396,14 +1396,18 @@ window.addEventListener('keydown', e => {
       minigame.combatGauge = Math.min(MG.combatGaugeMax,
         minigame.combatGauge + minigame.playerPower);
       SoundManager.play('combat_mash');
-      // 80% 도달 + 치료제 보유 + 아직 선택 안 했으면 선택지 표시
+
+      // 80% 도달 + 치료제 보유 + 아직 선택 안 했으면 → 게이지 80에 고정 + 선택지 강제 표시
       if (!minigame.serumChosen && player.serum > 0
-          && minigame.combatGauge >= MG.combatChoiceGauge
-          && minigame.combatGauge < MG.combatWinThreshold) {
+          && minigame.combatGauge >= MG.combatChoiceGauge) {
+        minigame.combatGauge      = MG.combatChoiceGauge;  // 80에서 멈춤
         minigame.serumChoice      = true;
         minigame.serumChoiceTimer = CONFIG.serum.choiceTime;
         if (window._updateTouchUI) window._updateTouchUI();
+        return;
       }
+
+      // 선택지 이미 거부한 상태에서만 100% 승리 체크
       if (minigame.combatGauge >= MG.combatWinThreshold) endMinigame(true);
       return;
     }
@@ -1534,6 +1538,50 @@ function onStep(tx, ty) {
       showExitChoice('partial', remaining);
     }
   }
+}
+
+// ── ORIGIN 암전 연출 ─────────────────────────────────────────────
+// 크리쳐 워프 시 층별 확률로 발동, 층당 1회 상한
+const originFlash = { usedThisStage: false };
+
+function triggerOriginFlash() {
+  if (originFlash.usedThisStage) return;
+
+  // 층별 확률: 1층 10% → 5층 60%
+  const stageIdx  = Math.min(player.stage, CONFIG.stages.length - 1);
+  const chance    = 0.10 + stageIdx * 0.125;  // 0.10 / 0.225 / 0.35 / 0.475 / 0.60
+  if (Math.random() > chance) return;
+
+  originFlash.usedThisStage = true;
+
+  const overlay = document.getElementById('origin-flash');
+  const eyes    = document.getElementById('origin-eyes');
+  if (!overlay || !eyes) return;
+
+  // ① 급격한 암전
+  overlay.style.transition = 'opacity 0.08s ease';
+  overlay.style.opacity    = '1';
+
+  // ② 암전 피크 — 눈빛 + 웃음소리
+  setTimeout(() => {
+    eyes.style.opacity = '1';
+    SoundManager.play('origin_laugh');  // mp3 추가 후 활성화
+  }, 100);
+
+  // ③ 눈빛 깜빡 (한 번 더)
+  setTimeout(() => { eyes.style.opacity = '0'; }, 220);
+  setTimeout(() => { eyes.style.opacity = '1'; }, 310);
+
+  // ④ 복귀
+  setTimeout(() => {
+    eyes.style.opacity       = '0';
+    overlay.style.transition = 'opacity 0.15s ease';
+    overlay.style.opacity    = '0';
+  }, 420);
+}
+
+function resetOriginFlash() {
+  originFlash.usedThisStage = false;
 }
 
 function triggerFlash(color) {
@@ -2189,10 +2237,10 @@ function saveRunRecord(exitType) {
     localStorage.setItem(DNA_KEY, String(prevDna + finalCollected));
   } catch(e) { console.warn('기록 저장 실패', e); }
 
-  // 감염사 → 전사자 풀 등록 (다음 런에 감염자로 증원)
-  if (exitType === 'infected') {
+  // 감염사 + 일반 사망 → 전사자 풀 등록
+  if (exitType === 'infected' || exitType === 'death') {
     addToFallenPool(getCurrentUnit(), stageIdx + 1);
-    devLog(`UNIT-${String(getCurrentUnit()).padStart(2,'0')} 전사자 풀 등록`, 'warn');
+    devLog(`UNIT-${String(getCurrentUnit()).padStart(2,'0')} 전사자 풀 등록 [${exitType}]`, 'warn');
   }
 
   const label = { retire:'복귀', early:'조기탈출', death:'사망', infected:'좀비화' }[exitType] || exitType;
@@ -2641,6 +2689,9 @@ function warpZombie(z) {
   // const laughChance = 0.3 + (player.stage / CONFIG.stages.length) * 0.5;
   // if (Math.random() < laughChance) SoundManager.play('origin_laugh');
 
+  // ORIGIN 암전 연출 (층별 확률, 층당 1회)
+  triggerOriginFlash();
+
   devLog('크리쳐 워프 시작 — 이펙트 재생 중', 'warn');
 }
 
@@ -2668,7 +2719,11 @@ function dissolveInfected(z) {
   const idx = zombies.indexOf(z);
   if (idx !== -1) zombies.splice(idx, 1);
 
-  devLog('감염자 소멸 — 싸워서 보낸 것', 'warn');
+  // 좀비 수 유지 — 크리쳐로 대체 스폰 (ORIGIN이 보충)
+  // 소멸 이펙트가 끝날 즈음 등장하는 느낌으로 약간 딜레이
+  setTimeout(() => spawnExtraZombie(true), 800);
+
+  devLog('감염자 소멸 — 크리쳐로 대체 스폰 예약', 'warn');
 }
 
 function spawnExtraZombie(forceCreature = false) {
@@ -3835,6 +3890,7 @@ document.getElementById('exit-next-btn').addEventListener('click', () => {
     player.stage++;
     applyStageTransition();
   }
+  resetOriginFlash();
   init();
 });
 // 출구 팝업 — 재탐사 (미회수 시, 쿨타임 부여)
