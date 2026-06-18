@@ -387,6 +387,69 @@ function showRegretNotice(unitLabel) {
   addNotice(line1, '#cc88ff', 4.0);
 }
 
+// ── 대사 팝업 (플레이어 좌측 고정) ─────────────────────────────
+// 수치 팝업(위로 올라감)과 분리된 채널
+// fade-in 0.3s → 유지 → fade-out 0.5s
+const voicePopups = [];  // { text, color, life, maxLife, alpha }
+
+function addVoicePopup(text, color = '#ffffff') {
+  // 기존 대사 즉시 제거 (한 번에 하나만)
+  voicePopups.length = 0;
+  voicePopups.push({
+    text,
+    color,
+    life:    2.8,
+    maxLife: 2.8,
+    alpha:   0,
+  });
+}
+
+function drawVoicePopup(dt) {
+  if (voicePopups.length === 0) return;
+  const ts  = CONFIG.map.tileSize;
+
+  // 플레이어 화면 좌표
+  const spx = player.px - camX + ts / 2;
+  const spy = player.py - camY + ts / 2;
+
+  // 좌측 오프셋 — 플레이어 반지름 + 여백
+  const OFFSET_X = ts * 0.9;
+  const OFFSET_Y = 0;
+
+  ctx.save();
+  ctx.textAlign    = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.font         = 'bold 12px monospace';
+
+  for (let i = voicePopups.length - 1; i >= 0; i--) {
+    const v = voicePopups[i];
+    v.life -= dt;
+
+    // fade-in 앞 10% / fade-out 뒤 18%
+    const t = v.life / v.maxLife;          // 1→0
+    const progress = 1 - t;               // 0→1
+    v.alpha = progress < 0.10 ? progress / 0.10
+            : t < 0.18        ? t / 0.18
+            : 1.0;
+
+    if (v.life <= 0) { voicePopups.splice(i, 1); continue; }
+
+    const x = spx - OFFSET_X;
+    const y = spy + OFFSET_Y;
+
+    // 텍스트 그림자
+    ctx.globalAlpha = v.alpha * 0.85;
+    ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+    ctx.lineWidth   = 3.5;
+    ctx.strokeText(v.text, x, y);
+
+    // 텍스트 본체
+    ctx.fillStyle   = v.color;
+    ctx.fillText(v.text, x, y);
+  }
+  ctx.restore();
+}
+
 function drawPopups(dt) {
   // ctx.restore() 이후 화면 좌표계에서 호출됨
   // player 화면 좌표 = player.px - camX, player.py - camY
@@ -1604,7 +1667,7 @@ function useSerumInCombat() {
     addPopup(`DNA +${dnaBonus}`, '#cc66ff', 0.2);
     addNotice('그는 마침내 안식에 들었다', '#bb44ff', 3.0);
     const voiceRest = pickVoice('restSuccess');
-    if (voiceRest) addPopup(voiceRest, '#cc88ff', 0.4);
+    if (voiceRest) addVoicePopup(voiceRest);
     SoundManager.play('combat_win');
     // ── 전사자 풀 청소 ──────────────────────────────────────────
     if (z.fallenUnit != null) {
@@ -1630,7 +1693,7 @@ function useSerumInCombat() {
     addPopup(`산소 -${oxyLoss}%`, '#ff3333', 0.2);
     addPopup(`오염 +${infGain}%`, '#ff3333', 0.4);
     const voiceWasted = pickVoice('serumWasted');
-    if (voiceWasted) addPopup(voiceWasted, '#ff8888', 0.6);
+    if (voiceWasted) addVoicePopup(voiceWasted);
     SoundManager.play('combat_lose');
     triggerFlash('red');
     devLog('치료제 투여 — 크리쳐 무효, 전투 실패 처리', 'danger');
@@ -1783,7 +1846,7 @@ function endMinigame(success) {
               : null
           );
           const voiceDown = pickVoice('infectedDown');
-          if (voiceDown) addPopup(voiceDown, '#cc88ff', 0.25);
+          if (voiceDown) addVoicePopup(voiceDown);
         } else {
           // ── 크리쳐: 워프 이탈 ─────────────────────────────────
           setTimeout(() => {
@@ -1791,7 +1854,7 @@ function endMinigame(success) {
             warpZombie(cz);
           }, 220);
           const voiceWarp = pickVoice('creatureWarp');
-          if (voiceWarp) addPopup(voiceWarp, '#bb44ff', 0.20);
+          if (voiceWarp) addVoicePopup(voiceWarp);
         }
       }
       devLog(`전투 성공 — 산소 -${oxyLoss}%${interrupted ? ' (급습 패널티)' : ''}`, 'warn');
@@ -2589,6 +2652,9 @@ function dissolveInfected(z) {
     ? `UNIT-${String(z.fallenUnit).padStart(2, '0')}`
     : null;
 
+  // 소멸 중 접촉 판정 차단
+  z.dissolving = true;
+
   // 소멸 이펙트
   addZombieFX('dissolve', z.px + ts / 2, z.py + ts / 2, '#aa66cc', unitLabel);
 
@@ -3257,6 +3323,8 @@ function circleWallCollide(cx, cy, r, ts, width, height, tiles) {
 // ── ③ 접촉 → 전투 미니게임 진입 ───────────────────────────────
 function zombieContact(z, c, zcx, zcy) {
   if (z.stunTimer > 0) return;                     // 스턴 중인 좀비는 접촉 없음
+  if (z.hidden) return;                             // 워프/소멸 이펙트 중 접촉 없음
+  if (z.dissolving) return;                         // 소멸 대기 중 접촉 없음
   if (minigame.postCooldown > 0) return;          // 무적 쿨타임 중
   if (minigame.active && minigame.type === 'combat') return; // 전투 중 중복 차단
   // 출구 처리 중이거나 탈출/게임오버 상태면 전투 차단
@@ -3466,6 +3534,7 @@ function render() {
 
   // 화면 좌표계 오버레이 (ctx.restore 이후)
   drawPopups(lastDt);
+  drawVoicePopup(lastDt);
   drawNotices(lastDt);
 }
 
