@@ -39,19 +39,19 @@ canvas#canvas { display:block; width:960px; height:540px; }
 
 /* 좌상단: 산소 + 감염 게이지 */
 #hud-left {
-  position:absolute; top:12px; left:12px;
-  display:flex; flex-direction:column; gap:7px;
+  position:absolute; top:14px; left:14px;
+  display:flex; flex-direction:column; gap:9px;
   pointer-events:none;
 }
 .hud-gauge-row {
-  display:flex; align-items:center; gap:8px;
+  display:flex; align-items:center; gap:10px;
 }
 .hud-gauge-label {
-  color:#888; font-size:0.72rem; letter-spacing:0.05em;
-  width:24px; text-align:right; flex-shrink:0;
+  color:#aaa; font-size:1.0rem; letter-spacing:0.05em;
+  width:28px; text-align:right; flex-shrink:0;
 }
 .hud-gauge-bg {
-  position:relative; width:120px; height:8px;
+  position:relative; width:160px; height:12px;
   background:#1a1a1a; border:1px solid #2a2a2a; border-radius:2px; overflow:visible;
 }
 .hud-gauge-fill {
@@ -63,30 +63,51 @@ canvas#canvas { display:block; width:960px; height:540px; }
   background:#ff8800; opacity:0.7; left:60%;
 }
 .hud-gauge-val {
-  color:#00ff88; font-size:0.78rem;
-  min-width:38px;
+  color:#00ff88; font-size:1.0rem; font-weight:bold;
+  min-width:48px;
 }
 
-/* 우상단: 치료제 / 소나 / 병원체 / DNA */
+/* 우상단: 진행도 + DNA */
 #hud-right {
-  position:absolute; top:12px; right:12px;
-  display:flex; flex-direction:column; gap:5px; align-items:flex-end;
+  position:absolute; top:14px; right:14px;
+  display:flex; flex-direction:column; gap:7px; align-items:flex-end;
   pointer-events:none;
 }
 .hud-chip {
-  background:rgba(0,0,0,0.65); border:1px solid #1a1a1a;
-  padding:4px 9px; font-size:0.74rem;
-  display:flex; gap:8px; align-items:center;
+  background:rgba(0,0,0,0.6); border:1px solid #222;
+  padding:6px 12px; 
+  display:flex; gap:10px; align-items:center;
   border-radius:3px;
 }
-.hud-chip-label { color:#666; font-size:0.62rem; letter-spacing:0.05em; }
-.hud-chip-val { color:#00ff88; font-size:0.78rem; }
+.hud-chip-label { color:#888; font-size:0.82rem; letter-spacing:0.04em; }
+.hud-chip-val { color:#00ff88; font-size:0.95rem; font-weight:bold; }
 
-/* 하단 중앙: 위치 */
-#hud-stage {
-  position:absolute; bottom:10px; left:50%;
+/* 중앙 하단: 기능키 바 (PC 전용) */
+#hud-actions {
+  position:absolute; bottom:14px; left:50%;
   transform:translateX(-50%);
-  font-size:0.62rem; color:#444; letter-spacing:0.15em;
+  display:flex; gap:10px;
+  pointer-events:none;
+}
+.hud-action {
+  background:rgba(0,0,0,0.65); border:1px solid #2a2a2a;
+  border-radius:4px; padding:6px 14px;
+  display:flex; align-items:center; gap:8px;
+}
+.hud-action-key {
+  background:#1a1a1a; border:1px solid #3a3a3a; border-radius:3px;
+  color:#ccc; font-size:0.82rem; font-weight:bold;
+  width:22px; height:22px; display:flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+}
+.hud-action-name { color:#888; font-size:0.82rem; }
+.hud-action-val { color:#00ff88; font-size:0.92rem; font-weight:bold; }
+
+/* 하단 위치 표시 */
+#hud-stage {
+  position:absolute; bottom:4px; left:50%;
+  transform:translateX(-50%);
+  font-size:0.6rem; color:#333; letter-spacing:0.15em;
   pointer-events:none;
 }
 
@@ -99,18 +120,18 @@ canvas#canvas { display:block; width:960px; height:540px; }
 #minimap-wrap:hover { opacity:1; }
 canvas#minimap { display:block; image-rendering:pixelated; }
 
-/* ── 볼륨 패널 ── */
-#vol-panel {
-  position:absolute; bottom:10px; left:10px;
-  background:rgba(0,0,0,0.75); border:1px solid #222;
-  padding:8px 10px; font-size:0.6rem; color:#666;
-  min-width:140px; z-index:10;
+/* ── ESC 설정 메뉴 ── */
+#settings-menu { gap:20px; }
+#settings-vol {
+  background:rgba(0,0,0,0.5); border:1px solid #222;
+  padding:20px 26px; border-radius:6px;
+  display:flex; flex-direction:column; gap:14px;
+  min-width:300px;
 }
-#vol-panel .vol-title { color:#ffaa00; font-size:0.58rem; letter-spacing:0.1em; margin-bottom:6px; text-transform:uppercase; }
-#vol-panel .vol-row { display:flex; align-items:center; gap:6px; margin:3px 0; }
-#vol-panel .vol-row label { color:#888; width:36px; flex-shrink:0; }
-#vol-panel .vol-row input[type=range] { width:72px; accent-color:#ffaa00; cursor:pointer; }
-#vol-panel .vol-val { color:#ffaa00; min-width:24px; text-align:right; font-size:0.58rem; }
+.set-row { display:flex; align-items:center; gap:12px; }
+.set-row label { color:#aaa; font-size:0.85rem; width:80px; flex-shrink:0; }
+.set-row input[type=range] { flex:1; accent-color:#ffaa00; cursor:pointer; }
+.set-val { color:#ffaa00; font-size:0.85rem; min-width:36px; text-align:right; }
 
 /* ── 플래시 오버레이 ── */
 #flash { position:absolute; inset:0; pointer-events:none; opacity:0; background:rgba(255,50,50,0.45); transition:opacity 0.08s; }
@@ -216,12 +237,12 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 .action-btn .btn-label { font-size:0.48rem; color:rgba(255,255,255,0.4); }
 
 /* ── 모바일 전용 조정 ── */
-#game-area.mobile #minimap-wrap { bottom:auto; top:10px; right:10px; }
-#game-area.mobile #vol-panel    { display:none; }
+#game-area.mobile #minimap-wrap { bottom:auto; top:14px; right:14px; }
 body.mobile-ui #game-area { width:100vw; height:100dvh; }
 body.mobile-ui canvas#canvas { width:100vw; height:100dvh; }
 body.mobile-ui #sidebar { display:none; }
 body.mobile-ui #dev-toggle { display:none; }
+body.mobile-ui #hud-actions { display:none; }
 
 /* ── 기지(로비) 화면 ── */
 :root { --lb-base:13px; }
@@ -328,20 +349,8 @@ body.mobile-ui #dev-toggle { display:none; }
           </div>
         </div>
 
-        <!-- 우상단: 치료제 / 소나 / 병원체 / DNA -->
+        <!-- 우상단: 진행도 + DNA -->
         <div id="hud-right">
-          <div class="hud-chip">
-            <span class="hud-chip-label">치료제[D]</span>
-            <span class="hud-chip-val" id="hud-serum" style="color:#bb44ff;">💉 1</span>
-          </div>
-          <div class="hud-chip">
-            <span class="hud-chip-label">소나[F]</span>
-            <span class="hud-chip-val" id="hud-basic">READY</span>
-          </div>
-          <div class="hud-chip">
-            <span class="hud-chip-label">정밀[G]</span>
-            <span class="hud-chip-val" id="hud-precise">📡 2</span>
-          </div>
           <div class="hud-chip">
             <span class="hud-chip-label">☣ 병원체</span>
             <span class="hud-chip-val" id="hud-mines" style="color:#ff6644;">0/0</span>
@@ -351,14 +360,32 @@ body.mobile-ui #dev-toggle { display:none; }
             <span class="hud-chip-val" id="hud-items">0/3</span>
           </div>
           <div class="hud-chip">
-            <span class="hud-chip-label">탐험</span>
-            <span class="hud-chip-val" id="hud-explored">0%</span>
-          </div>
-          <div class="hud-chip">
             <span class="hud-chip-label">🧬 DNA</span>
             <span class="hud-chip-val" id="hud-dna" style="color:#cc66ff;">0</span>
           </div>
         </div>
+
+        <!-- 중앙 하단: 기능키 (PC 전용) -->
+        <div id="hud-actions">
+          <div class="hud-action">
+            <span class="hud-action-key">D</span>
+            <span class="hud-action-name">치료제</span>
+            <span class="hud-action-val" id="hud-serum" style="color:#bb44ff;">💉 1</span>
+          </div>
+          <div class="hud-action">
+            <span class="hud-action-key">F</span>
+            <span class="hud-action-name">소나</span>
+            <span class="hud-action-val" id="hud-basic">READY</span>
+          </div>
+          <div class="hud-action">
+            <span class="hud-action-key">G</span>
+            <span class="hud-action-name">정밀</span>
+            <span class="hud-action-val" id="hud-precise">📡 2</span>
+          </div>
+        </div>
+
+        <!-- 숨김 — updateHUD 호환용 (탐험률 제거됨, 참조만 유지) -->
+        <span id="hud-explored" style="display:none;">0%</span>
 
         <!-- 하단 중앙: 위치 + DEV 토글 -->
         <div id="hud-stage"><span id="hud-pos">1,1</span></div>
@@ -516,23 +543,27 @@ body.mobile-ui #dev-toggle { display:none; }
       </div>
     </div>
 
-    <div id="vol-panel">
-      <div class="vol-title">🔊 볼륨</div>
-      <div class="vol-row">
-        <label>전체</label>
-        <input type="range" id="vp-master" min="0" max="1" step="0.05" value="0.25">
-        <span class="vol-val" id="vp-master-v">0.25</span>
+    <!-- ESC 설정 메뉴 (게임 일시정지) -->
+    <div id="settings-menu" class="overlay">
+      <div class="ov-title green" style="font-size:1.1rem;">⏸ 일시정지</div>
+      <div id="settings-vol">
+        <div class="set-row">
+          <label>전체 볼륨</label>
+          <input type="range" id="vp-master" min="0" max="1" step="0.05" value="0.25">
+          <span class="set-val" id="vp-master-v">0.25</span>
+        </div>
+        <div class="set-row">
+          <label>BGM</label>
+          <input type="range" id="vp-bgm" min="0" max="1" step="0.05" value="0.30">
+          <span class="set-val" id="vp-bgm-v">0.30</span>
+        </div>
+        <div class="set-row">
+          <label>효과음</label>
+          <input type="range" id="vp-sfx" min="0" max="1" step="0.05" value="0.75">
+          <span class="set-val" id="vp-sfx-v">0.75</span>
+        </div>
       </div>
-      <div class="vol-row">
-        <label>BGM</label>
-        <input type="range" id="vp-bgm" min="0" max="1" step="0.05" value="0.30">
-        <span class="vol-val" id="vp-bgm-v">0.30</span>
-      </div>
-      <div class="vol-row">
-        <label>효과음</label>
-        <input type="range" id="vp-sfx" min="0" max="1" step="0.05" value="0.75">
-        <span class="vol-val" id="vp-sfx-v">0.75</span>
-      </div>
+      <button class="ov-btn green" id="settings-resume">계속하기 (ESC)</button>
     </div>
 
     <!-- 게임오버 -->

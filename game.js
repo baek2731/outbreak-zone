@@ -1289,11 +1289,24 @@ const GAME_KEYS = new Set([
 ]);
 
 // ── 게임 상태 머신 ──────────────────────────────────────────────
-// 'TITLE' | 'INTRO' | 'PLAYING' | 'ESCAPED' | 'GAMEOVER'
+// 'TITLE' | 'LOBBY' | 'INTRO' | 'PLAYING' | 'PAUSED' | 'ESCAPED' | 'GAMEOVER'
 let GAME_STATE = 'TITLE';
 
 window.addEventListener('keydown', e => {
   if (GAME_KEYS.has(e.code)) e.preventDefault();
+
+  // ── ESC: 일시정지 토글 (PLAYING ↔ PAUSED) ────────────────────
+  if (e.code === 'Escape') {
+    if (GAME_STATE === 'PLAYING') {
+      pauseGame();
+    } else if (GAME_STATE === 'PAUSED') {
+      resumeGame();
+    }
+    return;
+  }
+
+  // ── PAUSED: ESC 외 입력 차단 ─────────────────────────────────
+  if (GAME_STATE === 'PAUSED') return;
 
   // ── TITLE 상태: 스페이스/엔터로 시작 ──────────────────────────
   if (GAME_STATE === 'TITLE') {
@@ -1594,6 +1607,21 @@ function triggerFlash(color) {
       }, 200);
     }
   }
+}
+
+// ── 일시정지 / 재개 ─────────────────────────────────────────────
+function pauseGame() {
+  if (GAME_STATE !== 'PLAYING') return;
+  GAME_STATE = 'PAUSED';
+  document.getElementById('settings-menu').classList.add('show');
+  // 이동 입력 정리 — 재개 시 잔류 입력 방지
+  for (const k in KEYS) KEYS[k] = false;
+}
+
+function resumeGame() {
+  if (GAME_STATE !== 'PAUSED') return;
+  GAME_STATE = 'PLAYING';
+  document.getElementById('settings-menu').classList.remove('show');
 }
 
 function showGameOver(reason) {
@@ -4264,6 +4292,9 @@ document.getElementById('d-sound-export').addEventListener('click', () => {
     });
   });
 })();
+
+// ESC 설정 메뉴 — 계속하기 버튼
+document.getElementById('settings-resume').addEventListener('click', resumeGame);
 
 // ── 메인 루프 ────────────────────────────────────────────────────
 let lastTs = 0, fps = 0, frameCount = 0, fpsTimer = 0, lastDt = 0;
