@@ -173,21 +173,6 @@ function drawZombie(z, ts) {
     ctx.globalAlpha = 1;
   }
 
-  // 스턴 표시 — 번개 아이콘이 서서히 사라짐
-  if (z.stunTimer > 0) {
-    const ratio = z.stunTimer / MG.combatStunTime;  // 1→0
-    // 노란 오버레이 (점점 희미해짐)
-    ctx.globalAlpha = 0.35 * ratio;
-    ctx.beginPath(); ctx.arc(cx, cy, r * 1.1, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffee44'; ctx.fill();
-    // ⚡ 아이콘 (페이드아웃)
-    ctx.globalAlpha = ratio;
-    ctx.font = `${ts * 0.3}px monospace`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('⚡', cx, cy - r * 1.6);
-    ctx.globalAlpha = 1;
-  }
-
   ctx.restore();
 }
 
@@ -1151,7 +1136,6 @@ const MG = {
   combatFailInfect:   8,
   // 기타
   postCooldown:     3.0,
-  combatStunTime:   4.0,   // 전투 승리 후 좀비 무력화 시간 (초)
   resultShowTime:   1.0,
   visionRadMine:    2,
   // 전투 게이지
@@ -2280,9 +2264,6 @@ function removeFromFallenPool(unitNum) {
   saveFallenPool(pool);
   return true;
 }
-function clearFallenPool() {
-  try { localStorage.removeItem(FALLEN_KEY); } catch(e) {}
-}
 
 // [방법A - 튜토리얼 대체] UNIT-00 강제 등록
 // 튜토리얼 완성 후 이 함수를 튜토리얼 사망 처리로 교체할 것
@@ -3393,13 +3374,6 @@ function zombieContact(z, c, zcx, zcy) {
   }
 }
 
-
-function isWallAt(px, py, mapWidth, ts, tiles) {
-  const tx = Math.floor(px / ts);
-  const ty = Math.floor(py / ts);
-  if (tx < 0 || ty < 0 || tx >= mapWidth || ty >= Math.floor(tiles.length / mapWidth)) return true;
-  return tiles[ty * mapWidth + tx] === T.WALL;
-}
 
 // ── 업데이트 ─────────────────────────────────────────────────────
 function update(dt) {
