@@ -1558,29 +1558,23 @@ function triggerOriginFlash() {
   if (!overlay) return;
 
   // ① 급격한 암전
-  overlay.style.transition       = 'opacity 0.08s ease, background-color 0.06s ease';
+  overlay.style.transition       = 'opacity 0.06s ease, background-color 0.05s ease';
   overlay.style.backgroundColor  = '#000000';
   overlay.style.opacity          = '1';
 
-  // ② 암전 유지 후 화이트아웃으로 충격 전환
+  // ② 화이트아웃 충격
   setTimeout(() => {
     overlay.style.backgroundColor = '#ffffff';
-  }, 250);
+  }, 160);
 
-  // ③ 웃음소리 — 화이트아웃 직후
+  // ③ 복귀
   setTimeout(() => {
-    SoundManager.play('origin_laugh');
-  }, 320);
-
-  // ④ 천천히 복귀
-  setTimeout(() => {
-    overlay.style.transition = 'opacity 0.40s ease';
+    overlay.style.transition = 'opacity 0.25s ease';
     overlay.style.opacity    = '0';
-    // 복귀 완료 후 배경색 초기화
     setTimeout(() => {
       overlay.style.backgroundColor = '#000000';
-    }, 450);
-  }, 430);
+    }, 280);
+  }, 280);
 }
 
 function resetOriginFlash() {
