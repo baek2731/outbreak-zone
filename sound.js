@@ -59,6 +59,8 @@ const SoundManager = (() => {
     upgrade_buy:       0.55,
     collect_key:       0.70,
     zombie_chase:      0.85,  // 볼륨 기준값 (1~3 공통)
+    origin_laugh:      0.70,  // ORIGIN 웃음소리 (크리쳐 워프 시, 확률 재생)
+    creature_warp:     0.60,  // 크리쳐 워프 전조음
   };
 
   // 개별 BGM 볼륨

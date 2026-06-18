@@ -919,6 +919,97 @@ const sonar = {
 const noisePulses = [];
 const popups = [];   // 플로팅 텍스트 팝업 { text, wx, wy, color, alpha, life, maxLife, vy, delay }
 
+// ── 좀비 소멸/워프 이펙트 ────────────────────────────────────────
+// type: 'dissolve' (감염자 소멸) | 'warp' (크리쳐 워프 out) | 'warpIn' (크리쳐 워프 재출현)
+const zombieFX = [];  // { type, wx, wy, life, maxLife, color, scale, unitLabel }
+
+function addZombieFX(type, wx, wy, color = '#bb44ff', unitLabel = null) {
+  const dur = type === 'warpIn' ? 0.5 : 0.6;
+  zombieFX.push({ type, wx, wy, life: dur, maxLife: dur, color, scale: 1.0, unitLabel });
+}
+
+function updateZombieFX(dt) {
+  for (const fx of zombieFX) fx.life -= dt;
+  for (let i = zombieFX.length - 1; i >= 0; i--) {
+    if (zombieFX[i].life <= 0) zombieFX.splice(i, 1);
+  }
+}
+
+function drawZombieFX(ts) {
+  for (const fx of zombieFX) {
+    const t     = Math.max(0, fx.life / fx.maxLife); // 1→0
+    const cx    = fx.wx, cy = fx.wy;
+    const r     = ts * 0.30;
+    ctx.save();
+
+    if (fx.type === 'dissolve') {
+      // 감염자 소멸: 아래로 가라앉으며 페이드
+      const sinkY = cy + (1 - t) * ts * 0.25;
+      ctx.globalAlpha = t * t;
+      ctx.fillStyle   = fx.color;
+      // 몸통 원
+      ctx.beginPath();
+      ctx.arc(cx, sinkY, r * (0.5 + t * 0.5), 0, Math.PI * 2);
+      ctx.fill();
+      // 인식표 텍스트 (fallenUnit 있을 때)
+      if (fx.unitLabel && t > 0.4) {
+        ctx.globalAlpha = (t - 0.4) / 0.6;
+        ctx.fillStyle   = '#cc88ff';
+        ctx.font        = `bold ${Math.round(ts * 0.22)}px monospace`;
+        ctx.textAlign   = 'center';
+        ctx.fillText(fx.unitLabel, cx, sinkY - r * 1.6);
+      }
+
+    } else if (fx.type === 'warp') {
+      // 크리쳐 워프 아웃: 중심으로 수축하며 사라짐
+      const shrink = t * t;          // 빠르게 작아짐
+      const spin   = (1 - t) * 3.0; // 약간 회전
+      ctx.translate(cx, cy);
+      ctx.rotate(spin);
+      ctx.globalAlpha = t;
+      // 수축 링
+      ctx.strokeStyle = fx.color;
+      ctx.lineWidth   = 2 * t;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * (shrink * 1.4 + 0.1), 0, Math.PI * 2);
+      ctx.stroke();
+      // 중심 코어
+      ctx.fillStyle = fx.color;
+      ctx.globalAlpha = t * 0.8;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * shrink, 0, Math.PI * 2);
+      ctx.fill();
+      // 보라빛 파티클 방사 (4개)
+      ctx.globalAlpha = t * 0.6;
+      for (let i = 0; i < 4; i++) {
+        const a  = (i / 4) * Math.PI * 2 + spin;
+        const pr = r * (1 - t) * 1.5;
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * pr, Math.sin(a) * pr, r * 0.12 * t, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+    } else if (fx.type === 'warpIn') {
+      // 크리쳐 재출현: 바깥에서 안으로 수렴하며 등장
+      const grow = 1 - t;          // 0→1
+      ctx.translate(cx, cy);
+      ctx.globalAlpha = grow * 0.9;
+      ctx.strokeStyle = fx.color;
+      ctx.lineWidth   = 1.5 * (1 - grow);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * (0.3 + grow * 0.7), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = fx.color;
+      ctx.globalAlpha = grow * 0.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * grow * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+}
+
 let camX = 0, camY = 0, moveTimer = 0;
 let devRevealMines = false;
 let devInvincible  = false;
@@ -1638,11 +1729,22 @@ function endMinigame(success) {
       if (interrupted) player.infection = Math.min(100, player.infection + 5);
       addPopup(`산소 -${oxyLoss}%`, '#ffaa00', 0);
       if (interrupted) addPopup('오염 +5%', '#ff8800', 0.18);
-      // 전투 대상 좀비 무력화
-      if (minigame.combatZombie) {
-        minigame.combatZombie.stunTimer = MG.combatStunTime;
-        minigame.combatZombie.state     = 'WANDER';
-        minigame.combatZombie.hasTarget = false;
+
+      const cz = minigame.combatZombie;
+      if (cz) {
+        if (cz.faction === 'INFECTED') {
+          // ── 감염자: 소멸 ───────────────────────────────────────
+          dissolveInfected(cz);
+          showRegretNotice(
+            cz.fallenUnit != null
+              ? `UNIT-${String(cz.fallenUnit).padStart(2, '0')}`
+              : null
+          );
+        } else {
+          // ── 크리쳐: ORIGIN에게 회수 (워프 이탈) ────────────────
+          warpZombie(cz);
+          addPopup('워프 이탈', '#bb44ff', 0.15);
+        }
       }
       devLog(`전투 성공 — 산소 -${oxyLoss}%${interrupted ? ' (급습 패널티)' : ''}`, 'warn');
     } else {
@@ -2374,6 +2476,72 @@ function updateGuardHomePoints() {
   }
 }
 
+// ── 크리쳐 워프 이탈 ────────────────────────────────────────────
+// 전투 승리 시 크리쳐를 맵 반대편으로 워프시킴 (ORIGIN 회수 연출)
+function warpZombie(z) {
+  const { tiles, width, height } = MAP;
+  const ts   = CONFIG.map.tileSize;
+  const minD = CONFIG.zombie.spawnDist + 3;   // 플레이어에서 충분히 멀리
+
+  // 후보 타일: FLOOR이고 플레이어에서 minD 이상 떨어진 곳
+  const candidates = [];
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    if (tiles[y * width + x] !== T.FLOOR) continue;
+    if (Math.hypot(x - player.tx, y - player.ty) < minD) continue;
+    candidates.push([x, y]);
+  }
+  if (candidates.length === 0) return;   // 워프 실패 시 그냥 스턴 유지
+
+  const dest = candidates[Math.floor(Math.random() * candidates.length)];
+
+  // 워프 아웃 이펙트 (현재 위치)
+  addZombieFX('warp', z.px + ts / 2, z.py + ts / 2, '#bb44ff');
+
+  // 사운드 — 50% 확률로 ORIGIN 웃음소리 (현재 슬롯만 예약, mp3 추가 후 활성화)
+  // const laughChance = 0.3 + (player.stage / CONFIG.stages.length) * 0.5;
+  // if (Math.random() < laughChance) SoundManager.play('origin_laugh');
+
+  // 이동
+  z.px = dest[0] * ts;
+  z.py = dest[1] * ts;
+  z.tx = dest[0];
+  z.ty = dest[1];
+
+  // 워프 후 짧은 스턴 (재즉시접촉 방지)
+  z.stunTimer  = 1.8;
+  z.state      = 'WANDER';
+  z.hasTarget  = false;
+
+  // 워프 인 이펙트 (도착 위치)
+  addZombieFX('warpIn', z.px + ts / 2, z.py + ts / 2, '#bb44ff');
+
+  devLog(`크리쳐 워프 이탈 → (${dest[0]},${dest[1]}) [ORIGIN 회수]`, 'warn');
+}
+
+// ── 감염자 소멸 처리 ─────────────────────────────────────────────
+// 치료제 없이 전투 승리 시 — "싸워서 보낸 것"
+function dissolveInfected(z) {
+  const ts = CONFIG.map.tileSize;
+  const unitLabel = z.fallenUnit != null
+    ? `UNIT-${String(z.fallenUnit).padStart(2, '0')}`
+    : null;
+
+  // 소멸 이펙트
+  addZombieFX('dissolve', z.px + ts / 2, z.py + ts / 2, '#aa66cc', unitLabel);
+
+  // 전사자 풀 청소
+  if (z.fallenUnit != null) {
+    const cleaned = removeFromFallenPool(z.fallenUnit);
+    if (cleaned) devLog(`${unitLabel} — 전투로 보냄, 전사자 풀 제거`, 'good');
+  }
+
+  // 좀비 배열에서 제거
+  const idx = zombies.indexOf(z);
+  if (idx !== -1) zombies.splice(idx, 1);
+
+  devLog('감염자 소멸 — 싸워서 보낸 것', 'warn');
+}
+
 function spawnExtraZombie(forceCreature = false) {
   const { tiles, width, height } = MAP;
   const ts   = CONFIG.map.tileSize;
@@ -3062,6 +3230,7 @@ function update(dt) {
   updateZombies(dt);
   updateMinigame(dt);
   updateOxygenInfection(dt);
+  updateZombieFX(dt);
   if (player.exitCooldown > 0) player.exitCooldown -= dt;
 
   // 소음 파동 업데이트
@@ -3218,6 +3387,7 @@ function render() {
   for (const z of zombies) {
     if (VISIBLE[z.ty * MAP.width + z.tx]) drawZombie(z, ts);
   }
+  drawZombieFX(ts);
   drawPlayer(ts);
   drawMinePrompt(ts);
   drawMinigame(ts);
