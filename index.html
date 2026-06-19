@@ -19,7 +19,7 @@ html,body { height:100%; background:#111; touch-action:none; user-select:none; o
 /* ── 게임 컨테이너 (960×540 고정, 화면 중앙) ── */
 #game-wrap {
   flex:1; display:flex; align-items:center; justify-content:center;
-  background:#0a0a0a; overflow:hidden;
+  background:#151515; overflow:hidden;
   min-width:0;
 }
 #game-area {
@@ -28,6 +28,7 @@ html,body { height:100%; background:#111; touch-action:none; user-select:none; o
   flex-shrink:0;
   overflow:hidden;
   background:#000;
+  box-shadow:0 0 0 1px rgba(255,255,255,0.08), 0 20px 60px rgba(0,0,0,0.6);
 }
 canvas#canvas { display:block; width:960px; height:540px; }
 
@@ -156,34 +157,49 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 
 /* ── 사이드바 (DEV + LOG) ── */
 #sidebar {
-  display:flex; flex-direction:row;
-  flex-shrink:0; align-self:stretch;
-  background:#050505; border-left:1px solid #111;
+  position:fixed; top:0; right:0; height:100dvh;
+  display:flex;
+  z-index:50;
+  pointer-events:none;
 }
+#sidebar > * { pointer-events:auto; }
 #dev-panel {
   width:0; background:#050505; border-left:1px solid #1a1a1a;
   overflow:hidden; flex-shrink:0; transition:width 0.15s;
+  display:flex; flex-direction:column;
 }
-#dev-panel.open { width:260px; }
-#dev-inner { padding:12px; min-width:260px; overflow-y:auto; max-height:100vh; }
-.dev-row input[type=range].snd { width:90px; accent-color:#ff8800; }
-.dev-row { display:flex; align-items:center; gap:6px; font-size:0.6rem; color:#555; margin:3px 0; }
-.dev-row input[type=range] { width:80px; accent-color:#00ff88; cursor:pointer; }
-.dev-val { font-size:0.66rem; color:#00ff88; min-width:32px; text-align:right; }
-.dev-btn { width:100%; margin-top:5px; text-align:left; background:none; border:1px solid #222; color:#444; font-family:monospace; font-size:0.6rem; padding:4px 8px; cursor:pointer; }
+#dev-panel.open { width:340px; }
+
+/* 탭 버튼 */
+#dev-tabs { display:flex; flex-shrink:0; border-bottom:1px solid #1a1a1a; }
+.dev-tab {
+  flex:1; background:none; border:none; color:#555;
+  font-family:monospace; font-size:0.95rem; padding:12px 8px; cursor:pointer;
+  border-bottom:2px solid transparent;
+}
+.dev-tab:hover { color:#888; }
+.dev-tab.active { color:#ffaa00; border-bottom-color:#ffaa00; }
+
+/* 탭 콘텐츠 — 평소 숨김, active일 때만 표시 */
+.dev-tab-content { display:none; flex:1; overflow-y:auto; min-height:0; }
+.dev-tab-content.active { display:block; }
+#log-panel.dev-tab-content.active { display:flex; flex-direction:column; }
+
+#dev-inner { padding:16px; min-width:340px; }
+.dev-row input[type=range].snd { width:100px; accent-color:#ff8800; }
+.dev-row { display:flex; align-items:center; gap:8px; font-size:0.9rem; color:#888; margin:5px 0; }
+.dev-row input[type=range] { width:90px; accent-color:#00ff88; cursor:pointer; }
+.dev-val { font-size:0.99rem; color:#00ff88; min-width:42px; text-align:right; }
+.dev-btn { width:100%; margin-top:7px; text-align:left; background:none; border:1px solid #2a2a2a; color:#777; font-family:monospace; font-size:0.9rem; padding:7px 10px; cursor:pointer; }
 .dev-btn:hover { border-color:#555; color:#aaa; }
-.dev-info { font-size:0.63rem; color:#444; line-height:2.0; margin-top:10px; border-top:1px solid #1a1a1a; padding-top:8px; }
-.dev-log-box { font-size:0.58rem; color:#555; line-height:1.8; max-height:120px; overflow-y:auto; }
-#log-panel { width:280px; flex-shrink:0; border-left:1px solid #111; transition:width 0.15s; }
-#log-panel.hidden { width:0; overflow:hidden; }
-#log-inner { padding:10px; overflow-y:auto; height:100%; }
-#log-header { display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid #1a1a1a; font-size:0.62rem; color:#666; letter-spacing:0.1em; }
-#log-header button { background:none; border:1px solid #222; color:#444; font-family:monospace; font-size:0.55rem; padding:2px 6px; cursor:pointer; }
-#log-header button:hover { border-color:#555; color:#888; }
-#log-body { padding:8px 10px; overflow-y:auto; height:calc(100% - 34px); font-size:0.6rem; line-height:1.7; color:#555; }
-.dev-title { color:#ffaa00; font-size:0.72rem; letter-spacing:0.1em; margin-bottom:10px; }
-.dev-section { font-size:0.58rem; color:#444; letter-spacing:0.08em; margin:10px 0 4px; text-transform:uppercase; }
-.dev-row label { color:#666; font-size:0.6rem; flex:1; }
+.dev-info { font-size:0.94rem; color:#666; line-height:2.0; margin-top:14px; border-top:1px solid #1a1a1a; padding-top:10px; }
+#log-header { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid #1a1a1a; font-size:0.93rem; color:#888; letter-spacing:0.06em; flex-shrink:0; }
+#log-header button { background:none; border:1px solid #2a2a2a; color:#666; font-family:monospace; font-size:0.82rem; padding:3px 9px; cursor:pointer; }
+#log-header button:hover { border-color:#555; color:#aaa; }
+#log-body { padding:10px 12px; overflow-y:auto; flex:1; font-size:0.9rem; line-height:1.7; color:#777; }
+.dev-title { color:#ffaa00; font-size:1.08rem; letter-spacing:0.06em; margin-bottom:14px; }
+.dev-section { font-size:0.87rem; color:#666; letter-spacing:0.05em; margin:14px 0 6px; text-transform:uppercase; }
+.dev-row label { color:#888; font-size:0.9rem; flex:1; }
 
 /* DEV 토글 버튼 — 게임 우하단 절대위치 */
 #dev-toggle {
@@ -692,21 +708,16 @@ body.mobile-ui #mobile-pause { position:absolute; top:auto; bottom:14px; left:14
   <!-- DEV 토글 — 게임 영역 바깥 좌상단 고정 -->
   <button id="dev-toggle">⚙ DEV</button>
 
-  <!-- ── 사이드바 (DEV / LOG) ── -->
+  <!-- ── 사이드바 (DEV — 탭: 설정 / 로그) ── -->
   <div id="sidebar">
-    <div id="log-panel" class="hidden">
-    <div id="log-header">
-      <span>EVENT LOG</span>
-      <div style="display:flex;gap:6px;">
-        <button id="log-clear">CLR</button>
-        <button id="log-toggle-btn">✕</button>
-      </div>
-    </div>
-    <div id="log-body"></div>
-  </div>
     <div id="dev-panel">
-    <div id="dev-inner">
-      <div class="dev-title">⚙ DEV</div>
+      <div id="dev-tabs">
+        <button class="dev-tab active" id="tab-settings">⚙ 설정</button>
+        <button class="dev-tab" id="tab-log">📋 로그</button>
+      </div>
+
+      <!-- 설정 탭 -->
+      <div id="dev-inner" class="dev-tab-content active">
 
       <div class="dev-section">STAGE (즉시 점프)</div>
       <div class="dev-row"><label>스테이지</label><input type="range" id="d-stage" min="1" max="5" step="1" value="1"><span class="dev-val" id="d-stage-v">1</span></div>
@@ -746,7 +757,7 @@ body.mobile-ui #mobile-pause { position:absolute; top:auto; bottom:14px; left:14
       <button class="dev-btn" id="d-killzombies">☠ 좀비 전체 제거</button>
       <button class="dev-btn" id="d-zombiefov">👁 좀비 시야 표시 OFF</button>
       <button class="dev-btn" id="d-touch-toggle">📱 터치 조작 OFF</button>
-      <button class="dev-btn" id="d-log-toggle">📋 이벤트 로그 ON</button>
+      <button class="dev-btn" id="d-log-toggle">📋 이벤트 로그 보기</button>
       <button class="dev-btn" id="d-records">📋 수집 기록 보기</button>
       <button class="dev-btn" id="d-clearrecords">🗑 기록 초기화</button>
       <div class="dev-section">기지 UI 폰트</div>
@@ -812,12 +823,17 @@ body.mobile-ui #mobile-pause { position:absolute; top:auto; bottom:14px; left:14
       <div class="dev-row"><label>sting_gameover</label><input type="range" class="snd bgm-slider" data-id="sting_gameover" min="0" max="1" step="0.05" value="0.60"><span class="dev-val snd">0.60</span></div>
 
       <button class="dev-btn" id="d-sound-export" style="border-color:#ff8800;color:#ff8800;margin-top:8px;">💾 사운드 설정 내보내기</button>
+      </div>
 
-      <div class="dev-section">EVENT LOG</div>
-      <div id="dev-log"></div>
+      <!-- 로그 탭 -->
+      <div id="log-panel" class="dev-tab-content">
+        <div id="log-header">
+          <span>EVENT LOG</span>
+          <button id="log-clear">CLR</button>
+        </div>
+        <div id="log-body"></div>
+      </div>
     </div>
-  </div>
-  </div>
 
 </div>
 

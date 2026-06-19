@@ -3747,6 +3747,29 @@ document.getElementById('dev-toggle').addEventListener('click', () => {
   resize();
 });
 
+// ── DEV 패널 내부 탭 전환 (설정 / 로그) ────────────────────────────
+function switchDevTab(tab) {
+  const settingsEl = document.getElementById('dev-inner');
+  const logEl      = document.getElementById('log-panel');
+  const tabSettings = document.getElementById('tab-settings');
+  const tabLog      = document.getElementById('tab-log');
+
+  if (tab === 'log') {
+    settingsEl.classList.remove('active');
+    logEl.classList.add('active');
+    tabSettings.classList.remove('active');
+    tabLog.classList.add('active');
+  } else {
+    settingsEl.classList.add('active');
+    logEl.classList.remove('active');
+    tabSettings.classList.add('active');
+    tabLog.classList.remove('active');
+  }
+}
+document.getElementById('tab-settings').addEventListener('click', () => switchDevTab('settings'));
+document.getElementById('tab-log').addEventListener('click', () => switchDevTab('log'));
+switchDevTab('settings'); // 기본값: 설정 탭
+
 const SLIDERS = [
   ['d-stage',     v => { player.stage = parseInt(v) - 1; init(); }],
   ['d-tilesize',  v => CONFIG.map.tileSize         = parseInt(v)],
@@ -3918,12 +3941,6 @@ document.getElementById('log-clear').addEventListener('click', () => {
   devLogEntries.length = 0; _renderDevLog();
 });
 
-// ── 로그 패널 토글 ────────────────────────────────────────────────
-document.getElementById('log-toggle-btn').addEventListener('click', () => {
-  const panel = document.getElementById('log-panel');
-  panel.classList.toggle('hidden');
-});
-
 // ── 모바일 감지 및 터치 조작 ─────────────────────────────────────
 const _isTouchDevice = ('ontouchstart' in window || navigator.maxTouchPoints > 0)
                        && window.innerWidth < 1024;
@@ -3941,14 +3958,12 @@ function requestFullscreenOnce() {
 function applyTouchControls() {
   const gameArea = document.getElementById('game-area');
   const touchEl  = document.getElementById('touch-controls');
-  const logPanel = document.getElementById('log-panel');
 
   if (_touchControlsActive) {
     // ── 모바일 전용 ──────────────────────────────────────
     gameArea.classList.add('mobile');        // CSS: 미니맵 우상단, 볼륨 숨김
-    document.body.classList.add('mobile-ui'); // CSS: HUD 크기 축소
+    document.body.classList.add('mobile-ui'); // CSS: HUD 크기 축소, sidebar 자동 숨김
     touchEl.classList.add('show');           // 터치 컨트롤 표시
-    logPanel.classList.add('hidden');        // 이벤트 로그 숨김
     CONFIG.camera.smooth = 0.18;             // 카메라 스무스 강화
 
     // 첫 터치 시 전체화면 요청 (주소표시줄 숨김)
@@ -3984,12 +3999,9 @@ document.getElementById('d-touch-toggle').addEventListener('click', () => {
   applyTouchControls();
 });
 
-// DEV — 이벤트 로그 토글
+// DEV — 이벤트 로그 탭으로 전환
 document.getElementById('d-log-toggle').addEventListener('click', () => {
-  const panel = document.getElementById('log-panel');
-  const isHidden = panel.classList.toggle('hidden');
-  document.getElementById('d-log-toggle').textContent =
-    '📋 이벤트 로그 ' + (isHidden ? 'OFF' : 'ON');
+  switchDevTab('log');
 });
 
 // ── 터치 이벤트 → 키 입력 변환 ───────────────────────────────────
