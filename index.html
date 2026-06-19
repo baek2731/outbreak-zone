@@ -87,13 +87,15 @@ canvas#canvas { display:block; width:960px; height:540px; }
 .hud-panel-label { color:#999; font-size:0.92rem; letter-spacing:0.03em; }
 .hud-panel-val { color:#00ff88; font-size:1.02rem; font-weight:bold; }
 
-/* 모바일 일시정지 버튼 */
+/* 모바일 일시정지 버튼 — 좌하단, 조이스틱/dpad와 겹치지 않게 충분히 위 */
 #mobile-pause {
   display:none;
+  position:absolute; top:auto; left:14px; bottom:170px;
   pointer-events:all;
   background:rgba(0,0,0,0.62); border:1px solid #2a2a2a;
-  color:#888; font-size:1.1rem; border-radius:5px;
-  width:42px; height:42px; cursor:pointer;
+  color:#888; font-size:1.2rem; border-radius:5px;
+  width:48px; height:48px; cursor:pointer;
+  z-index:14;
 }
 #mobile-pause:active { background:rgba(0,255,136,0.15); border-color:#00ff88; color:#00ff88; }
 body.mobile-ui #mobile-pause { display:block; }
@@ -293,11 +295,9 @@ body.mobile-ui #dev-toggle { display:none; }
 #touch-serum-choice .btn-label { font-size:0.6rem; }
 
 /* ── 모바일 전용 조정 ── */
-#game-area.mobile #minimap-wrap { bottom:auto; top:14px; right:14px; }
 body.mobile-ui #game-area { width:100vw; height:100dvh; }
 body.mobile-ui canvas#canvas { width:100vw; height:100dvh; }
 body.mobile-ui #sidebar { display:none; }
-body.mobile-ui #dev-toggle { display:none; }
 body.mobile-ui #hud-actions { display:none; }
 
 /* 모바일 HUD — 살짝 축소 + 위치 조정 */
@@ -314,10 +314,6 @@ body.mobile-ui .hud-panel-val { font-size:0.85rem; }
 
 /* 모바일 미니맵 — 진행도 패널 아래로 (겹침 방지) */
 body.mobile-ui #minimap-wrap { top:auto; bottom:14px; right:14px; }
-#game-area.mobile #minimap-wrap { bottom:14px; top:auto; right:14px; }
-
-/* 모바일 일시정지 — 미니맵/패널과 겹치지 않게 좌상단 게이지 옆 */
-body.mobile-ui #mobile-pause { position:absolute; top:auto; bottom:14px; left:14px; width:48px; height:48px; font-size:1.2rem; z-index:14; }
 
 /* ── 기지(로비) 화면 ── */
 :root { --lb-base:13px; }
@@ -653,7 +649,7 @@ body.mobile-ui #mobile-pause { position:absolute; top:auto; bottom:14px; left:14
         밟은 병원체: <span id="go-mines">0</span>개<br>
         생존 시간: <span id="go-time">0초</span>
       </div>
-      <button class="ov-btn green" id="go-base-btn">기지로 복귀</button>
+      <button class="ov-btn green" id="go-base-btn">기지로 복귀 <span style="opacity:0.5;font-size:0.8em">[Space/Enter]</span></button>
     </div>
 
     <!-- 탈출 성공 -->

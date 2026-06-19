@@ -1368,9 +1368,9 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  // ── GAMEOVER 상태: Space → 기지 복귀 ────────────────────────
+  // ── GAMEOVER 상태: Space/Enter → 기지 복귀 ──────────────────
   if (GAME_STATE === 'GAMEOVER') {
-    if (e.code === 'Space') {
+    if (e.code === 'Space' || e.code === 'Enter') {
       document.getElementById('go-base-btn').click();
     }
     return;
