@@ -1221,8 +1221,14 @@ function resize() {
     vignetteGradient.addColorStop(1, 'rgba(0,0,0,0.72)');
   }
   updateZoom(); // 화면 폭에 맞춰 줌 재계산 — PC/모바일 동일 시야 유지
+  console.log('[RESIZE]', 'mobile:', isMobile, '| W_px:', W_px, '| H_px:', H_px, '| ZOOM:', ZOOM.toFixed(3), '| innerWidth:', window.innerWidth, '| innerHeight:', window.innerHeight);
 }
 window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => {
+  // 회전 직후 브라우저가 innerWidth/Height를 갱신하는 타이밍이 늦을 수 있어 약간의 딜레이 후 재계산
+  setTimeout(resize, 50);
+  setTimeout(resize, 300);
+});
 
 // ── 초기화 ───────────────────────────────────────────────────────
 function init() {
@@ -1760,6 +1766,7 @@ function useSerumInCombat() {
         const unitLabel = `UNIT-${String(z.fallenUnit).padStart(2, '0')}`;
         devLog(`${unitLabel} 안식 완료 — 전사자 풀에서 제거`, 'good');
       }
+      logUnitAction(z.fallenUnit, 'rested', player.stage + 1);
     }
     devLog(`치료제 투여 성공 — 감염자 안식 + DNA +${dnaBonus}`, 'good');
   } else {
@@ -2273,6 +2280,9 @@ function saveRunRecord(exitType) {
     localStorage.setItem(DNA_KEY, String(prevDna + finalCollected));
   } catch(e) { console.warn('기록 저장 실패', e); }
 
+  // 다음 출격 시 유닛 번호 증가 여부 결정 — 조기탈출이면 같은 유닛 유지
+  setLastExitType(exitType);
+
   // 감염사 + 일반 사망 → 전사자 풀 등록
   if (exitType === 'infected' || exitType === 'death') {
     addToFallenPool(getCurrentUnit(), stageIdx + 1);
@@ -2339,7 +2349,7 @@ function saveUpgrades(data) {
   try { localStorage.setItem(UPGRADE_KEY, JSON.stringify(data)); } catch(e) {}
 }
 
-// 요원 번호 — 런 시작마다 +1
+// 요원 번호 — 완주/사망/좀비화 시에만 +1 (조기탈출은 같은 유닛 유지)
 function getCurrentUnit() {
   try { return parseInt(localStorage.getItem(UNIT_KEY) || '0'); }
   catch(e) { return 0; }
@@ -2348,6 +2358,38 @@ function incrementUnit() {
   const n = getCurrentUnit() + 1;
   try { localStorage.setItem(UNIT_KEY, String(n)); } catch(e) {}
   return n;
+}
+
+const LAST_EXIT_KEY = 'outbreak_last_exit_type';
+function getLastExitType() {
+  try { return localStorage.getItem(LAST_EXIT_KEY) || null; }
+  catch(e) { return null; }
+}
+function setLastExitType(type) {
+  try { localStorage.setItem(LAST_EXIT_KEY, type); } catch(e) {}
+}
+
+// 런 시작 시 호출 — 조기탈출 다음 런이면 유닛 유지, 그 외엔 새 유닛
+function advanceUnitIfNeeded() {
+  const last = getLastExitType();
+  if (last === 'early') return; // 조기탈출 직후 — 같은 유닛으로 이어서 출격
+  incrementUnit();               // 완주/사망/좀비화/첫 시작 — 새 유닛
+}
+
+// ── 유닛 행동 로그 (안식/소멸) — 임무일지에 시간순으로 통합 표시 ──
+// 유물 해금 조건 등에서 재사용 가능하도록 영구 저장
+const UNIT_ACTIONS_KEY = 'outbreak_unit_actions';
+function loadUnitActions() {
+  try { return JSON.parse(localStorage.getItem(UNIT_ACTIONS_KEY) || '[]'); }
+  catch(e) { return []; }
+}
+function logUnitAction(unitNum, action, stage) {
+  if (unitNum == null) return; // 인식표 없는 좀비는 기록 안 함
+  try {
+    const list = loadUnitActions();
+    list.push({ unit: unitNum, action, stage, date: new Date().toLocaleString('ko-KR'), ts: Date.now() });
+    localStorage.setItem(UNIT_ACTIONS_KEY, JSON.stringify(list));
+  } catch(e) {}
 }
 
 // 현재 업그레이드가 게임 파라미터에 적용된 효과 반환
@@ -2506,7 +2548,8 @@ function renderLobby(tab) {
   });
 }
 
-// ── 전사자 기록 탭 ────────────────────────────────────────────────
+// ── 임무일지 (구 "전사자 기록") ──────────────────────────────────
+// 런 기록(완주/조기탈출/사망/좀비화) + 유닛 행동(안식/소멸)을 시간순으로 통합 표시
 const MEMORIAL_ICONS = {
   retire:   '🧬',  // 탈출 성공
   early:    '☣',   // 조기 탈출
@@ -2516,29 +2559,55 @@ const MEMORIAL_ICONS = {
 const MEMORIAL_LABELS = {
   retire:'탈출', early:'조기탈출', death:'사망', infected:'좀비화',
 };
+const ACTION_ICONS = { rested: '✦', dissolved: '☠' };
+const ACTION_LABELS = { rested: '안식시킴', dissolved: '소멸시킴' };
 
 function renderMemorial(el) {
   const records = loadRecords();
-  if (records.length === 0) {
-    el.innerHTML = '<div class="lb-section">— 전사자 기록 —</div><div class="mem-empty">아직 기록 없음</div>';
+  const actions = loadUnitActions();
+
+  if (records.length === 0 && actions.length === 0) {
+    el.innerHTML = '<div class="lb-section">— 임무일지 —</div><div class="mem-empty">아직 기록 없음</div>';
     return;
   }
-  let html = '<div class="lb-section">— 전사자 기록 —</div>';
-  // 최신순 역순 표시
-  [...records].reverse().forEach((r, i) => {
-    const icon   = MEMORIAL_ICONS[r.exitType] || '☣';
-    const label  = MEMORIAL_LABELS[r.exitType] || r.exitType;
-    const unit   = r.unit ? `UNIT-${String(r.unit).padStart(2,'0')}` : `UNIT-??`;
-    const raw    = r.rawCollected ?? r.collected ?? 0;
-    html += `
-      <div class="mem-item">
-        <div class="mem-icon">${icon}</div>
-        <div class="mem-info">
-          <div class="mem-name">${unit} — ${r.stage}층 ${r.stageName || ''}</div>
-          <div class="mem-detail">${label} | ${r.elapsed}초 생존 | 회수 ${raw}개 | 감염 ${r.infection}%</div>
-        </div>
-        <div class="mem-dna">+${r.collected} DNA</div>
-      </div>`;
+
+  // 두 종류를 하나의 타임라인으로 합치고 시간순 정렬
+  const timeline = [
+    ...records.map(r => ({ kind: 'run', ts: new Date(r.date).getTime() || 0, data: r })),
+    ...actions.map(a => ({ kind: 'action', ts: a.ts || 0, data: a })),
+  ].sort((a, b) => b.ts - a.ts); // 최신순
+
+  let html = '<div class="lb-section">— 임무일지 —</div>';
+  timeline.forEach(entry => {
+    if (entry.kind === 'run') {
+      const r      = entry.data;
+      const icon   = MEMORIAL_ICONS[r.exitType] || '☣';
+      const label  = MEMORIAL_LABELS[r.exitType] || r.exitType;
+      const unit   = r.unit ? `UNIT-${String(r.unit).padStart(2,'0')}` : `UNIT-??`;
+      const raw    = r.rawCollected ?? r.collected ?? 0;
+      html += `
+        <div class="mem-item">
+          <div class="mem-icon">${icon}</div>
+          <div class="mem-info">
+            <div class="mem-name">${unit} — ${r.stage}층 ${r.stageName || ''}</div>
+            <div class="mem-detail">${label} | ${r.elapsed}초 생존 | 회수 ${raw}개 | 감염 ${r.infection}%</div>
+          </div>
+          <div class="mem-dna">+${r.collected} DNA</div>
+        </div>`;
+    } else {
+      const a     = entry.data;
+      const icon  = ACTION_ICONS[a.action] || '•';
+      const label = ACTION_LABELS[a.action] || a.action;
+      const unit  = `UNIT-${String(a.unit).padStart(2,'0')}`;
+      html += `
+        <div class="mem-item" style="opacity:0.75;">
+          <div class="mem-icon">${icon}</div>
+          <div class="mem-info">
+            <div class="mem-name">${unit} ${label}</div>
+            <div class="mem-detail">${a.stage}층에서 조우</div>
+          </div>
+        </div>`;
+    }
   });
   el.innerHTML = html;
 }
@@ -2586,7 +2655,7 @@ function applyUpgradeEffects() {
 function startGame() {
   ['title-screen','lobby-screen'].forEach(id =>
     document.getElementById(id)?.classList.remove('show'));
-  incrementUnit();
+  advanceUnitIfNeeded();
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
   player.infection      = 0;
@@ -2746,6 +2815,7 @@ function dissolveInfected(z) {
   if (z.fallenUnit != null) {
     const cleaned = removeFromFallenPool(z.fallenUnit);
     if (cleaned) devLog(`${unitLabel} — 전투로 보냄, 전사자 풀 제거`, 'good');
+    logUnitAction(z.fallenUnit, 'dissolved', player.stage + 1);
   }
 
   // 좀비 배열에서 제거
