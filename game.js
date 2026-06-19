@@ -1191,10 +1191,17 @@ const mmCtx    = mmCanvas.getContext('2d');
 let W_px, H_px;
 
 function resize() {
-  // 960×540 (16:9) 고정 — CrazyGames 권장 비율
-  const GAME_W = 960, GAME_H = 540;
-  W_px = canvas.width  = GAME_W;
-  H_px = canvas.height = GAME_H;
+  const isMobile = document.body.classList.contains('mobile-ui');
+  if (isMobile) {
+    // 모바일: 실제 화면 크기로 캔버스 해상도 동기화 (비율 왜곡 방지)
+    W_px = canvas.width  = window.innerWidth;
+    H_px = canvas.height = window.innerHeight;
+  } else {
+    // PC: 960×540 (16:9) 고정 — CrazyGames 권장 비율
+    const GAME_W = 960, GAME_H = 540;
+    W_px = canvas.width  = GAME_W;
+    H_px = canvas.height = GAME_H;
+  }
   mmCanvas.width = mmCanvas.height = CONFIG.minimap.size;
   if (W_px > 0 && H_px > 0) {
     vignetteGradient = ctx.createRadialGradient(W_px/2, H_px/2, H_px*0.18, W_px/2, H_px/2, H_px*0.78);
@@ -3956,6 +3963,9 @@ function applyTouchControls() {
 
   document.getElementById('d-touch-toggle').textContent =
     '📱 터치 조작 ' + (_touchControlsActive ? 'ON' : 'OFF');
+
+  // 모바일↔PC 전환 시 캔버스 실제 해상도 갱신 (비율 왜곡 방지)
+  if (typeof resize === 'function') resize();
 }
 applyTouchControls();
 updateSerumHUD(); // D 버튼 초기 상태 설정
