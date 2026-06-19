@@ -268,15 +268,17 @@ body.mobile-ui #dev-toggle { display:none; }
 .dpad-btn:active, .dpad-btn.pressed { background:rgba(0,255,136,0.22); border-color:rgba(0,255,136,0.5); color:#00ff88; }
 .dpad-empty { visibility:hidden; }
 
-/* 액션 버튼 — 우하단 */
-#action-btns { position:absolute; right:20px; bottom:20px; display:flex; flex-direction:column; gap:10px; pointer-events:all; align-items:flex-end; }
-.action-btn { width:62px; height:62px; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.15); border-radius:50%; color:rgba(255,255,255,0.75); font-family:monospace; font-weight:bold; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; user-select:none; touch-action:none; transition:background 0.06s; }
+/* 액션 버튼 — 우하단, 2열(G/D · E/F) */
+#action-btns { position:absolute; right:20px; bottom:16px; display:flex; gap:8px; pointer-events:all; align-items:flex-end; }
+.action-col { display:flex; flex-direction:column; gap:8px; align-items:center; }
+.action-btn { width:54px; height:54px; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.15); border-radius:50%; color:rgba(255,255,255,0.75); font-family:monospace; font-weight:bold; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; user-select:none; touch-action:none; transition:background 0.06s; }
 .action-btn:active, .action-btn.pressed { background:rgba(0,255,136,0.2); border-color:rgba(0,255,136,0.45); color:#00ff88; }
-.action-btn .btn-key { font-size:0.95rem; }
-.action-btn .btn-label { font-size:0.52rem; color:rgba(255,255,255,0.45); }
+.action-btn .btn-key { font-size:0.9rem; }
+.action-btn .btn-label { font-size:0.46rem; color:rgba(255,255,255,0.45); }
 
-/* F(소나) 버튼 — 가장 크게, 가장 아래 */
-#touch-f { width:74px; height:74px; }
+/* F(소나) 버튼 — 가장 크게, 우측 열 가장 아래 (엄지 닿기 쉬운 바깥쪽) */
+.action-btn-main { width:70px; height:70px; background:rgba(20,40,25,0.6); border-color:rgba(80,200,120,0.35); }
+.action-btn-main .btn-key { font-size:1.05rem; color:#88dd99; }
 
 /* 전투 선택지 Y/N — 화면 중앙 하단, 다른 버튼과 완전 분리 */
 #touch-serum-choice {
@@ -294,26 +296,36 @@ body.mobile-ui #dev-toggle { display:none; }
 #touch-serum-choice .btn-key { font-size:1.1rem; }
 #touch-serum-choice .btn-label { font-size:0.6rem; }
 
-/* ── 모바일 전용 조정 ── */
+/* ── 모바일 전용 조정 (가로 고정, PC와 동일 비율) ── */
 body.mobile-ui #game-area { width:100vw; height:100dvh; }
 body.mobile-ui canvas#canvas { width:100vw; height:100dvh; }
 body.mobile-ui #sidebar { display:none; }
 body.mobile-ui #hud-actions { display:none; }
 
-/* 모바일 HUD — 살짝 축소 + 위치 조정 */
+/* 좌상단 산소/오염 — PC와 거의 동일, 약간 컴팩트 */
 body.mobile-ui #hud-left { top:10px; left:12px; gap:6px; }
-body.mobile-ui .hud-gauge-bg { width:130px; height:10px; }
-body.mobile-ui .hud-gauge-label { font-size:0.85rem; }
-body.mobile-ui .hud-gauge-val { font-size:0.85rem; }
+body.mobile-ui .hud-gauge-bg { width:120px; height:9px; }
+body.mobile-ui .hud-gauge-label { font-size:0.8rem; }
+body.mobile-ui .hud-gauge-val { font-size:0.8rem; }
 
-/* 모바일 진행도 패널 — 우상단, 미니맵과 세로로 분리 */
-body.mobile-ui #hud-right { top:10px; right:12px; gap:6px; flex-direction:row; align-items:flex-start; }
-body.mobile-ui .hud-panel { padding:7px 11px; gap:5px; min-width:120px; }
-body.mobile-ui .hud-panel-label { font-size:0.78rem; }
-body.mobile-ui .hud-panel-val { font-size:0.85rem; }
+/* 진행도 패널 — 중앙 상단으로 이동, 일시정지 버튼 한 줄에 포함 */
+body.mobile-ui #hud-right {
+  top:10px; left:50%; right:auto; transform:translateX(-50%);
+  flex-direction:row; align-items:center; gap:0;
+}
+body.mobile-ui .hud-panel { flex-direction:row; padding:7px 12px; gap:14px; min-width:0; }
+body.mobile-ui .hud-panel-row { gap:5px; }
+body.mobile-ui .hud-panel-label { font-size:0.74rem; }
+body.mobile-ui .hud-panel-val { font-size:0.8rem; }
 
-/* 모바일 미니맵 — 진행도 패널 아래로 (겹침 방지) */
-body.mobile-ui #minimap-wrap { top:auto; bottom:14px; right:14px; }
+/* 미니맵 — 우상단 (PC는 우하단, 모바일만 변경 — 액션버튼과 겹침 방지) */
+body.mobile-ui #minimap-wrap { top:10px; bottom:auto; right:12px; }
+
+/* 모바일 일시정지 — 진행도 패널 우측에 붙임 */
+body.mobile-ui #mobile-pause {
+  position:static; width:24px; height:24px; font-size:0.85rem;
+  margin-left:10px; flex-shrink:0;
+}
 
 /* ── 기지(로비) 화면 ── */
 :root { --lb-base:13px; }
@@ -436,10 +448,9 @@ body.mobile-ui #minimap-wrap { top:auto; bottom:14px; right:14px; }
               <span class="hud-panel-val" id="hud-dna" style="color:#cc66ff;">0</span>
             </div>
           </div>
+          <!-- 모바일 일시정지 — 진행도 패널과 한 줄(가로 모드 중앙상단) -->
+          <button id="mobile-pause">⏸</button>
         </div>
-
-        <!-- 모바일 일시정지 버튼 (hud-overlay 직속) -->
-        <button id="mobile-pause">⏸</button>
 
         <!-- 숨김 — updateHUD 호환용 -->
         <span id="hud-explored" style="display:none;">0%</span>
@@ -582,24 +593,24 @@ body.mobile-ui #minimap-wrap { top:auto; bottom:14px; right:14px; }
         <button class="dpad-btn" id="dpad-down">▼</button>
         <div class="dpad-empty"></div>
       </div>
-      <!-- 액션 버튼 (우하단) -->
+      <!-- 액션 버튼 (우하단, 2x2 — F가 가장 크고 바깥쪽) -->
       <div id="action-btns">
-        <div style="display:flex;gap:8px;">
+        <div class="action-col">
           <button class="action-btn" id="touch-g">
             <span class="btn-key">G</span>
             <span class="btn-label">정밀소나</span>
           </button>
-          <button class="action-btn" id="touch-e">
-            <span class="btn-key">E</span>
-            <span class="btn-label">회수</span>
-          </button>
-        </div>
-        <div style="display:flex;gap:8px;">
           <button class="action-btn" id="touch-d" style="display:none;background:rgba(120,0,180,0.4);border-color:rgba(187,68,255,0.5);">
             <span class="btn-key">D</span>
             <span class="btn-label">치료제</span>
           </button>
-          <button class="action-btn" id="touch-f">
+        </div>
+        <div class="action-col">
+          <button class="action-btn" id="touch-e">
+            <span class="btn-key">E</span>
+            <span class="btn-label">회수</span>
+          </button>
+          <button class="action-btn action-btn-main" id="touch-f">
             <span class="btn-key">F</span>
             <span class="btn-label">소나</span>
           </button>
