@@ -3744,7 +3744,6 @@ function updateDevInfo() {
 document.getElementById('dev-toggle').addEventListener('click', () => {
   document.getElementById('dev-panel').classList.toggle('open');
   document.getElementById('dev-toggle').classList.toggle('on');
-  console.log('[DEV] 토글 클릭 — open:', document.getElementById('dev-panel').classList.contains('open'));
   resize();
 });
 
