@@ -4099,9 +4099,10 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
     const isMinigame   = minigame.active && minigame.type === 'mine';
     const isCombat     = minigame.active && minigame.type === 'combat';
     const isChoice     = isCombat && minigame.serumChoice;
+    const isMoveLocked = minigame.active;  // 회수든 전투든 — 이동 불가 시 조이스틱 숨김
 
-    // 조이스틱 / D-PAD 전환
-    joystickWrap.style.display  = isMinigame ? 'none' : '';
+    // 조이스틱 — 이동 가능할 때만 표시 (전투 중에도 숨김, dpad는 회수에만)
+    joystickWrap.style.display  = isMoveLocked ? 'none' : '';
     minigameDpad.classList.toggle('show', isMinigame);
 
     // 미니게임(회수) 중엔 액션버튼 숨김 — dpad 입력과 오조작 방지
@@ -4109,6 +4110,12 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
     if (actionBtnsEl && !isChoice) {
       actionBtnsEl.style.display = isMinigame ? 'none' : '';
     }
+
+    // 전투 중엔 G/E 숨김 — F(연타)만 유효한 입력
+    const gBtn = document.getElementById('touch-g');
+    const eBtn = document.getElementById('touch-e');
+    if (gBtn) gBtn.style.display = isCombat ? 'none' : '';
+    if (eBtn) eBtn.style.display = isCombat ? 'none' : '';
 
     // D 버튼 — 치료제 보유 + 전투/미니게임 외
     const dBtn = document.getElementById('touch-d');
