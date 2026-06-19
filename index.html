@@ -157,7 +157,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
 /* ── 사이드바 (DEV + LOG) ── */
 #sidebar {
   display:flex; flex-direction:row;
-  flex-shrink:0; height:100%;
+  flex-shrink:0; align-self:stretch;
   background:#050505; border-left:1px solid #111;
 }
 #dev-panel {
@@ -191,7 +191,7 @@ canvas#minimap { display:block; image-rendering:pixelated; }
   background:rgba(0,0,0,0.6); border:1px solid #2a2a2a; color:#666;
   font-family:monospace; font-size:0.7rem;
   padding:5px 10px; cursor:pointer; border-radius:3px;
-  z-index:60;
+  z-index:999; pointer-events:auto;
 }
 #dev-toggle:hover, #dev-toggle.on { border-color:#ffaa00; color:#ffaa00; }
 body.mobile-ui #dev-toggle { display:none; }
