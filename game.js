@@ -4082,16 +4082,28 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
     joystickWrap.style.display  = isMinigame ? 'none' : '';
     minigameDpad.classList.toggle('show', isMinigame);
 
+    // 미니게임(회수) 중엔 액션버튼 숨김 — dpad 입력과 오조작 방지
+    const actionBtnsEl = document.getElementById('action-btns');
+    if (actionBtnsEl && !isChoice) {
+      actionBtnsEl.style.display = isMinigame ? 'none' : '';
+    }
+
     // D 버튼 — 치료제 보유 + 전투/미니게임 외
     const dBtn = document.getElementById('touch-d');
     if (dBtn) dBtn.style.display = (player.serum > 0 && !minigame.active) ? '' : 'none';
 
-    // 전투 선택지 Y/N 버튼
+    // 전투 선택지 Y/N 버튼 — action-btns 전체 숨기고 중앙 Y/N 표시
     const choiceEl = document.getElementById('touch-serum-choice');
-    const normalBtns = document.getElementById('action-btns').querySelectorAll(':scope > div:not(#touch-serum-choice)');
+    const actionBtns = document.getElementById('action-btns');
     if (choiceEl) {
-      choiceEl.style.display = isChoice ? 'flex' : 'none';
-      normalBtns.forEach(el => { el.style.display = isChoice ? 'none' : ''; });
+      if (isChoice) {
+        choiceEl.classList.add('show');
+        if (actionBtns) actionBtns.style.display = 'none';
+      } else {
+        choiceEl.classList.remove('show');
+        // 미니게임 중이 아닐 때만 복원 (위에서 이미 처리)
+        if (actionBtns && !isMinigame) actionBtns.style.display = '';
+      }
     }
   };
 

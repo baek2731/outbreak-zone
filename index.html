@@ -235,21 +235,46 @@ body.mobile-ui #dev-toggle { display:none; }
 #gameover.infected { background:rgba(10,0,20,0.94); }
 
 /* ── 모바일 터치 컨트롤 ── */
-#touch-controls { display:none; position:absolute; inset:0; pointer-events:none; padding:16px; box-sizing:border-box; justify-content:space-between; align-items:flex-end; }
-#touch-controls.show { display:flex; }
-#minigame-dpad { display:none; position:absolute; left:16px; bottom:10px; width:130px; height:130px; grid-template-columns:repeat(3,40px); grid-template-rows:repeat(3,40px); gap:5px; pointer-events:all; align-content:center; justify-content:center; }
+#touch-controls { display:none; position:absolute; inset:0; pointer-events:none; }
+#touch-controls.show { display:block; }
+
+/* 조이스틱 — 좌하단 고정 */
+#joystick-wrap { position:absolute; left:20px; bottom:20px; width:140px; height:140px; pointer-events:all; }
+#joystick-base { width:140px; height:140px; border-radius:50%; background:rgba(0,0,0,0.40); border:1px solid rgba(255,255,255,0.10); position:absolute; top:0; left:0; }
+#joystick-stick { width:58px; height:58px; border-radius:50%; background:rgba(0,255,136,0.25); border:2px solid rgba(0,255,136,0.45); position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); transition:transform 0.05s; pointer-events:none; }
+
+/* 미니게임 D-PAD — 조이스틱과 같은 위치(좌하단), 조이스틱 대체 */
+#minigame-dpad { display:none; position:absolute; left:20px; bottom:14px; width:156px; height:156px; grid-template-columns:repeat(3,48px); grid-template-rows:repeat(3,48px); gap:6px; pointer-events:all; }
 #minigame-dpad.show { display:grid; }
-.dpad-btn { background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.12); border-radius:6px; color:rgba(255,255,255,0.6); font-size:1.2rem; cursor:pointer; display:flex; align-items:center; justify-content:center; user-select:none; touch-action:none; transition:background 0.06s; }
-.dpad-btn:active, .dpad-btn.pressed { background:rgba(0,255,136,0.18); border-color:rgba(0,255,136,0.4); color:#00ff88; }
+.dpad-btn { background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:rgba(255,255,255,0.7); font-size:1.4rem; cursor:pointer; display:flex; align-items:center; justify-content:center; user-select:none; touch-action:none; transition:background 0.06s; }
+.dpad-btn:active, .dpad-btn.pressed { background:rgba(0,255,136,0.22); border-color:rgba(0,255,136,0.5); color:#00ff88; }
 .dpad-empty { visibility:hidden; }
-#joystick-wrap { width:130px; height:130px; position:relative; pointer-events:all; flex-shrink:0; }
-#joystick-base { width:130px; height:130px; border-radius:50%; background:rgba(0,0,0,0.40); border:1px solid rgba(255,255,255,0.10); position:absolute; top:0; left:0; }
-#joystick-stick { width:52px; height:52px; border-radius:50%; background:rgba(0,255,136,0.25); border:2px solid rgba(0,255,136,0.45); position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); transition:transform 0.05s; pointer-events:none; }
-#action-btns { display:flex; flex-direction:column; gap:8px; pointer-events:all; align-items:flex-end; }
-.action-btn { width:56px; height:56px; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.12); border-radius:50%; color:rgba(255,255,255,0.7); font-family:monospace; font-size:0.62rem; font-weight:bold; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; user-select:none; touch-action:none; letter-spacing:0.05em; transition:background 0.06s; }
-.action-btn:active, .action-btn.pressed { background:rgba(0,255,136,0.18); border-color:rgba(0,255,136,0.4); color:#00ff88; }
-.action-btn .btn-key { font-size:0.8rem; }
-.action-btn .btn-label { font-size:0.48rem; color:rgba(255,255,255,0.4); }
+
+/* 액션 버튼 — 우하단 */
+#action-btns { position:absolute; right:20px; bottom:20px; display:flex; flex-direction:column; gap:10px; pointer-events:all; align-items:flex-end; }
+.action-btn { width:62px; height:62px; background:rgba(0,0,0,0.55); border:1px solid rgba(255,255,255,0.15); border-radius:50%; color:rgba(255,255,255,0.75); font-family:monospace; font-weight:bold; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; user-select:none; touch-action:none; transition:background 0.06s; }
+.action-btn:active, .action-btn.pressed { background:rgba(0,255,136,0.2); border-color:rgba(0,255,136,0.45); color:#00ff88; }
+.action-btn .btn-key { font-size:0.95rem; }
+.action-btn .btn-label { font-size:0.52rem; color:rgba(255,255,255,0.45); }
+
+/* F(소나) 버튼 — 가장 크게, 가장 아래 */
+#touch-f { width:74px; height:74px; }
+
+/* 전투 선택지 Y/N — 화면 중앙 하단, 다른 버튼과 완전 분리 */
+#touch-serum-choice {
+  display:none; position:absolute;
+  left:50%; bottom:30px; transform:translateX(-50%);
+  flex-direction:row; gap:20px; pointer-events:all;
+  z-index:18;
+}
+#touch-serum-choice.show { display:flex; }
+#touch-serum-choice .action-btn {
+  width:120px; height:64px; border-radius:12px; flex-direction:column;
+}
+#touch-y { background:rgba(120,0,180,0.55); border-color:#bb44ff; }
+#touch-n { background:rgba(80,80,80,0.5); }
+#touch-serum-choice .btn-key { font-size:1.1rem; }
+#touch-serum-choice .btn-label { font-size:0.6rem; }
 
 /* ── 모바일 전용 조정 ── */
 #game-area.mobile #minimap-wrap { bottom:auto; top:14px; right:14px; }
@@ -258,6 +283,25 @@ body.mobile-ui canvas#canvas { width:100vw; height:100dvh; }
 body.mobile-ui #sidebar { display:none; }
 body.mobile-ui #dev-toggle { display:none; }
 body.mobile-ui #hud-actions { display:none; }
+
+/* 모바일 HUD — 살짝 축소 + 위치 조정 */
+body.mobile-ui #hud-left { top:10px; left:12px; gap:6px; }
+body.mobile-ui .hud-gauge-bg { width:130px; height:10px; }
+body.mobile-ui .hud-gauge-label { font-size:0.85rem; }
+body.mobile-ui .hud-gauge-val { font-size:0.85rem; }
+
+/* 모바일 진행도 패널 — 우상단, 미니맵과 세로로 분리 */
+body.mobile-ui #hud-right { top:10px; right:12px; gap:6px; flex-direction:row; align-items:flex-start; }
+body.mobile-ui .hud-panel { padding:7px 11px; gap:5px; min-width:120px; }
+body.mobile-ui .hud-panel-label { font-size:0.78rem; }
+body.mobile-ui .hud-panel-val { font-size:0.85rem; }
+
+/* 모바일 미니맵 — 진행도 패널 아래로 (겹침 방지) */
+body.mobile-ui #minimap-wrap { top:auto; bottom:14px; right:14px; }
+#game-area.mobile #minimap-wrap { bottom:14px; top:auto; right:14px; }
+
+/* 모바일 일시정지 — 미니맵/패널과 겹치지 않게 좌상단 게이지 옆 */
+body.mobile-ui #mobile-pause { position:absolute; top:auto; bottom:14px; left:14px; width:48px; height:48px; font-size:1.2rem; z-index:14; }
 
 /* ── 기지(로비) 화면 ── */
 :root { --lb-base:13px; }
@@ -380,8 +424,10 @@ body.mobile-ui #hud-actions { display:none; }
               <span class="hud-panel-val" id="hud-dna" style="color:#cc66ff;">0</span>
             </div>
           </div>
-          <button id="mobile-pause">⏸</button>
         </div>
+
+        <!-- 모바일 일시정지 버튼 (hud-overlay 직속) -->
+        <button id="mobile-pause">⏸</button>
 
         <!-- 숨김 — updateHUD 호환용 -->
         <span id="hud-explored" style="display:none;">0%</span>
@@ -541,22 +587,22 @@ body.mobile-ui #hud-actions { display:none; }
             <span class="btn-key">D</span>
             <span class="btn-label">치료제</span>
           </button>
-          <button class="action-btn" id="touch-f" style="border-radius:10px;">
+          <button class="action-btn" id="touch-f">
             <span class="btn-key">F</span>
             <span class="btn-label">소나</span>
           </button>
         </div>
-        <!-- 전투 선택지 버튼 (평소 숨김) -->
-        <div id="touch-serum-choice" style="display:none;flex-direction:column;gap:6px;align-items:flex-end;">
-          <button class="action-btn" id="touch-y" style="width:80px;border-radius:8px;background:rgba(120,0,180,0.5);border-color:#bb44ff;">
-            <span class="btn-key" style="font-size:0.7rem;">Y</span>
-            <span class="btn-label">치료제 투여</span>
-          </button>
-          <button class="action-btn" id="touch-n" style="width:80px;border-radius:8px;">
-            <span class="btn-key" style="font-size:0.7rem;">N</span>
-            <span class="btn-label">계속 싸우기</span>
-          </button>
-        </div>
+      </div>
+      <!-- 전투 선택지 버튼 (화면 중앙 하단, 평소 숨김) -->
+      <div id="touch-serum-choice">
+        <button class="action-btn" id="touch-y">
+          <span class="btn-key">Y</span>
+          <span class="btn-label">치료제 투여</span>
+        </button>
+        <button class="action-btn" id="touch-n">
+          <span class="btn-key">N</span>
+          <span class="btn-label">계속 싸우기</span>
+        </button>
       </div>
     </div>
 
