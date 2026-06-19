@@ -1094,7 +1094,19 @@ function drawZombieFX(ts) {
 let camX = 0, camY = 0, moveTimer = 0;
 
 // 카메라 줌 — 플레이어를 더 크게, 시야를 더 폐쇄적으로
-const ZOOM = 1.5;
+// PC 기준(960px 폭)에서 줌 1.5일 때 보이는 타일 개수를 기준으로,
+// 화면 폭이 달라져도(모바일) 동일한 시야(타일 개수)를 유지하도록 동적 계산
+const BASE_ZOOM = 1.5;
+const BASE_W_PX = 960;
+let ZOOM = BASE_ZOOM;
+
+function updateZoom() {
+  // 화면 폭이 PC 기준보다 크면 줌도 비례해서 키워 같은 타일 개수 유지
+  // (W_px가 클수록 1타일이 차지하는 픽셀도 커지므로 ZOOM도 같이 커져야 "보이는 타일 수"가 동일해짐)
+  ZOOM = BASE_ZOOM * (W_px / BASE_W_PX);
+  ZOOM = Math.max(0.9, Math.min(2.4, ZOOM)); // 극단적 화면비 방지
+}
+
 // 줌 반영 뷰포트 크기 (월드 단위)
 function viewW() { return W_px / ZOOM; }
 function viewH() { return H_px / ZOOM; }
@@ -1208,6 +1220,7 @@ function resize() {
     vignetteGradient.addColorStop(0, 'rgba(0,0,0,0)');
     vignetteGradient.addColorStop(1, 'rgba(0,0,0,0.72)');
   }
+  updateZoom(); // 화면 폭에 맞춰 줌 재계산 — PC/모바일 동일 시야 유지
 }
 window.addEventListener('resize', resize);
 
@@ -4135,6 +4148,7 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
       }
     }
   };
+  window._updateTouchUI(); // 정의 즉시 1회 호출 — D버튼 등 초기 상태 동기화
 
   // ── D 버튼 (자가 치료제) ──────────────────────────────────────
   const dBtn = document.getElementById('touch-d');
