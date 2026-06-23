@@ -2765,7 +2765,7 @@ const TUT_MOVE_LINES = [
 const TUT_SONAR_LINES = [
   '전방에 반응이 있다.',
   '',
-  '[F] 키를 눌러 소나를 사용하세요.',
+  '[F] 키를 꾹 눌러 소나를 사용하세요.',
 ];
 
 function startTutorial() {
@@ -2913,6 +2913,7 @@ function showTutorialLine(lines, onDone) {
     typingDone = true;
     textEl.textContent = FULL_TEXT;
     cursorEl.style.display = 'none';
+    hintEl.style.display = '';
     _tutAdvance = () => { _tutAdvance = null; if (onDone) onDone(); };
   }
 
