@@ -241,24 +241,25 @@ body.mobile-ui #dev-toggle { display:none; }
 }
 #tutorial-intro-screen.show { display:flex; }
 #tutorial-intro-box {
-  font-family:'Courier New',monospace; font-size:0.95rem; color:#00cc66; text-align:left;
-  line-height:2.0; max-width:540px; width:90%; border:1px solid #0a3a1a;
-  padding:24px 30px; background:rgba(0,10,0,0.85); white-space:pre-wrap; min-height:1.2em;
+  font-family:'Courier New',monospace; font-size:1.3rem; color:#00cc66; text-align:left;
+  line-height:2.0; max-width:680px; width:92%; border:1px solid #0a3a1a;
+  padding:28px 34px; background:rgba(0,10,0,0.85); white-space:pre-wrap; min-height:1.2em;
 }
-#tutorial-intro-cursor { display:inline-block; width:8px; height:1em; background:#00cc66; animation:blink 0.8s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
+#tutorial-intro-cursor { display:inline-block; width:10px; height:1.1em; background:#00cc66; animation:blink 0.8s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
+#tutorial-intro-hint { font-size:0.85rem; }
 
 /* ── 튜토리얼 하단 대화창 (인게임 위 오버레이) ── */
 #tutorial-box {
   display:none; position:absolute; left:50%; bottom:6%; transform:translateX(-50%);
-  width:88%; max-width:620px; min-height:64px;
-  font-family:'Courier New',monospace; font-size:0.92rem; color:#00cc66; text-align:left;
+  width:90%; max-width:720px; min-height:64px;
+  font-family:'Courier New',monospace; font-size:1.2rem; color:#00cc66; text-align:left;
   line-height:1.7; border:1px solid #0a3a1a; border-radius:4px;
-  padding:16px 22px; background:rgba(0,10,0,0.88); white-space:pre-wrap;
+  padding:18px 26px; background:rgba(0,10,0,0.88); white-space:pre-wrap;
   z-index:30; box-shadow:0 0 24px rgba(0,0,0,0.6);
 }
 #tutorial-box.show { display:block; }
-#tutorial-cursor { display:inline-block; width:8px; height:1em; background:#00cc66; animation:blink 0.8s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
-#tutorial-hint { font-size:0.7rem; color:#2a5a3a; margin-top:8px; letter-spacing:0.08em; }
+#tutorial-cursor { display:inline-block; width:10px; height:1.1em; background:#00cc66; animation:blink 0.8s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
+#tutorial-hint { font-size:0.85rem; color:#2a5a3a; margin-top:8px; letter-spacing:0.08em; }
 
 /* ── 엔딩 ── */
 #ending-screen { display:none; position:absolute; inset:0; background:#000; flex-direction:column; align-items:center; justify-content:center; z-index:25; overflow:hidden; }
@@ -507,7 +508,7 @@ body.mobile-ui #mobile-pause {
         <!-- 튜토리얼 대화창 (인게임 위 오버레이) -->
         <div id="tutorial-box">
           <span id="tutorial-text"></span><span id="tutorial-cursor"></span>
-          <div id="tutorial-hint" style="display:none;">[ Space — 다음 ]</div>
+          <div id="tutorial-hint" style="display:none;">[ F / Space — 다음 ]</div>
         </div>
       </div>
 
@@ -579,6 +580,7 @@ body.mobile-ui #mobile-pause {
     <!-- 튜토리얼 인트로 (풀스크린 암전 — 세계관 설명) -->
     <div id="tutorial-intro-screen">
       <div id="tutorial-intro-box"><span id="tutorial-intro-text"></span><span id="tutorial-intro-cursor"></span></div>
+      <div id="tutorial-intro-hint" style="font-size:0.75rem;color:#2a5a3a;margin-top:10px;letter-spacing:0.1em;">[ F / Space — 다음 ]</div>
     </div>
 
     <canvas id="canvas" tabindex="0"></canvas>

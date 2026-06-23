@@ -1398,8 +1398,11 @@ window.addEventListener('keydown', e => {
   // ── PAUSED: ESC 외 입력 차단 ─────────────────────────────────
   if (GAME_STATE === 'PAUSED') return;
 
-  // ── TUTORIAL_INTRO: 풀스크린 암전 세계관 설명 중 — 모든 게임 키 무시 ──
-  if (GAME_STATE === 'TUTORIAL_INTRO') return;
+  // ── TUTORIAL_INTRO: 풀스크린 암전 세계관 설명 — F/Space로 진행 ──
+  if (GAME_STATE === 'TUTORIAL_INTRO') {
+    if (e.code === 'KeyF' || e.code === 'Space') tutorialAdvanceKey();
+    return;
+  }
 
   // ── TITLE 상태: 스페이스/엔터로 시작 ──────────────────────────
   if (GAME_STATE === 'TITLE') {
@@ -1455,6 +1458,11 @@ window.addEventListener('keydown', e => {
   }
 
   // ── PLAYING 상태 ──────────────────────────────────────────────
+  // 튜토리얼 대화창 보는 중(TUT_LOCKED) — F/Space로 진행, 다른 입력 무시
+  if (TUT_ACTIVE && TUT_LOCKED) {
+    if (e.code === 'KeyF' || e.code === 'Space') tutorialAdvanceKey();
+    return;
+  }
   // 미니게임 중 입력
   if (minigame.active && !minigame.result) {
     // 치료제 선택지 중 Y/N은 통과
@@ -2831,33 +2839,50 @@ function startTutorial() {
   });
 }
 
+// ── 튜토리얼 텍스트 진행 공용 키 핸들러 (F/Space) ────────────────
+// _tutAdvance: 현재 호출하면 "타이핑 즉시완성" 또는 "다음 단계로" 동작하는 함수. null이면 대기 중 아님.
+let _tutAdvance = null;
+
+function tutorialAdvanceKey() {
+  if (_tutAdvance) _tutAdvance();
+}
+
 // ── 튜토리얼 풀스크린 암전 인트로 (세계관 설명 전용) ─────────────
 // 검은 화면에서 커서만 깜빡이다가 텍스트가 타이핑되는 구조 — 엔딩 터미널과 동일한 패턴
+// F 또는 Space로 진행: 타이핑 중엔 즉시완성, 완성 후엔 다음 단계로
 function showTutorialIntroScreen(lines, onDone) {
   const screen   = document.getElementById('tutorial-intro-screen');
   const textEl   = document.getElementById('tutorial-intro-text');
   const cursorEl = document.getElementById('tutorial-intro-cursor');
+  const hintEl   = document.getElementById('tutorial-intro-hint');
   if (!screen || !textEl) { if (onDone) onDone(); return; }
 
   screen.classList.add('show');
   textEl.textContent = '';
   cursorEl.style.display = '';
+  if (hintEl) hintEl.style.display = 'none';
 
   const FULL_TEXT = Array.isArray(lines) ? lines.join('\n') : lines;
   let charIdx = 0;
+  let typingDone = false;
   const SPEED = 55; // ms/글자 — 사람이 편하게 읽을 수 있는 속도
 
+  function finishTyping() {
+    typingDone = true;
+    textEl.textContent = FULL_TEXT;
+    cursorEl.style.display = 'none';
+    if (hintEl) hintEl.style.display = '';
+    _tutAdvance = () => { _tutAdvance = null; if (onDone) onDone(); };
+  }
+
   function typeNext() {
-    if (charIdx >= FULL_TEXT.length) {
-      cursorEl.style.display = 'none';
-      // 다 읽을 시간을 준 뒤 다음 단계로 — 마지막 줄에서 바로 끊기지 않도록
-      setTimeout(() => { if (onDone) onDone(); }, 1200);
-      return;
-    }
+    if (charIdx >= FULL_TEXT.length) { finishTyping(); return; }
     textEl.textContent += FULL_TEXT[charIdx++];
     setTimeout(typeNext, SPEED);
   }
-  // 커서만 잠시 깜빡이다가 타이핑 시작 — 말씀하신 "검은 화면에 커서만 깜빡이는" 느낌
+
+  _tutAdvance = () => { if (!typingDone) finishTyping(); };
+  // 커서만 잠시 깜빡이다가 타이핑 시작 — 검은 화면에 커서만 깜빡이는 느낌
   setTimeout(typeNext, 900);
 }
 
@@ -2867,8 +2892,6 @@ function hideTutorialIntroScreen() {
 }
 
 // ── 튜토리얼 대화창 타이핑 엔진 (엔딩 터미널과 동일한 패턴) ──────
-let _tutTypingActive = false;
-
 function showTutorialLine(lines, onDone) {
   const box     = document.getElementById('tutorial-box');
   const textEl  = document.getElementById('tutorial-text');
@@ -2880,22 +2903,26 @@ function showTutorialLine(lines, onDone) {
   textEl.textContent = '';
   cursorEl.style.display = '';
   hintEl.style.display = 'none';
-  _tutTypingActive = true;
 
   const FULL_TEXT = Array.isArray(lines) ? lines.join('\n') : lines;
   let charIdx = 0;
+  let typingDone = false;
   const SPEED = 55; // ms/글자 — 사람이 편하게 읽을 수 있는 속도
 
+  function finishTyping() {
+    typingDone = true;
+    textEl.textContent = FULL_TEXT;
+    cursorEl.style.display = 'none';
+    _tutAdvance = () => { _tutAdvance = null; if (onDone) onDone(); };
+  }
+
   function typeNext() {
-    if (charIdx >= FULL_TEXT.length) {
-      _tutTypingActive = false;
-      cursorEl.style.display = 'none';
-      if (onDone) onDone();
-      return;
-    }
+    if (charIdx >= FULL_TEXT.length) { finishTyping(); return; }
     textEl.textContent += FULL_TEXT[charIdx++];
     setTimeout(typeNext, SPEED);
   }
+
+  _tutAdvance = () => { if (!typingDone) finishTyping(); };
   setTimeout(typeNext, 200);
 }
 
@@ -2942,21 +2969,12 @@ function onTutorialMineCollected() {
 }
 
 function goToLobbyFromTutorial() {
-  // UNIT-00 튜토리얼 1단계 완주 — 본게임 진행을 위해 유닛을 1로 올림
+  // UNIT-00 튜토리얼 완주 — 유닛을 1로 올리고 타이틀로 복귀 (정상 플로우: 타이틀→기지)
   incrementUnit();
-  GAME_STATE = 'LOBBY';
-  document.getElementById('lobby-screen')?.classList.add('show');
-  renderLobby('status');
-  SoundManager.crossfadeBGM('bgm_base');
+  showTitle();
 }
 
 function startGame() {
-  // UNIT-00 (한 번도 플레이한 적 없는 신규 유저) → 튜토리얼로 분기
-  // advanceUnitIfNeeded() 호출 전에 체크해야 함 (호출 후엔 이미 1로 올라감)
-  if (getCurrentUnit() === 0) {
-    startTutorial();
-    return;
-  }
   ['title-screen','lobby-screen'].forEach(id =>
     document.getElementById(id)?.classList.remove('show'));
   advanceUnitIfNeeded();
@@ -4762,8 +4780,9 @@ player.recordSaved    = false;
 resize();
 // CSS 완전 로드 후 resize 재호출 (GitHub Pages 타이밍 이슈 방지)
 window.addEventListener('load', () => { resize(); });
-// 타이틀 화면으로 시작 (init은 작전 개시 후)
-showTitle();
+// 최초 진입 — 유닛 0(첫 플레이)이면 튜토리얼, 아니면 타이틀
+if (getCurrentUnit() === 0) startTutorial();
+else showTitle();
 
 // 소나 JIT 워밍업 — 오프스크린에서 draw 함수 한 번 실행
 (function warmupSonar() {
