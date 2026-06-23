@@ -1398,6 +1398,9 @@ window.addEventListener('keydown', e => {
   // ── PAUSED: ESC 외 입력 차단 ─────────────────────────────────
   if (GAME_STATE === 'PAUSED') return;
 
+  // ── TUTORIAL_INTRO: 풀스크린 암전 세계관 설명 중 — 모든 게임 키 무시 ──
+  if (GAME_STATE === 'TUTORIAL_INTRO') return;
+
   // ── TITLE 상태: 스페이스/엔터로 시작 ──────────────────────────
   if (GAME_STATE === 'TITLE') {
     if (e.code === 'Space' || e.code === 'Enter') showLobby();
@@ -2687,6 +2690,7 @@ function showTitle() {
   TUT_LOCKED = false;
   TUT_STEP   = null;
   hideTutorialBox();
+  hideTutorialIntroScreen();
   document.getElementById('title-screen').classList.add('show');
   updateTitleStats();
   SoundManager.init();
@@ -2811,16 +2815,55 @@ function startTutorial() {
   ['gameover','escaped','early-exit','stage-intro','ending-screen','tbc-screen','origin-eyes']
     .forEach(id => document.getElementById(id)?.classList.remove('show'));
 
-  GAME_STATE = 'PLAYING';
+  // ── 1단계: 풀스크린 암전 — 세계관 설명 (인게임 화면은 아직 안 보임) ──
+  GAME_STATE = 'TUTORIAL_INTRO';
   SoundManager.crossfadeBGM('bgm_base');
 
-  showTutorialLine(TUT_WORLD_LINES, () => {
+  showTutorialIntroScreen(TUT_WORLD_LINES, () => {
+    hideTutorialIntroScreen();
+    // ── 2단계: 인게임 화면 등장 — 이동 안내부터는 하단 오버레이 대화창 ──
+    GAME_STATE = 'PLAYING';
     TUT_STEP = 'move_intro';
     showTutorialLine(TUT_MOVE_LINES, () => {
       TUT_STEP = 'moving';
       TUT_LOCKED = false; // 이동 허용
     });
   });
+}
+
+// ── 튜토리얼 풀스크린 암전 인트로 (세계관 설명 전용) ─────────────
+// 검은 화면에서 커서만 깜빡이다가 텍스트가 타이핑되는 구조 — 엔딩 터미널과 동일한 패턴
+function showTutorialIntroScreen(lines, onDone) {
+  const screen   = document.getElementById('tutorial-intro-screen');
+  const textEl   = document.getElementById('tutorial-intro-text');
+  const cursorEl = document.getElementById('tutorial-intro-cursor');
+  if (!screen || !textEl) { if (onDone) onDone(); return; }
+
+  screen.classList.add('show');
+  textEl.textContent = '';
+  cursorEl.style.display = '';
+
+  const FULL_TEXT = Array.isArray(lines) ? lines.join('\n') : lines;
+  let charIdx = 0;
+  const SPEED = 55; // ms/글자 — 사람이 편하게 읽을 수 있는 속도
+
+  function typeNext() {
+    if (charIdx >= FULL_TEXT.length) {
+      cursorEl.style.display = 'none';
+      // 다 읽을 시간을 준 뒤 다음 단계로 — 마지막 줄에서 바로 끊기지 않도록
+      setTimeout(() => { if (onDone) onDone(); }, 1200);
+      return;
+    }
+    textEl.textContent += FULL_TEXT[charIdx++];
+    setTimeout(typeNext, SPEED);
+  }
+  // 커서만 잠시 깜빡이다가 타이핑 시작 — 말씀하신 "검은 화면에 커서만 깜빡이는" 느낌
+  setTimeout(typeNext, 900);
+}
+
+function hideTutorialIntroScreen() {
+  const screen = document.getElementById('tutorial-intro-screen');
+  if (screen) screen.classList.remove('show');
 }
 
 // ── 튜토리얼 대화창 타이핑 엔진 (엔딩 터미널과 동일한 패턴) ──────
@@ -2841,7 +2884,7 @@ function showTutorialLine(lines, onDone) {
 
   const FULL_TEXT = Array.isArray(lines) ? lines.join('\n') : lines;
   let charIdx = 0;
-  const SPEED = 32; // ms/글자 — 엔딩보다 약간 빠르게 (튜토리얼은 반복 노출되니까)
+  const SPEED = 55; // ms/글자 — 사람이 편하게 읽을 수 있는 속도
 
   function typeNext() {
     if (charIdx >= FULL_TEXT.length) {
@@ -4702,6 +4745,7 @@ function loop(ts) {
   const dt = Math.min((ts - lastTs) / 1000, 0.1); lastTs = ts; lastDt = dt;
   frameCount++; fpsTimer += dt;
   if (fpsTimer >= 1) { fps = frameCount; frameCount = 0; fpsTimer = 0; }
+  // TUTORIAL_INTRO — 풀스크린 암전 세계관 설명 중. 인게임 화면(캔버스/HUD) 렌더링 안 함
   if (GAME_STATE === 'PLAYING' || GAME_STATE === 'ESCAPED' || GAME_STATE === 'GAMEOVER') {
     handleInput(dt); updateSonar(dt); update(dt);
     render(); renderMinimap(); updateHUD(); updateDevInfo();

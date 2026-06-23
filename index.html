@@ -233,6 +233,20 @@ body.mobile-ui #dev-toggle { display:none; }
 .intro-location { font-size:1.05rem; color:#555; letter-spacing:0.2em; margin-top:-4px; margin-bottom:6px; }
 .intro-icon { font-size:1.3rem; width:26px; text-align:center; }
 
+/* ── 튜토리얼 인트로 (풀스크린 암전 — 세계관 설명 전용) ── */
+#tutorial-intro-screen {
+  display:none; position:absolute; inset:0; background:#000;
+  flex-direction:column; align-items:center; justify-content:center;
+  z-index:60; overflow:hidden;
+}
+#tutorial-intro-screen.show { display:flex; }
+#tutorial-intro-box {
+  font-family:'Courier New',monospace; font-size:0.95rem; color:#00cc66; text-align:left;
+  line-height:2.0; max-width:540px; width:90%; border:1px solid #0a3a1a;
+  padding:24px 30px; background:rgba(0,10,0,0.85); white-space:pre-wrap; min-height:1.2em;
+}
+#tutorial-intro-cursor { display:inline-block; width:8px; height:1em; background:#00cc66; animation:blink 0.8s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
+
 /* ── 튜토리얼 하단 대화창 (인게임 위 오버레이) ── */
 #tutorial-box {
   display:none; position:absolute; left:50%; bottom:6%; transform:translateX(-50%);
@@ -560,6 +574,11 @@ body.mobile-ui #mobile-pause {
           <div class="ts-stat-val" id="ts-runs">0</div>
         </div>
       </div>
+    </div>
+
+    <!-- 튜토리얼 인트로 (풀스크린 암전 — 세계관 설명) -->
+    <div id="tutorial-intro-screen">
+      <div id="tutorial-intro-box"><span id="tutorial-intro-text"></span><span id="tutorial-intro-cursor"></span></div>
     </div>
 
     <canvas id="canvas" tabindex="0"></canvas>
