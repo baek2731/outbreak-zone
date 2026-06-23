@@ -23,6 +23,9 @@ const SoundManager = (() => {
 
   let _bgmSource  = null;
   let _bgmCurrent = null;
+  // BGM 버퍼가 아직 디코딩되지 않았을 때 재생을 보류해두는 슬롯
+  // (디코딩이 끝나면 _loadBGMFile에서 이 값을 확인해 자동 재생)
+  let _pendingBGM = null; // { id, fadeIn } | null
 
   // ── 볼륨 설정 ────────────────────────────────────────────────
   const VOL = {
@@ -132,6 +135,12 @@ const SoundManager = (() => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const arr = await res.arrayBuffer();
       _bgmBuffers[id] = await _ctx.decodeAudioData(arr);
+      // 이 BGM의 디코딩을 기다리던 재생 요청이 있으면 지금 실행
+      if (_pendingBGM && _pendingBGM.id === id) {
+        const req = _pendingBGM;
+        _pendingBGM = null;
+        playBGM(req.id, req.fadeIn);
+      }
     } catch(e) {
       console.warn(`[Sound] BGM 로드 실패 [${id}]:`, e);
     }
@@ -286,9 +295,14 @@ const SoundManager = (() => {
   // ── BGM 관리 ─────────────────────────────────────────────────
   function playBGM(id, fadeIn = 1.2) {
     if (!_ensureCtx()) return;
-    if (_bgmCurrent === id) return;
+    if (_bgmCurrent === id) { _pendingBGM = null; return; }
     const buf = _bgmBuffers[id];
-    if (!buf) { console.warn(`[Sound] BGM 버퍼 없음 [${id}]`); return; }
+    if (!buf) {
+      console.warn(`[Sound] BGM 버퍼 없음 [${id}] — 디코딩 완료 시 자동 재생 대기`);
+      _pendingBGM = { id, fadeIn, mode: 'play' };
+      return;
+    }
+    _pendingBGM = null;
 
     _stopBGMSource();
 

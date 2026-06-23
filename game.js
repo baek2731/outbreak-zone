@@ -1230,6 +1230,62 @@ window.addEventListener('orientationchange', () => {
   setTimeout(resize, 300);
 });
 
+// ================================================================
+//  튜토리얼 전용 고정 맵
+//  구조: 시작점(십자 1칸) + 오른쪽 통로(4칸) + 그 뒤 병원체 2개 인접 배치
+//  좌표 원점은 (0,0)=벽 테두리, 시작점은 (3,3)으로 둬서 사방 1칸 여유 확보
+// ================================================================
+const TUT_MAP_W = 16, TUT_MAP_H = 7;
+const TUT_START_TX = 3, TUT_START_TY = 3;          // 시작 타일
+const TUT_SONAR_TRIGGER_TX = TUT_START_TX + 4;     // 오른쪽 4칸 지점 — 소나 안내 트리거
+// 병원체 2개를 메인 통로 위/아래 한 칸씩에 배치 → 통로 타일에서 인접 병원체 2개(danger=2, 주황 핑) 시연
+// 소나트리거(시작+4) 지점에서 거리 2 — 소나 최소반경(minRadius=2)으로 짧게 눌러도 반드시 핑이 도달하도록
+const TUT_MINE_TX   = TUT_SONAR_TRIGGER_TX + 2;
+const TUT_MINE_TY_A = TUT_START_TY - 1;            // 병원체 A (통로 위)
+const TUT_MINE_TY_B = TUT_START_TY + 1;            // 병원체 B (통로 아래)
+const TUT_CORRIDOR_END_TX = TUT_MINE_TX + 2;       // 통로 끝
+
+function generateTutorialMap() {
+  const W = TUT_MAP_W, H = TUT_MAP_H;
+  const tiles   = new Uint8Array(W * H).fill(T.WALL);
+  const numbers = new Uint8Array(W * H);
+  const detected = new Uint8Array(W * H);
+  const idx = (x, y) => y * W + x;
+
+  // 시작점 십자 (상하좌우 1칸씩 개방, 그 외 사방은 벽)
+  tiles[idx(TUT_START_TX, TUT_START_TY)]     = T.FLOOR;
+  tiles[idx(TUT_START_TX, TUT_START_TY - 1)] = T.FLOOR; // 위 1칸
+  tiles[idx(TUT_START_TX, TUT_START_TY + 1)] = T.FLOOR; // 아래 1칸
+  tiles[idx(TUT_START_TX - 1, TUT_START_TY)] = T.FLOOR; // 왼쪽 1칸
+
+  // 오른쪽 메인 통로 — 시작점부터 병원체 구역 너머까지 일자로 개방
+  for (let x = TUT_START_TX; x <= TUT_CORRIDOR_END_TX; x++) {
+    tiles[idx(x, TUT_START_TY)] = T.FLOOR;
+  }
+
+  // 병원체 2개 — 통로 위/아래로 분리 배치 (통로 타일에서 danger=2 주황 핑 시연)
+  tiles[idx(TUT_MINE_TX, TUT_MINE_TY_A)] = T.MINE;
+  tiles[idx(TUT_MINE_TX, TUT_MINE_TY_B)] = T.MINE;
+  // 병원체 A(위쪽)로 도달하는 1칸 분기 통로 — 회수 대상은 A 하나만 (설계 합의: "1개를 회수")
+  // 병원체 B(아래쪽)는 분기를 열지 않아 도달 불가 — danger=2 시연용으로만 존재
+  tiles[idx(TUT_MINE_TX - 1, TUT_MINE_TY_A)] = T.FLOOR; // 통로(y=3)에서 위로 꺾어 들어가는 길
+
+  // 인접 병원체 수 계산 (본게임과 동일한 규칙 — 3x3 인접 MINE 개수)
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (tiles[idx(x, y)] === T.WALL) continue;
+    let cnt = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < W && ny >= 0 && ny < H && tiles[idx(nx, ny)] === T.MINE) cnt++;
+    }
+    numbers[idx(x, y)] = cnt;
+  }
+
+  return { tiles, numbers, detected, width: W, height: H,
+           floorCount: 0, mineCount: 2, deadEndCount: 0, deadEndRatio: 0 };
+}
+
 // ── 초기화 ───────────────────────────────────────────────────────
 function init() {
   MAP = generateMap();
@@ -1411,6 +1467,7 @@ window.addEventListener('keydown', e => {
 
   if (e.code === 'KeyE') {
     if (!e.repeat && !player.dead && !minigame.active) {
+      if (TUT_ACTIVE && TUT_STEP !== 'mine_collect') return; // 튜토리얼 — 소나 사용 전엔 회수 불가
       const tileIdx = player.ty * MAP.width + player.tx;
       if (MAP.tiles[tileIdx] === T.MINE && MAP.detected[tileIdx]) {
         startMinigame('mine', tileIdx);
@@ -1442,6 +1499,7 @@ window.addEventListener('keydown', e => {
       return;
     }
     if (!e.repeat && !sonar.charging && !player.dead && !minigame.active) {
+      if (TUT_ACTIVE && TUT_STEP !== 'sonar_prompt') return; // 튜토리얼 — 안내 전엔 소나 비활성
       sonar.charging = true; sonar.chargeTime = 0;
     }
     return;
@@ -1464,12 +1522,14 @@ window.addEventListener('keydown', e => {
   }
   // D — 자가 치료제 사용 (전투 외)
   if (e.code === 'KeyD') {
+    if (TUT_ACTIVE) return; // 치료제는 PR1 범위 밖
     if (!minigame.active && !player.dead && GAME_STATE === 'PLAYING') {
       useSerumSelf();
     }
     return;
   }
   if (e.code === 'KeyG') {
+    if (TUT_ACTIVE) return; // 정밀소나는 PR1 범위 밖 (후속 PR에서 시연)
     if (!e.repeat && !sonar.chargingPrecise && sonar.precise > 0 && !player.dead && !minigame.active) {
       sonar.chargingPrecise = true; sonar.chargeTimePrecise = 0;
     }
@@ -1519,6 +1579,7 @@ function handleInput(dt) {
   moveTimer = Math.max(0, moveTimer - dt);
   if (player.dead) { sonar.charging = false; sonar.chargingPrecise = false; }
   if (GAME_STATE !== 'PLAYING') return;
+  if (TUT_ACTIVE && TUT_LOCKED) return; // 튜토리얼 대화창 보는 중 — 이동 차단
   if (player.moving || moveTimer > 0 || player.dead || minigame.active) return;
   const dir = getHeldDir();
   if (dir) { updateFacing(dir.dx, dir.dy); tryMove(dir.dx, dir.dy); }
@@ -1528,6 +1589,8 @@ function handleInput(dt) {
 function onStep(tx, ty) {
   const tileIdx = ty * MAP.width + tx;
   const tile    = MAP.tiles[tileIdx];
+
+  checkTutorialMoveProgress();
 
   if (tile === T.MINE) {
     const tileIdx2 = ty * MAP.width + tx;
@@ -1875,13 +1938,15 @@ function endMinigame(success) {
         const ty = Math.floor(minigame.mineTileIdx / MAP.width);
         recalcNumbers(tx, ty);
         player.totalCollected++; // 런 전체 누적
-        // 마지막 병원체였는지 확인
-        let remain = 0;
-        for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remain++;
-        if (remain === 0) devLog('✓ 모든 병원체 회수 완료 — 출구로 이동하세요!', 'good');
-        checkPatrolPhase();
-        // GUARD 홈 포인트 갱신 (회수된 병원체가 홈이었을 경우)
-        updateGuardHomePoints();
+        if (!TUT_ACTIVE) {
+          // 마지막 병원체였는지 확인
+          let remain = 0;
+          for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remain++;
+          if (remain === 0) devLog('✓ 모든 병원체 회수 완료 — 출구로 이동하세요!', 'good');
+          checkPatrolPhase();
+          // GUARD 홈 포인트 갱신 (회수된 병원체가 홈이었을 경우)
+          updateGuardHomePoints();
+        }
       }
       const fx = getUpgradeEffects();
       const resistRate = Math.min(1, fx.infectResistRate || 0);
@@ -1894,12 +1959,15 @@ function endMinigame(success) {
         addPopup('병원체 +1', '#00ff88', 0);
         addPopup('오염 저항', '#bb88ff', 0.18);
       }
-      // 마지막 병원체 회수 완료 알림
-      let remain2 = 0;
-      for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remain2++;
-      if (remain2 === 0) addNotice('전 병원체 회수 완료 — 출구로', '#00ffcc', 3.5);
+      if (!TUT_ACTIVE) {
+        // 마지막 병원체 회수 완료 알림
+        let remain2 = 0;
+        for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remain2++;
+        if (remain2 === 0) addNotice('전 병원체 회수 완료 — 출구로', '#00ffcc', 3.5);
+      }
       revealAround(player.tx, player.ty, CONFIG.player.visionRad);
       devLog(`병원체 회수 성공 — 감염 +${infectAmt}% (저항 ${Math.round(resistRate*100)}%)`, 'good');
+      onTutorialMineCollected();
     } else {
       SoundManager.play('collect_fail');
       // 실패 — 감염 대폭 증가 + 소음
@@ -2615,6 +2683,10 @@ function renderMemorial(el) {
 // ── 타이틀 화면 ──────────────────────────────────────────────────
 function showTitle() {
   GAME_STATE = 'TITLE';
+  TUT_ACTIVE = false;
+  TUT_LOCKED = false;
+  TUT_STEP   = null;
+  hideTutorialBox();
   document.getElementById('title-screen').classList.add('show');
   updateTitleStats();
   SoundManager.init();
@@ -2652,7 +2724,196 @@ function applyUpgradeEffects() {
   devLog(`업그레이드 효과 적용: 산소MAX=${CONFIG.oxygen.max} 감소×${fx.oxygenDrainMult.toFixed(2)} 전투+${fx.combatPowerBonus}`, 'good');
 }
 
+// ================================================================
+//  튜토리얼 (UNIT-00)
+//  세계관 설명 → 이동 학습 → 기본소나 학습(병원체 2개, danger=2 시연)
+//  → 회수 미니게임 1개 → 기지 전환
+//  PR 1 범위: 여기까지. (정밀소나/전투/사망 연출은 후속 PR)
+// ================================================================
+let TUT_ACTIVE = false;   // 튜토리얼 진행 중 여부
+let TUT_LOCKED = false;   // true면 이동 입력 차단 (대화창 보는 중)
+let TUT_STEP   = null;    // 'world_intro' | 'move_intro' | 'moving' | 'sonar_prompt' | 'sonar_used' | 'mine_collect' | 'done'
+
+const TUT_WORLD_LINES = [
+  '[수신: 격리구역 통신망]',
+  '',
+  '...이곳은 한때 평범한 병원이었다.',
+  '지금은 아니다.',
+  '',
+  '임무: 병원체 회수. 생존자는 없다고 가정하라.',
+  '— 단, 정말 그런지는 직접 확인하게 될 것이다.',
+];
+
+const TUT_MOVE_LINES = [
+  '상하좌우 방향키로 이동합니다.',
+  '',
+  '→ 직접 움직여 보세요.',
+];
+
+const TUT_SONAR_LINES = [
+  '전방에 반응이 있다.',
+  '',
+  '[F] 키를 눌러 소나를 사용하세요.',
+];
+
+function startTutorial() {
+  ['title-screen','lobby-screen'].forEach(id =>
+    document.getElementById(id)?.classList.remove('show'));
+  TUT_ACTIVE = true;
+  TUT_LOCKED = true;
+  TUT_STEP   = 'world_intro';
+
+  player.stage          = 0;
+  player.oxygen         = CONFIG.oxygen.max;
+  player.infection      = 0;
+  player.totalCollected = 0;
+  player.recordSaved    = false;
+  player.serum          = CONFIG.serum.initialCount;
+  applyUpgradeEffects();
+  player.oxygen = CONFIG.oxygen.max;
+
+  MAP = generateTutorialMap();
+  VISITED = new Uint8Array(MAP.width * MAP.height);
+  VISIBLE  = new Uint8Array(MAP.width * MAP.height);
+
+  Object.assign(player, {
+    tx: TUT_START_TX, ty: TUT_START_TY,
+    px: TUT_START_TX * CONFIG.map.tileSize, py: TUT_START_TY * CONFIG.map.tileSize,
+    targetX: TUT_START_TX * CONFIG.map.tileSize, targetY: TUT_START_TY * CONFIG.map.tileSize,
+    moving: false, facing: 'down',
+    dead: false, itemsFound: 0, exitCooldown: 0,
+  });
+
+  Object.assign(sonar, {
+    charging:false, chargeTime:0,
+    chargingPrecise:false, chargeTimePrecise:0,
+    firing:false, pulseR:0, pulseMaxR:0,
+    pings:[], preciseMarks:[],
+    precise: CONFIG.sonar.preciseCount,
+    radarTimer: 0, radarRadius: 0,
+  });
+
+  zombies.length = 0; // 튜토리얼 1단계는 좀비 없음
+  noisePulses.length = 0;
+  popups.length = 0;
+  notices.length = 0;
+  Object.assign(minigame, {
+    active:false, type:null, pattern:[], current:0, result:null,
+    resultTimer:0, flashTimer:0, mineTileIdx:-1, combatZombie:null,
+    interruptedMine:false, postCooldown:0,
+    combatGauge:0, combatDrain:0, playerPower: MG.combatPlayerPower, mashTimer:0,
+  });
+
+  revealAround(TUT_START_TX, TUT_START_TY, CONFIG.player.visionRad);
+  camX = player.px + CONFIG.map.tileSize / 2 - viewW() / 2;
+  camY = player.py + CONFIG.map.tileSize / 2 - viewH() / 2;
+
+  ['gameover','escaped','early-exit','stage-intro','ending-screen','tbc-screen','origin-eyes']
+    .forEach(id => document.getElementById(id)?.classList.remove('show'));
+
+  GAME_STATE = 'PLAYING';
+  SoundManager.crossfadeBGM('bgm_base');
+
+  showTutorialLine(TUT_WORLD_LINES, () => {
+    TUT_STEP = 'move_intro';
+    showTutorialLine(TUT_MOVE_LINES, () => {
+      TUT_STEP = 'moving';
+      TUT_LOCKED = false; // 이동 허용
+    });
+  });
+}
+
+// ── 튜토리얼 대화창 타이핑 엔진 (엔딩 터미널과 동일한 패턴) ──────
+let _tutTypingActive = false;
+
+function showTutorialLine(lines, onDone) {
+  const box     = document.getElementById('tutorial-box');
+  const textEl  = document.getElementById('tutorial-text');
+  const cursorEl= document.getElementById('tutorial-cursor');
+  const hintEl  = document.getElementById('tutorial-hint');
+  if (!box || !textEl) { if (onDone) onDone(); return; }
+
+  box.classList.add('show');
+  textEl.textContent = '';
+  cursorEl.style.display = '';
+  hintEl.style.display = 'none';
+  _tutTypingActive = true;
+
+  const FULL_TEXT = Array.isArray(lines) ? lines.join('\n') : lines;
+  let charIdx = 0;
+  const SPEED = 32; // ms/글자 — 엔딩보다 약간 빠르게 (튜토리얼은 반복 노출되니까)
+
+  function typeNext() {
+    if (charIdx >= FULL_TEXT.length) {
+      _tutTypingActive = false;
+      cursorEl.style.display = 'none';
+      if (onDone) onDone();
+      return;
+    }
+    textEl.textContent += FULL_TEXT[charIdx++];
+    setTimeout(typeNext, SPEED);
+  }
+  setTimeout(typeNext, 200);
+}
+
+function hideTutorialBox() {
+  const box = document.getElementById('tutorial-box');
+  if (box) box.classList.remove('show');
+}
+
+// ── 이동 거리 체크 — 매 onStep마다 호출 (moving 단계에서만 동작) ──
+function checkTutorialMoveProgress() {
+  if (!TUT_ACTIVE || TUT_STEP !== 'moving') return;
+  if (player.tx >= TUT_SONAR_TRIGGER_TX) {
+    TUT_STEP = 'sonar_prompt';
+    TUT_LOCKED = true; // 이동 다시 차단
+    showTutorialLine(TUT_SONAR_LINES, () => {
+      // F 입력 대기 — 잠금은 풀되, 이동만 막힌 상태 유지 (소나는 막힌 상태에서도 차징 가능해야 하므로
+      // TUT_LOCKED는 이동에만 적용되고 소나 입력은 handleInput과 별도 경로라 영향 없음)
+      TUT_LOCKED = false;
+      hideTutorialBox();
+    });
+  }
+}
+
+// ── 소나 발사 후 처리 — fireSonar 내부에서 튜토리얼이면 호출 ──────
+function onTutorialSonarFired() {
+  if (!TUT_ACTIVE || TUT_STEP !== 'sonar_prompt') return;
+  TUT_STEP = 'mine_collect';
+  TUT_LOCKED = true; // 이동 다시 차단 — 핑을 관찰하게 함
+  setTimeout(() => {
+    TUT_LOCKED = false; // 곧 다시 풀어서 회수 위치로 이동 가능하게
+  }, 1200);
+}
+
+// ── 회수 완료 후 처리 — endMinigame(mine, success) 내부에서 호출 ──
+function onTutorialMineCollected() {
+  if (!TUT_ACTIVE) return;
+  TUT_STEP = 'done';
+  TUT_LOCKED = true;
+  setTimeout(() => {
+    TUT_ACTIVE = false;
+    hideTutorialBox();
+    goToLobbyFromTutorial();
+  }, 1400);
+}
+
+function goToLobbyFromTutorial() {
+  // UNIT-00 튜토리얼 1단계 완주 — 본게임 진행을 위해 유닛을 1로 올림
+  incrementUnit();
+  GAME_STATE = 'LOBBY';
+  document.getElementById('lobby-screen')?.classList.add('show');
+  renderLobby('status');
+  SoundManager.crossfadeBGM('bgm_base');
+}
+
 function startGame() {
+  // UNIT-00 (한 번도 플레이한 적 없는 신규 유저) → 튜토리얼로 분기
+  // advanceUnitIfNeeded() 호출 전에 체크해야 함 (호출 후엔 이미 1로 올라감)
+  if (getCurrentUnit() === 0) {
+    startTutorial();
+    return;
+  }
   ['title-screen','lobby-screen'].forEach(id =>
     document.getElementById(id)?.classList.remove('show'));
   advanceUnitIfNeeded();
@@ -2664,8 +2925,6 @@ function startGame() {
   player.serum          = CONFIG.serum.initialCount; // 치료제 초기화
   applyUpgradeEffects();
   player.oxygen = CONFIG.oxygen.max;
-  // [방법A] UNIT-00 강제 등록 — 튜토리얼 완성 후 이 줄 제거
-  ensureUnit00Fallen();
   SoundManager.crossfadeBGM('bgm_stage12');
   init();
 }
@@ -2879,6 +3138,8 @@ function fireSonar(isPrecise) {
 
   if (isPrecise) { sonar.chargingPrecise = false; sonar.chargeTimePrecise = 0; sonar.precise--; }
   else           { sonar.charging = false; sonar.chargeTime = 0; }
+
+  if (!isPrecise) onTutorialSonarFired();
 
   // 사운드
   SoundManager.play(isPrecise ? 'sonar_precise' : 'sonar_fire');
@@ -4315,10 +4576,10 @@ document.getElementById('d-records').addEventListener('click', () => {
 document.getElementById('d-clearrecords').addEventListener('click', () => {
   localStorage.removeItem(RECORDS_KEY);
   localStorage.removeItem(DNA_KEY);
-  localStorage.setItem(UNIT_KEY, '1');   // UNIT-00 = 튜토리얼 사망, 플레이어는 UNIT-01부터
+  localStorage.setItem(UNIT_KEY, '1');   // UNIT-00 = 튜토리얼 사망 처리, 플레이어는 UNIT-01부터
   localStorage.removeItem(FALLEN_KEY);
-  ensureUnit00Fallen();                  // 즉시 등록 — 새로고침 불필요
-  devLog('수집 기록 초기화 — UNIT-01부터 시작 / UNIT-00 전사자 풀 등록됨', 'warn');
+  ensureUnit00Fallen();                  // 즉시 등록 — 튜토리얼 재플레이 없이 바로 본게임 테스트용
+  devLog('수집 기록 초기화 — UNIT-01부터 시작 / UNIT-00 전사자 풀 등록됨 (튜토리얼 우회)', 'warn');
 });
 
 // DEV — 기지 UI 폰트 크기 조절

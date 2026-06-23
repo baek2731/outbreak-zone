@@ -233,6 +233,19 @@ body.mobile-ui #dev-toggle { display:none; }
 .intro-location { font-size:1.05rem; color:#555; letter-spacing:0.2em; margin-top:-4px; margin-bottom:6px; }
 .intro-icon { font-size:1.3rem; width:26px; text-align:center; }
 
+/* ── 튜토리얼 하단 대화창 (인게임 위 오버레이) ── */
+#tutorial-box {
+  display:none; position:absolute; left:50%; bottom:6%; transform:translateX(-50%);
+  width:88%; max-width:620px; min-height:64px;
+  font-family:'Courier New',monospace; font-size:0.92rem; color:#00cc66; text-align:left;
+  line-height:1.7; border:1px solid #0a3a1a; border-radius:4px;
+  padding:16px 22px; background:rgba(0,10,0,0.88); white-space:pre-wrap;
+  z-index:30; box-shadow:0 0 24px rgba(0,0,0,0.6);
+}
+#tutorial-box.show { display:block; }
+#tutorial-cursor { display:inline-block; width:8px; height:1em; background:#00cc66; animation:blink 0.8s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
+#tutorial-hint { font-size:0.7rem; color:#2a5a3a; margin-top:8px; letter-spacing:0.08em; }
+
 /* ── 엔딩 ── */
 #ending-screen { display:none; position:absolute; inset:0; background:#000; flex-direction:column; align-items:center; justify-content:center; z-index:25; overflow:hidden; }
 #ending-screen.show { display:flex; }
@@ -476,6 +489,12 @@ body.mobile-ui #mobile-pause {
 
         <!-- 하단 중앙: 위치 표시 -->
         <div id="hud-stage"><span id="hud-pos">1,1</span></div>
+
+        <!-- 튜토리얼 대화창 (인게임 위 오버레이) -->
+        <div id="tutorial-box">
+          <span id="tutorial-text"></span><span id="tutorial-cursor"></span>
+          <div id="tutorial-hint" style="display:none;">[ Space — 다음 ]</div>
+        </div>
       </div>
 
       <!-- 플래시 오버레이 -->
