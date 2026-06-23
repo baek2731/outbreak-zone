@@ -1398,9 +1398,9 @@ window.addEventListener('keydown', e => {
   // ── PAUSED: ESC 외 입력 차단 ─────────────────────────────────
   if (GAME_STATE === 'PAUSED') return;
 
-  // ── TUTORIAL_INTRO: 풀스크린 암전 세계관 설명 — F/Space로 진행 ──
+  // ── TUTORIAL_INTRO: 풀스크린 암전 세계관 설명 — Space로 진행 ──
   if (GAME_STATE === 'TUTORIAL_INTRO') {
-    if (e.code === 'KeyF' || e.code === 'Space') tutorialAdvanceKey();
+    if (e.code === 'Space') tutorialAdvanceKey();
     return;
   }
 
@@ -1458,9 +1458,9 @@ window.addEventListener('keydown', e => {
   }
 
   // ── PLAYING 상태 ──────────────────────────────────────────────
-  // 튜토리얼 대화창 보는 중(TUT_LOCKED) — F/Space로 진행, 다른 입력 무시
+  // 튜토리얼 대화창 보는 중(TUT_LOCKED) — Space로 진행, 다른 입력 무시
   if (TUT_ACTIVE && TUT_LOCKED) {
-    if (e.code === 'KeyF' || e.code === 'Space') tutorialAdvanceKey();
+    if (e.code === 'Space') tutorialAdvanceKey();
     return;
   }
   // 미니게임 중 입력
@@ -2835,7 +2835,8 @@ function startTutorial() {
     showTutorialLine(TUT_MOVE_LINES, () => {
       TUT_STEP = 'moving';
       TUT_LOCKED = false; // 이동 허용
-    });
+      hideTutorialBox();  // 타이핑 끝나면 바로 닫힘 — Space 대기 없음
+    }, true); // autoAdvance: 타이핑 완성 시 즉시 진행
   });
 }
 
@@ -2892,7 +2893,7 @@ function hideTutorialIntroScreen() {
 }
 
 // ── 튜토리얼 대화창 타이핑 엔진 (엔딩 터미널과 동일한 패턴) ──────
-function showTutorialLine(lines, onDone) {
+function showTutorialLine(lines, onDone, autoAdvance) {
   const box     = document.getElementById('tutorial-box');
   const textEl  = document.getElementById('tutorial-text');
   const cursorEl= document.getElementById('tutorial-cursor');
@@ -2913,8 +2914,13 @@ function showTutorialLine(lines, onDone) {
     typingDone = true;
     textEl.textContent = FULL_TEXT;
     cursorEl.style.display = 'none';
-    hintEl.style.display = '';
-    _tutAdvance = () => { _tutAdvance = null; if (onDone) onDone(); };
+    if (autoAdvance) {
+      _tutAdvance = null;
+      if (onDone) onDone();
+    } else {
+      hintEl.style.display = '';
+      _tutAdvance = () => { _tutAdvance = null; if (onDone) onDone(); };
+    }
   }
 
   function typeNext() {
@@ -2935,15 +2941,15 @@ function hideTutorialBox() {
 // ── 이동 거리 체크 — 매 onStep마다 호출 (moving 단계에서만 동작) ──
 function checkTutorialMoveProgress() {
   if (!TUT_ACTIVE || TUT_STEP !== 'moving') return;
+  hideTutorialBox(); // 이동 시작 — 대화창이 화면을 가리지 않도록 즉시 숨김
   if (player.tx >= TUT_SONAR_TRIGGER_TX) {
     TUT_STEP = 'sonar_prompt';
     TUT_LOCKED = true; // 이동 다시 차단
     showTutorialLine(TUT_SONAR_LINES, () => {
-      // F 입력 대기 — 잠금은 풀되, 이동만 막힌 상태 유지 (소나는 막힌 상태에서도 차징 가능해야 하므로
-      // TUT_LOCKED는 이동에만 적용되고 소나 입력은 handleInput과 별도 경로라 영향 없음)
+      // 타이핑 끝나면 자동으로 잠금 해제 — 이후 진행은 F를 꾹 눌러 소나 사용
       TUT_LOCKED = false;
       hideTutorialBox();
-    });
+    }, true); // autoAdvance
   }
 }
 
