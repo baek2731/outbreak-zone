@@ -1529,9 +1529,9 @@ window.addEventListener('keydown', e => {
   // ── PAUSED: ESC 외 입력 차단 ─────────────────────────────────
   if (GAME_STATE === 'PAUSED') return;
 
-  // ── TUTORIAL_INTRO: 풀스크린 암전 세계관 설명 — Space로 진행 ──
+  // ── TUTORIAL_INTRO: 풀스크린 암전 세계관 설명 — Space/F로 진행(탭도 별도로 동작) ──
   if (GAME_STATE === 'TUTORIAL_INTRO') {
-    if (e.code === 'Space') tutorialAdvanceKey();
+    if (e.code === 'Space' || e.code === 'KeyF') tutorialAdvanceKey();
     return;
   }
 
@@ -1589,10 +1589,10 @@ window.addEventListener('keydown', e => {
   }
 
   // ── PLAYING 상태 ──────────────────────────────────────────────
-  // 튜토리얼 대화창 보는 중(TUT_LOCKED) — Space로 진행, 다른 입력 무시
+  // 튜토리얼 대화창 보는 중(TUT_LOCKED) — Space 또는 F로 진행(모바일은 기존 touch-f 버튼 재사용), 다른 입력 무시
   // precise_prompt 단계는 G키, serum_prompt/serum_use_wait 단계는 Y/N/D키 예외로 통과
   if (TUT_ACTIVE && TUT_LOCKED) {
-    if (e.code === 'Space') tutorialAdvanceKey();
+    if (e.code === 'Space' || e.code === 'KeyF') tutorialAdvanceKey();
     if (TUT_STEP === 'precise_prompt' && e.code === 'KeyG') { /* 아래로 통과 */ }
     else if (TUT_STEP === 'serum_prompt' && (e.code === 'KeyY' || e.code === 'KeyN')) { /* 아래로 통과 */ }
     else if (TUT_STEP === 'serum_use_wait' && e.code === 'KeyD') { /* 아래로 통과 */ }
@@ -5180,18 +5180,16 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
   });
 })();
 
-// ── 튜토리얼 대화창 / 풀스크린 인트로 — 모바일 탭으로 Space 대체 ──
-// PC는 Space 키로, 모바일은 화면(대화창/인트로 화면) 탭으로 동일하게 진행.
-// click 대신 touchstart 사용 — 다른 터치 버튼(조이스틱/액션버튼)들과 동일한 방식으로 통일.
-// 대화창이 조이스틱/액션버튼과 같은 화면 영역에서 겹칠 때 click 합성이 막히는 문제를 피하기 위함.
-// tutorialAdvanceKey()는 _tutAdvance가 null이면 아무 동작도 안 하므로(showTutorialLine의 'timer'/'silent'/true 모드,
-// 즉 G/D/Y/N 대기 중이거나 자동진행 중) 그 상태에서 탭해도 부작용 없음 — Space-다음 대기 상태에서만 실제로 진행됨.
-['tutorial-box', 'tutorial-intro-screen'].forEach(id => {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.addEventListener('touchstart', (e) => { e.preventDefault(); tutorialAdvanceKey(); }, { passive: false });
-  el.addEventListener('click', tutorialAdvanceKey); // PC 마우스 클릭 대비 — 터치 디바이스에선 touchstart가 먼저 처리하므로 중복 무해
-});
+// ── 튜토리얼 풀스크린 인트로 — 모바일 탭으로 Space 대체 (정상 동작 확인됨, 유지) ──
+// 인게임 하단 대화창은 탭 대신 F키(터치에선 기존 touch-f 버튼)로 진행 — 조이스틱/액션버튼과 겹치는 영역에서
+// click/touchstart 합성이 불안정했던 문제를 피하기 위해, 이미 검증된 touch-f 버튼 경로를 그대로 재사용.
+{
+  const introEl = document.getElementById('tutorial-intro-screen');
+  if (introEl) {
+    introEl.addEventListener('touchstart', (e) => { e.preventDefault(); tutorialAdvanceKey(); }, { passive: false });
+    introEl.addEventListener('click', tutorialAdvanceKey);
+  }
+}
 
 function closeIntro() {
   document.getElementById('stage-intro').classList.remove('show');
