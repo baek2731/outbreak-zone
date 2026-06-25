@@ -268,6 +268,10 @@ body.mobile-ui #dev-toggle { display:none; }
 }
 #tutorial-box.show { display:flex; }
 #tutorial-box.fade-out { opacity:0; }
+/* 모바일 — 좌측 조이스틱(20px+140px)/우측 액션버튼(20px+최대 4개*54~70px) 영역을 피해 고정 마진으로 폭 확보 */
+body.mobile-ui #tutorial-box {
+  left:170px; right:300px; width:auto; max-width:none; transform:none;
+}
 #tutorial-text { white-space:pre-wrap; }
 #tutorial-cursor { display:inline-block; width:8px; height:1em; background:#00cc66; animation:blink 0.8s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
 #tutorial-hint {
@@ -522,7 +526,7 @@ body.mobile-ui #mobile-pause {
         <!-- 튜토리얼 대화창 (인게임 위 오버레이) -->
         <div id="tutorial-box">
           <div id="tutorial-text" style="white-space:pre-wrap;"><span id="tutorial-cursor"></span></div>
-          <div id="tutorial-hint" style="display:none;">[ Space — 다음 ]</div>
+          <div id="tutorial-hint" style="display:none;">[ Space / 탭 — 다음 ]</div>
         </div>
       </div>
 
@@ -597,7 +601,7 @@ body.mobile-ui #mobile-pause {
     <div id="tutorial-intro-screen">
       <div id="tutorial-intro-box">
         <div id="tutorial-intro-text" style="white-space:pre-wrap;"><span id="tutorial-intro-cursor"></span></div>
-        <div id="tutorial-intro-hint">[ Space — 다음 ]</div>
+        <div id="tutorial-intro-hint">[ Space / 탭 — 다음 ]</div>
       </div>
     </div>
 

@@ -5182,11 +5182,15 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
 
 // ── 튜토리얼 대화창 / 풀스크린 인트로 — 모바일 탭으로 Space 대체 ──
 // PC는 Space 키로, 모바일은 화면(대화창/인트로 화면) 탭으로 동일하게 진행.
+// click 대신 touchstart 사용 — 다른 터치 버튼(조이스틱/액션버튼)들과 동일한 방식으로 통일.
+// 대화창이 조이스틱/액션버튼과 같은 화면 영역에서 겹칠 때 click 합성이 막히는 문제를 피하기 위함.
 // tutorialAdvanceKey()는 _tutAdvance가 null이면 아무 동작도 안 하므로(showTutorialLine의 'timer'/'silent'/true 모드,
 // 즉 G/D/Y/N 대기 중이거나 자동진행 중) 그 상태에서 탭해도 부작용 없음 — Space-다음 대기 상태에서만 실제로 진행됨.
 ['tutorial-box', 'tutorial-intro-screen'].forEach(id => {
   const el = document.getElementById(id);
-  if (el) el.addEventListener('click', tutorialAdvanceKey);
+  if (!el) return;
+  el.addEventListener('touchstart', (e) => { e.preventDefault(); tutorialAdvanceKey(); }, { passive: false });
+  el.addEventListener('click', tutorialAdvanceKey); // PC 마우스 클릭 대비 — 터치 디바이스에선 touchstart가 먼저 처리하므로 중복 무해
 });
 
 function closeIntro() {
