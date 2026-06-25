@@ -1312,7 +1312,7 @@ window.addEventListener('orientationchange', () => {
 //        + 통로 연장 + 병원체 C(단독, 치료제선택 후 회수 — 좀비 습격 트리거)
 //  좌표 원점은 (0,0)=벽 테두리, 시작점은 (3,4)로 둬서 사방 1칸 여유 확보
 // ================================================================
-const TUT_MAP_W = 18, TUT_MAP_H = 9;
+const TUT_MAP_W = 22, TUT_MAP_H = 9;
 const TUT_START_TX = 3, TUT_START_TY = 4;          // 시작 타일
 const TUT_SONAR_TRIGGER_TX = TUT_START_TX + 4;     // 오른쪽 4칸 지점 — 소나 안내 트리거
 // 병원체 A/B를 메인 통로 위/아래 한 칸씩에 인접 배치 → danger=2(오렌지) 시연
@@ -1327,10 +1327,10 @@ const TUT_CORRIDOR_END_TX = TUT_MINE_C_TX + 1;     // 통로 끝
 const TUT_AMBUSH_SPAWN_TY = TUT_MINE_C_TY + 3;     // 습격 좀비 출발지 — 병원체C에서 3칸 아래(멀리서 달려옴)
 
 // 습격 직후 화이트플래시와 동시에 카메라를 '뚝' 끊어 옮기는 전용 공간 — 메인 통로와 연결되지 않은 독립된 방
-// (정밀소나로 좀비떼에 둘러싸이는 연출을 위해 1칸 폭 통로보다 넓은 공간이 필요해서 따로 마련함)
-const TUT_VOID_ROOM_X0 = 15, TUT_VOID_ROOM_X1 = 17; // x 15~17 (3칸 폭)
-const TUT_VOID_ROOM_Y0 = 2,  TUT_VOID_ROOM_Y1 = 6;  // y 2~6 (5칸 높이)
-const TUT_VOID_ROOM_TX = 16, TUT_VOID_ROOM_TY = 4;  // 방 중앙 — 텔레포트 목적지
+// (정밀소나로 좀비떼에 둘러싸이는 연출을 위해 1칸 폭 통로보다 넓은 정사각형 공간이 필요해서 따로 마련함)
+const TUT_VOID_ROOM_X0 = 15, TUT_VOID_ROOM_X1 = 21; // x 15~21 (7칸 폭)
+const TUT_VOID_ROOM_Y0 = 1,  TUT_VOID_ROOM_Y1 = 7;  // y 1~7 (7칸 높이)
+const TUT_VOID_ROOM_TX = 18, TUT_VOID_ROOM_TY = 4;  // 방 중앙 — 텔레포트 목적지
 
 function generateTutorialMap() {
   const W = TUT_MAP_W, H = TUT_MAP_H;
@@ -3107,6 +3107,7 @@ function startTutorial() {
   TUT_VIGNETTE.mode   = null;
   TUT_VIGNETTE.radius = 1;
   TUT_VIGNETTE.pulseT = 0;
+  { const mw = document.getElementById('minimap-wrap'); if (mw) mw.style.display = ''; }
 
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
@@ -3240,7 +3241,7 @@ function hideTutorialIntroScreen() {
 // autoAdvance: true(행동트리거형 — 타이핑끝나면 onDone 즉시, 닫힘은 호출측이 처리) |
 //              'timer'(시간기반 자동진행 — 최소체류시간 보장 후 자동으로 onDone+페이드아웃 닫힘) |
 //              false/undefined(Space로 진행)
-function showTutorialLine(lines, onDone, autoAdvance) {
+function showTutorialLine(lines, onDone, autoAdvance, minHoldOverride) {
   const box     = document.getElementById('tutorial-box');
   const textEl  = document.getElementById('tutorial-text');
   const cursorEl= document.getElementById('tutorial-cursor');
@@ -3269,8 +3270,8 @@ function showTutorialLine(lines, onDone, autoAdvance) {
     textNode.textContent = FULL_TEXT;
     cursorEl.style.display = 'none';
     if (autoAdvance === 'timer') {
-      // 최소 체류시간 보장 — 글자수 비례, 최소 1.3초 — 다급한 장면이라도 읽을 시간은 확보
-      const minHoldMs = Math.max(1300, FULL_TEXT.length * 35);
+      // 최소 체류시간 보장 — 글자수 비례, 최소 1.3초(또는 호출 시 지정한 minHoldOverride) — 다급한 장면이라도 읽을 시간은 확보
+      const minHoldMs = minHoldOverride || Math.max(1300, FULL_TEXT.length * 35);
       setTimeout(() => {
         // onDone() 안에서 새 showTutorialLine이 즉시 호출되면 토큰이 바뀜 — 그러면 이 텍스트는 더 이상 "현재 표시 중"이 아니므로 박스를 건드리지 않음
         if (_tutBoxToken === myToken) box.classList.add('fade-out'); // 부드럽게 사라짐 — 훅 끊기지 않게
@@ -3424,6 +3425,16 @@ function teleportTutorialToVoidRoom() {
   camX = player.px + ts / 2 - viewW() / 2;
   camY = player.py + ts / 2 - viewH() / 2;
   revealAround(player.tx, player.ty, 6); // 새 방을 즉시 밝힘 (좀비 노출 때와 동일 반경)
+
+  // 화이트플래시가 걷히는 순간 이미 좁은 시야(aftermath 모드 기준 0.5칸)로 시작 — 방이 바뀐 게 그대로 드러나지 않게.
+  // 이후 onTutorialAmbushResolved()의 collapseVignetteTo가 여기서부터 더 좁은 0.30까지 자연스럽게 이어서 좁혀감
+  TUT_VIGNETTE.active = true;
+  TUT_VIGNETTE.mode   = 'aftermath';
+  TUT_VIGNETTE.radius = 1;
+
+  // 크리쳐와의 전투 이후로는 미니맵에 새 공간이 갑자기 나타나는 게 부자연스러워서 꺼버림
+  const minimapWrap = document.getElementById('minimap-wrap');
+  if (minimapWrap) minimapWrap.style.display = 'none';
 }
 
 function onTutorialAmbushResolved() {
@@ -3523,8 +3534,8 @@ function onTutorialPreciseFired() {
     if (!TUT_ACTIVE || TUT_STEP !== 'precise_revealed') return; // 그 사이 상태가 바뀌었으면 중단
     showTutorialLine(TUT_DESPAIR_LINES, () => {
       onTutorialFinalBlackout();
-    }, 'timer'); // 시간기반 자동진행
-  }, 1300);
+    }, 'timer', 2200); // 시간기반 자동진행 — 기존(1.3초)보다 더 오래 머문 뒤 암전
+  }, 2000); // 정밀소나 직후 곧바로 뜨지 않게 — 2초 대기 후 표시
 }
 
 // ── 최종 암전 → 비명 → 타이틀 복귀 ──────────────────────────────
@@ -3641,6 +3652,8 @@ function startGame() {
   player.serum          = CONFIG.serum.initialCount; // 치료제 초기화
   PLAYER_SERUM_CONFIRM_ACTIVE = false; // 이전 런의 잔여 상태 방지
   hideTutChoiceCenter();
+  const minimapWrap = document.getElementById('minimap-wrap');
+  if (minimapWrap) minimapWrap.style.display = ''; // 튜토리얼에서 꺼졌을 경우 복원
   applyUpgradeEffects();
   player.oxygen = CONFIG.oxygen.max;
   SoundManager.crossfadeBGM('bgm_stage12');
