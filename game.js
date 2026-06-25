@@ -808,6 +808,8 @@ function drawMinePrompt(ts) {
 function drawTutorialSerumPrompt(ts) {
   if (!TUT_ACTIVE) return;
   if (TUT_STEP !== 'serum_prompt' && TUT_STEP !== 'serum_use_wait') return;
+  // 모바일은 하단에 별도의 터치 Y/N 버튼이 이미 떠 있어 중복/겹침이 생기므로 이 단계만 캔버스 힌트 숨김
+  if (_touchControlsActive && TUT_STEP === 'serum_prompt') return;
 
   const wx = player.px + ts / 2;
   const wy = player.py - ts * 0.3;
@@ -2101,6 +2103,10 @@ function minigameInput(dir) {
 }
 
 function endMinigame(success) {
+  // 안전장치 — D-PAD 터치가 비정상 종료(touchcancel 누락 등)되어 방향키가 눌린 채로 남는 경우를 대비해 강제 해제
+  if (minigame.type === 'mine') {
+    KEYS['ArrowUp'] = KEYS['ArrowDown'] = KEYS['ArrowLeft'] = KEYS['ArrowRight'] = false;
+  }
   minigame.result = success ? 'success' : 'fail';
   minigame.resultTimer = MG.resultShowTime;
 
@@ -3473,6 +3479,9 @@ function onTutorialSerumPromptStart() {
   showTutorialLine(TUT_SERUM_PROMPT_LINES, () => {
     TUT_SERUM_PROMPT_TIMER = 5.0; // 5초 내 미선택 시 자동 N 처리(update 루프에서 감소)
     TUT_SERUM_PROMPT_ACTIVE = true;
+    // 모바일은 터치 Y/N 버튼이 대화창과 같은 화면 하단 영역에 겹쳐 텍스트를 가리는 문제가 있어,
+    // 텍스트를 다 보여준 뒤 대화창을 닫고 선택지만 표시. PC는 대화창 텍스트 자체가 안내문 역할을 하므로 그대로 유지.
+    if (_touchControlsActive) hideTutorialBox();
     if (window._updateTouchUI) window._updateTouchUI(); // 모바일 Y/N 버튼 노출
   }, true); // 타이핑이 끝나면 별도 Space 확인 없이 즉시 Y/N 선택 가능 — 5초 타임아웃도 이 시점부터 시작
 }
@@ -5085,7 +5094,7 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
     const btn = document.getElementById(id);
     if (!btn) return;
     const start = (e) => { e.preventDefault(); btn.classList.add('pressed'); fireKey(code, 'keydown'); };
-    const end   = (e) => { e.preventDefault(); btn.classList.remove('pressed'); };
+    const end   = (e) => { e.preventDefault(); btn.classList.remove('pressed'); fireKey(code, 'keyup'); };
     btn.addEventListener('touchstart', start, { passive: false });
     btn.addEventListener('touchend',   end,   { passive: false });
     btn.addEventListener('touchcancel',end,   { passive: false });
