@@ -3049,20 +3049,16 @@ const TUT_SONAR2_RESULT_LINES = [
 ];
 
 // ── 습격 시퀀스 (시간기반 자동진행 — 다급함을 끊지 않기 위해 Space 불필요) ──
-const TUT_AMBUSH_LINES = [
-  '제기랄, 코드 레드! 코드 레드!',
-  '대상 생명체 진위 확인 미실시',
-  '— 정밀소나 사용 불가.',
-];
-
-// 전투 시작 대사 — player.serum 값으로 분기(0=이미 사용함, >0=아직 있음)
-const TUT_AMBUSH_NOSERUM_LINES = [
-  '제길, 치료제가...!',
-];
-
+// player.serum 값으로 분기(0=이미 사용함, >0=아직 있음) — 별도 인트로 줄 없이 한 번에 표시
 const TUT_AMBUSH_HASSERUM_LINES = [
-  '치료제를 사용해야 하나?',
-  '식별이 안 됐는데!!',
+  '제기랄, 괴물과 조우했다!!',
+  '치료제를 쓰기엔.. 식별이 안됐어!!',
+  '써야 하나?',
+];
+
+const TUT_AMBUSH_NOSERUM_LINES = [
+  '제기랄, 괴물과 조우했다!!',
+  '벗어나야 해!!',
 ];
 
 const TUT_PRECISE_LINES = [
@@ -3397,11 +3393,9 @@ function spawnTutorialAmbushZombie() {
 function onTutorialCombatStart() {
   if (!TUT_ACTIVE || TUT_STEP !== 'ambush') return;
   TUT_FORCE_MASH_SHOWN = false;
-  showTutorialLine(TUT_AMBUSH_LINES, () => {
-    // 치료제 보유 여부에 따라 분기된 후속 대사
-    const lines = player.serum > 0 ? TUT_AMBUSH_HASSERUM_LINES : TUT_AMBUSH_NOSERUM_LINES;
-    showTutorialLine(lines, null, 'timer');
-  }, 'timer'); // 시간기반 자동진행 — 다급함을 끊지 않음
+  // 치료제 보유 여부에 따라 분기된 대사를 바로 표시 (별도 인트로 줄 없음)
+  const lines = player.serum > 0 ? TUT_AMBUSH_HASSERUM_LINES : TUT_AMBUSH_NOSERUM_LINES;
+  showTutorialLine(lines, null, 'timer'); // 시간기반 자동진행 — 다급함을 끊지 않음
 }
 
 // ── 습격 전투 종료 후 — 화이트플래시 → 정적 → 강한 비네팅 → 거친숨+G키 안내 → (G키 입력) → 좀비노출 → 제기랄 → 암전 → 비명 → 타이틀 ──
