@@ -3008,6 +3008,7 @@ const TUT_SONAR_RESULT_LINES = [
   '주변에 약한 반응(옐로우)도 감지됩니다.',
   '',
   '채집을 시작합니다.',
+  '병원체의 위치로 추정되는 부분으로 이동 후 채집합니다.',
 ];
 
 // 치료제 선택 — 2번째 회수 직후. Y(거친 선택)/N(아낀다) 둘 다 직접 만든 입력 핸들러로 처리
@@ -3043,6 +3044,7 @@ const TUT_SONAR2_RESULT_LINES = [
   '병원체 반응 확인.',
   '',
   '채집을 시작합니다.',
+  '탐지된 병원체의 위치로 이동합니다.',
 ];
 
 // ── 습격 시퀀스 (시간기반 자동진행 — 다급함을 끊지 않기 위해 Space 불필요) ──
@@ -3425,24 +3427,39 @@ function onTutorialAmbushResolved() {
   }, 700);
 }
 
-// ── 정밀소나용 좀비 스폰 — WALL 타일을 피해 안전한 FLOOR에 배치, AI 동결 상태로 대기 ──
+// ── 정밀소나용 좀비 스폰 — 1칸 폭 통로라 반경보다 '깊이'로 바닥 타일을 모으고,
+//    겹쳐서(픽셀 오프셋) 배치해 좁은 통로에서도 바글바글한 느낌을 줌. AI 동결 상태로 대기 ──
 function spawnTutorialPreciseZombies() {
   const ts = CONFIG.map.tileSize;
   TUT_FREEZE_ZOMBIES = true; // 다가오지 않도록 AI 동결
-  const count = 6;
-  let placed = 0, attempts = 0;
-  while (placed < count && attempts < 60) {
-    attempts++;
-    const ang = Math.random() * Math.PI * 2;
-    const dist = 1.2 + Math.random() * 1.8;
-    const ztx = Math.round(player.tx + Math.cos(ang) * dist);
-    const zty = Math.round(player.ty + Math.sin(ang) * dist);
-    if (ztx < 0 || zty < 0 || ztx >= MAP.width || zty >= MAP.height) continue;
-    if (MAP.tiles[zty * MAP.width + ztx] === T.WALL) continue; // 벽 회피 — 화면에 안 보이는 문제 방지
-    const z = makeZombieObj(ztx, zty, ts, 'BASIC', 'CREATURE');
+
+  // 주변 8방향 × 거리 1~6칸으로 바닥 타일 후보 수집 — 통로 폭이 1칸이라 실제로는 2방향 정도만 살아남지만,
+  // 그 방향으로 멀리까지(시야 반경 6칸 안) 길게 늘어선 후보를 모아서 '끝까지 가득 찬' 느낌을 만듦
+  const candidates = [];
+  const dirs = [[0,-1],[0,1],[1,0],[-1,0],[1,-1],[-1,-1],[1,1],[-1,1]];
+  for (let dist = 1; dist <= 6; dist++) {
+    for (const [dx, dy] of dirs) {
+      const tx = player.tx + dx * dist;
+      const ty = player.ty + dy * dist;
+      if (tx < 0 || ty < 0 || tx >= MAP.width || ty >= MAP.height) continue;
+      if (MAP.tiles[ty * MAP.width + tx] === T.WALL) continue; // 벽 회피
+      candidates.push({ tx, ty });
+    }
+  }
+  if (candidates.length === 0) candidates.push({ tx: player.tx, ty: player.ty });
+
+  // 같은 타일에 여러 마리가 배정돼도 픽셀 단위로 살짝씩 흩어줘서 '겹쳐서 바글거리는' 모습을 만듦
+  // (AI 동결 상태라 충돌/이동 로직과 무관 — 순수 시각 효과)
+  const types = ['BASIC','BASIC','BASIC','SENSOR','STALKER','RUSHER','GUARD','BASIC','BASIC','SENSOR'];
+  const count = 10; // 겹침을 허용하니 칸 수 제약 없이 늘려서 밀도를 높임
+  for (let i = 0; i < count; i++) {
+    const c = candidates[Math.floor(Math.random() * candidates.length)];
+    const type = types[i % types.length];
+    const z = makeZombieObj(c.tx, c.ty, ts, type, 'CREATURE');
+    z.px += (Math.random() - 0.5) * ts * 0.45;
+    z.py += (Math.random() - 0.5) * ts * 0.45;
     z.state = 'WANDER';
     zombies.push(z);
-    placed++;
   }
 }
 
@@ -3451,6 +3468,7 @@ function onTutorialPreciseFired() {
   if (!TUT_ACTIVE || TUT_STEP !== 'precise_prompt') return;
   TUT_STEP = 'precise_revealed';
   TUT_LOCKED = true;
+  hideTutorialBox(); // G 누른 순간 대화창을 즉시 닫음 — 비네팅 해제/좀비 노출 연출을 가리지 않게
   // 좀비를 발사 직후에 스폰 — G키를 누르는 순간 드러나는 느낌, VISIBLE 잔존으로 미리 보이는 문제도 방지
   spawnTutorialPreciseZombies();
   revealAround(player.tx, player.ty, 6); // 좀비들이 보이도록 시야 확보
@@ -3530,7 +3548,7 @@ function onTutorialSerumSequenceDone() {
     showTutorialLine(TUT_SONAR2_LINES, () => {
       TUT_LOCKED = false; // 타이핑 끝나면 F차징 가능 (대화창은 F 차징 시작 시 닫힘)
     }, true); // autoAdvance
-  }, true); // autoAdvance — 타이핑 끝나면 바로 다음 안내로
+  }, 'timer'); // 시간기반 자동진행 — 타이핑 끝나도 최소체류시간만큼 더 보여준 뒤 다음으로
 }
 
 function onTutorialMineCollected() {
