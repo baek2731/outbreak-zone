@@ -734,75 +734,7 @@ function drawMinigameContent(wx, wy, ts) {
     ctx.fillText('< F 연타 >', wx, gy + gh / 2);
     ctx.restore();
 
-    // ── 치료제 선택지 오버레이 (본게임 전용 — 튜토리얼은 화면 정중앙 오버레이가 전담) ──
-    if (minigame.serumChoice && !TUT_ACTIVE) {
-      const z        = minigame.combatZombie;
-      const faction  = z ? z.faction : null;
-      const identified = z ? z.identified : false;
-      let identLabel, identCol;
-      if (!identified) {
-        identLabel = '정체 불명'; identCol = '#aaaaaa';
-      } else if (faction === 'INFECTED') {
-        identLabel = '감염자 확인됨'; identCol = '#bb44ff';
-      } else {
-        identLabel = '크리쳐 확인됨'; identCol = '#ff4444';
-      }
-
-      if (_touchControlsActive) {
-        // 모바일 — Y/N은 하단 터치 버튼(#touch-serum-choice)이 전담. 캔버스에는 식별 정보만 작게 표시해
-        // 화면 하단의 터치 버튼과 겹치지 않게 함 (기존엔 Y/N 텍스트까지 포함된 큰 박스가 플레이어 위치에 따라 겹쳤음)
-        const cw = 150, ch = 28;
-        const cx2 = wx - cw / 2, cy2 = by - ch - 6;
-        ctx.save();
-        ctx.globalAlpha = 0.95;
-        ctx.fillStyle   = '#0d0d1a';
-        ctx.strokeStyle = '#bb44ff';
-        ctx.lineWidth   = 1.5;
-        roundRect(ctx, cx2, cy2, cw, ch, 5);
-        ctx.fill(); ctx.stroke();
-        ctx.globalAlpha = 1;
-        ctx.textAlign   = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font        = `bold ${ts * 0.16}px monospace`;
-        ctx.fillStyle   = identCol;
-        ctx.fillText(identLabel, wx, cy2 + ch / 2 + 1);
-        ctx.restore();
-      } else {
-        // 배경 박스 (더 넓게)
-        const cw = 160, ch = 62;
-        const cx2 = wx - cw / 2, cy2 = by - ch - 6;
-        ctx.save();
-        ctx.globalAlpha = 0.95;
-        ctx.fillStyle   = '#0d0d1a';
-        ctx.strokeStyle = '#bb44ff';
-        ctx.lineWidth   = 1.5;
-        roundRect(ctx, cx2, cy2, cw, ch, 5);
-        ctx.fill(); ctx.stroke();
-
-        // 식별 상태 텍스트
-        ctx.globalAlpha = 1;
-        ctx.textAlign   = 'center';
-        ctx.font        = `bold ${ts * 0.16}px monospace`;
-        ctx.fillStyle = identCol;
-        ctx.fillText(identLabel, wx, cy2 + 12);
-
-        // Y/N 버튼
-        ctx.font      = `bold ${ts * 0.17}px monospace`;
-        ctx.fillStyle = '#bb44ff';
-        ctx.fillText('[Y] 치료제 투여', wx, cy2 + 30);
-        ctx.fillStyle = '#888888';
-        ctx.fillText('[N] 계속 싸우기', wx, cy2 + 46);
-
-        // 남은 시간 바
-        const choiceTotal = TUT_ACTIVE ? TUT_SERUM_CHOICE_TIME : CONFIG.serum.choiceTime;
-        const tr = minigame.serumChoiceTimer / choiceTotal;
-        ctx.fillStyle = '#bb44ff';
-        ctx.globalAlpha = 0.4;
-        ctx.fillRect(cx2 + 4, cy2 + ch - 4, (cw - 8) * tr, 3);
-
-        ctx.restore();
-      }
-    }
+    // 치료제 선택지(Y/N)는 화면 정중앙 오버레이(showTutChoiceCenter)가 본게임·튜토리얼 공통으로 전담 — 캔버스 오버레이 제거됨
   }
 
 }
@@ -1527,6 +1459,7 @@ function hasLOS(x0, y0, x1, y1) {
 
 // ── 입력 ─────────────────────────────────────────────────────────
 const KEYS = {};
+let PLAYER_SERUM_CONFIRM_ACTIVE = false; // 본게임 — 치료제가 마지막 1개일 때 D키 사용 전 화면 중앙 확인 표시 중인지
 const GAME_KEYS = new Set([
   'ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
   'KeyF','KeyG','KeyE','Space','Enter',
@@ -1659,8 +1592,13 @@ window.addEventListener('keydown', e => {
         minigame.combatGauge      = MG.combatChoiceGauge;  // 80에서 멈춤
         minigame.serumChoice      = true;
         minigame.serumChoiceTimer = TUT_ACTIVE ? TUT_SERUM_CHOICE_TIME : CONFIG.serum.choiceTime; // 튜토리얼은 결정할 여유를 더 줌
-        // 튜토리얼은 화면 정중앙 오버레이로 표시 (PC/모바일 공용) — 본게임은 기존 방식(캔버스+하단 터치) 유지
-        if (TUT_ACTIVE) showTutChoiceCenter('치료제 투여', '계속 싸우기');
+        // 화면 정중앙 오버레이로 표시 (PC/모바일 공용, 튜토리얼·본게임 동일) — 본게임은 식별 정보를 부제목으로 같이 표시
+        const z = minigame.combatZombie;
+        let identLabel;
+        if (!z || !z.identified)        identLabel = '정체 불명';
+        else if (z.faction === 'INFECTED') identLabel = '감염자 확인됨';
+        else                                identLabel = '크리쳐 확인됨';
+        showTutChoiceCenter('치료제 투여', '계속 싸우기', identLabel);
         if (window._updateTouchUI) window._updateTouchUI();
         return;
       }
@@ -1679,6 +1617,13 @@ window.addEventListener('keydown', e => {
   // Y — 치료제 투여
   if (e.code === 'KeyY') {
     if (TUT_ACTIVE && TUT_STEP === 'serum_prompt') { onTutorialSerumChoice(true); return; }
+    if (PLAYER_SERUM_CONFIRM_ACTIVE) {
+      PLAYER_SERUM_CONFIRM_ACTIVE = false;
+      hideTutChoiceCenter();
+      if (window._updateTouchUI) window._updateTouchUI();
+      useSerumSelf();
+      return;
+    }
     if (minigame.active && minigame.type === 'combat' && minigame.serumChoice && !minigame.result) {
       useSerumInCombat();
     }
@@ -1687,6 +1632,12 @@ window.addEventListener('keydown', e => {
   // N — 계속 싸우기 (선택지 닫기) / 튜토리얼 평시에는 치료제 보류
   if (e.code === 'KeyN') {
     if (TUT_ACTIVE && TUT_STEP === 'serum_prompt') { onTutorialSerumChoice(false); return; }
+    if (PLAYER_SERUM_CONFIRM_ACTIVE) {
+      PLAYER_SERUM_CONFIRM_ACTIVE = false;
+      hideTutChoiceCenter();
+      if (window._updateTouchUI) window._updateTouchUI();
+      return;
+    }
     if (minigame.active && minigame.type === 'combat' && minigame.serumChoice) {
       minigame.serumChoice  = false;
       minigame.serumChosen  = true;
@@ -1695,12 +1646,18 @@ window.addEventListener('keydown', e => {
     }
     return;
   }
-  // D — 자가 치료제 사용 (전투 외)
+  // D — 자가 치료제 사용 (전투 외) — 마지막 1개일 땐 화면 중앙에서 한 번 더 확인
   if (e.code === 'KeyD') {
     if (TUT_ACTIVE && TUT_STEP === 'serum_use_wait') { onTutorialSerumUseConfirmed(); return; }
     if (TUT_ACTIVE) return; // 그 외 튜토리얼 단계에서는 비활성
-    if (!minigame.active && !player.dead && GAME_STATE === 'PLAYING') {
-      useSerumSelf();
+    if (!minigame.active && !player.dead && GAME_STATE === 'PLAYING' && !PLAYER_SERUM_CONFIRM_ACTIVE) {
+      if (player.serum === 1) {
+        PLAYER_SERUM_CONFIRM_ACTIVE = true;
+        showTutChoiceCenter('사용한다', '아껴둔다', '마지막 치료제입니다');
+        if (window._updateTouchUI) window._updateTouchUI();
+      } else {
+        useSerumSelf();
+      }
     }
     return;
   }
@@ -2278,10 +2235,8 @@ function updateMinigame(dt) {
     // 치료제 선택지 표시 중 — 게이지 감소/타임아웃 정지
     if (minigame.serumChoice) {
       minigame.serumChoiceTimer -= dt;
-      if (TUT_ACTIVE) {
-        const choiceTotal = TUT_SERUM_CHOICE_TIME;
-        updateTutChoiceTimerBar(minigame.serumChoiceTimer / choiceTotal);
-      }
+      const choiceTotal = TUT_ACTIVE ? TUT_SERUM_CHOICE_TIME : CONFIG.serum.choiceTime;
+      updateTutChoiceTimerBar(minigame.serumChoiceTimer / choiceTotal);
       if (minigame.serumChoiceTimer <= 0) {
         // 시간 초과 → N 선택과 동일 (계속 싸우기)
         minigame.serumChoice = false;
@@ -3624,6 +3579,8 @@ function startGame() {
   player.totalCollected = 0;
   player.recordSaved    = false;
   player.serum          = CONFIG.serum.initialCount; // 치료제 초기화
+  PLAYER_SERUM_CONFIRM_ACTIVE = false; // 이전 런의 잔여 상태 방지
+  hideTutChoiceCenter();
   applyUpgradeEffects();
   player.oxygen = CONFIG.oxygen.max;
   SoundManager.crossfadeBGM('bgm_stage12');
@@ -5165,11 +5122,8 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
     if (!joystickWrap || !minigameDpad) return;
     const isMinigame   = minigame.active && minigame.type === 'mine';
     const isCombat     = minigame.active && minigame.type === 'combat';
-    // 본게임 전투 선택지 — 화면 하단 터치 버튼 사용 (스크립트가 없어 하단도 안 겹침)
-    const isMainChoice = isCombat && minigame.serumChoice && !TUT_ACTIVE;
-    // 튜토리얼 선택지(평시 Y/N + 전투 강제선택) — 화면 정중앙 오버레이를 따로 사용, 여기선 액션버튼 숨김 용도로만 참조
-    const isTutChoice  = TUT_ACTIVE && (TUT_SERUM_PROMPT_ACTIVE || (isCombat && minigame.serumChoice));
-    const isChoice     = isMainChoice || isTutChoice;
+    // 선택지(평시 자가사용 마지막 1개 확인 + 전투 강제선택) — 본게임/튜토리얼 공통으로 화면 정중앙 패널 사용
+    const isChoice     = TUT_SERUM_PROMPT_ACTIVE || (isCombat && minigame.serumChoice) || PLAYER_SERUM_CONFIRM_ACTIVE;
     const isMoveLocked = minigame.active;  // 회수든 전투든 — 이동 불가 시 조이스틱 숨김
 
     // 조이스틱 — 이동 가능할 때만 표시 (전투 중에도 숨김, dpad는 회수에만)
@@ -5178,8 +5132,8 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
 
     // 미니게임(회수) 중엔 액션버튼 숨김 — dpad 입력과 오조작 방지. 선택지 표시 중에도 오조작 방지로 숨김
     const actionBtnsEl = document.getElementById('action-btns');
-    if (actionBtnsEl && !isMainChoice) {
-      actionBtnsEl.style.display = (isMinigame || isTutChoice) ? 'none' : '';
+    if (actionBtnsEl) {
+      actionBtnsEl.style.display = (isMinigame || isChoice) ? 'none' : '';
     }
 
     // 전투 중엔 G/E 숨김 — F(연타)만 유효한 입력
@@ -5191,20 +5145,6 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
     // D 버튼 — 치료제 보유 + 전투/미니게임 외
     const dBtn = document.getElementById('touch-d');
     if (dBtn) dBtn.style.display = (player.serum > 0 && !minigame.active) ? '' : 'none';
-
-    // 본게임 전투 선택지 Y/N 버튼 — action-btns 전체 숨기고 하단 중앙 Y/N 표시 (튜토리얼은 화면 정중앙 오버레이를 따로 사용)
-    const choiceEl = document.getElementById('touch-serum-choice');
-    const actionBtns = document.getElementById('action-btns');
-    if (choiceEl) {
-      if (isMainChoice) {
-        choiceEl.classList.add('show');
-        if (actionBtns) actionBtns.style.display = 'none';
-      } else {
-        choiceEl.classList.remove('show');
-        // 미니게임/튜토리얼 선택지 중이 아닐 때만 복원 (위에서 이미 처리)
-        if (actionBtns && !isMinigame && !isTutChoice) actionBtns.style.display = '';
-      }
-    }
   };
   window._updateTouchUI(); // 정의 즉시 1회 호출 — D버튼 등 초기 상태 동기화
 
