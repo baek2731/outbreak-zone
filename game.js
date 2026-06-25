@@ -3474,7 +3474,7 @@ function onTutorialSerumPromptStart() {
     TUT_SERUM_PROMPT_TIMER = 5.0; // 5초 내 미선택 시 자동 N 처리(update 루프에서 감소)
     TUT_SERUM_PROMPT_ACTIVE = true;
     if (window._updateTouchUI) window._updateTouchUI(); // 모바일 Y/N 버튼 노출
-  }); // Space로 타이핑은 즉시완성 가능, 이후 Y/N 입력 대기(타이머 시작은 finishTyping 콜백에서)
+  }, true); // 타이핑이 끝나면 별도 Space 확인 없이 즉시 Y/N 선택 가능 — 5초 타임아웃도 이 시점부터 시작
 }
 
 // Y(true)/N(false) 선택 처리 — 사용자 입력 또는 타임아웃에서 호출
