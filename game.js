@@ -2589,15 +2589,28 @@ function loadFallenPool() {
 function saveFallenPool(pool) {
   try { localStorage.setItem(FALLEN_KEY, JSON.stringify(pool)); } catch(e) {}
 }
-function addToFallenPool(unitNum, stage) {
+function addToFallenPool(unitNum, stage, cause = null) {
   const pool = loadFallenPool();
   // 층당 최대 N명 제한
   const stagePool = pool.filter(f => f.stage === stage);
   if (stagePool.length >= CONFIG.fallen.maxPerStage) return;
   // 중복 방지
   if (pool.find(f => f.unit === unitNum)) return;
-  pool.push({ unit: unitNum, stage });
+  const entry = { unit: unitNum, stage };
+  // cause가 있을 때만 임무일지에 표시 — 본게임 사망/감염(런 기록에서 이미 자세히 표시됨)은 cause 없이 호출되어 중복 표시 방지
+  if (cause) { entry.cause = cause; entry.ts = Date.now(); }
+  pool.push(entry);
   saveFallenPool(pool);
+}
+
+// cause 갈아끼우기용 — 추후 스테이지에서 UNIT-00을 조우한 뒤 정확한 사유로 교체할 때 사용
+function updateFallenCause(unitNum, cause) {
+  const pool = loadFallenPool();
+  const entry = pool.find(f => f.unit === unitNum);
+  if (!entry) return false;
+  entry.cause = cause;
+  saveFallenPool(pool);
+  return true;
 }
 function removeFromFallenPool(unitNum) {
   const pool = loadFallenPool();
@@ -2828,20 +2841,26 @@ const MEMORIAL_LABELS = {
 };
 const ACTION_ICONS = { rested: '✦', dissolved: '☠' };
 const ACTION_LABELS = { rested: '안식시킴', dissolved: '소멸시킴' };
+// 전사자 풀 cause 표시 라벨 — 'lost'는 임시 사유, 1스테이지 조우 후 updateFallenCause()로 정확한 사유로 교체 예정
+const CAUSE_ICONS  = { lost: '📡' };
+const CAUSE_LABELS = { lost: '로스트' };
 
 function renderMemorial(el) {
   const records = loadRecords();
   const actions = loadUnitActions();
+  // cause가 있는 전사자 풀 항목만 표시 — 본게임 사망/감염은 이미 'run' 기록으로 자세히 표시되므로 cause 없이 등록되어 여기 안 끼임 (중복 방지)
+  const fallenCaused = loadFallenPool().filter(f => f.cause);
 
-  if (records.length === 0 && actions.length === 0) {
+  if (records.length === 0 && actions.length === 0 && fallenCaused.length === 0) {
     el.innerHTML = '<div class="lb-section">— 임무일지 —</div><div class="mem-empty">아직 기록 없음</div>';
     return;
   }
 
-  // 두 종류를 하나의 타임라인으로 합치고 시간순 정렬
+  // 세 종류를 하나의 타임라인으로 합치고 시간순 정렬
   const timeline = [
     ...records.map(r => ({ kind: 'run', ts: new Date(r.date).getTime() || 0, data: r })),
     ...actions.map(a => ({ kind: 'action', ts: a.ts || 0, data: a })),
+    ...fallenCaused.map(f => ({ kind: 'fallen', ts: f.ts || 0, data: f })),
   ].sort((a, b) => b.ts - a.ts); // 최신순
 
   let html = '<div class="lb-section">— 임무일지 —</div>';
@@ -2860,6 +2879,19 @@ function renderMemorial(el) {
             <div class="mem-detail">${label} | ${r.elapsed}초 생존 | 회수 ${raw}개 | 감염 ${r.infection}%</div>
           </div>
           <div class="mem-dna">+${r.collected} DNA</div>
+        </div>`;
+    } else if (entry.kind === 'fallen') {
+      const f     = entry.data;
+      const icon  = CAUSE_ICONS[f.cause] || '❔';
+      const label = CAUSE_LABELS[f.cause] || f.cause;
+      const unit  = `UNIT-${String(f.unit).padStart(2,'0')}`;
+      html += `
+        <div class="mem-item" style="opacity:0.75;">
+          <div class="mem-icon">${icon}</div>
+          <div class="mem-info">
+            <div class="mem-name">${unit} — ${f.stage}층</div>
+            <div class="mem-detail">${label}</div>
+          </div>
         </div>`;
     } else {
       const a     = entry.data;
@@ -3447,7 +3479,7 @@ function onTutorialSerumPromptStart() {
 
 // Y(true)/N(false) 선택 처리 — 사용자 입력 또는 타임아웃에서 호출
 function onTutorialSerumChoice(useIt) {
-  if (!TUT_ACTIVE || TUT_STEP !== 'serum_prompt') return;
+  if (!TUT_ACTIVE || TUT_STEP !== 'serum_prompt' || !TUT_SERUM_PROMPT_ACTIVE) return; // 이미 선택 완료된 후 재입력(중복 호출) 방지
   TUT_SERUM_PROMPT_TIMER = 0;
   TUT_SERUM_PROMPT_ACTIVE = false; // 선택 즉시 닫힘 — 이후 후속 대사 중엔 TUT_STEP이 같아도 버튼이 다시 뜨지 않음
   if (window._updateTouchUI) window._updateTouchUI();
@@ -3507,8 +3539,9 @@ function onTutorialMineCollected() {
 
 function goToLobbyFromTutorial() {
   // UNIT-00 튜토리얼 완주(= 감염사 처리) — 전사자 풀에 정식 등록 후 유닛을 1로 올리고 타이틀로 복귀
-  addToFallenPool(0, 1);
-  devLog('UNIT-00 전사자 풀 등록 [튜토리얼 완주]', 'warn');
+  // cause:'lost' — 1스테이지에서 실제로 조우하기 전까지의 임시 사유. 조우 이후 updateFallenCause(0, '실제사유')로 교체할 것
+  addToFallenPool(0, 1, 'lost');
+  devLog('UNIT-00 전사자 풀 등록 [튜토리얼 완주 — 사유: lost]', 'warn');
   incrementUnit();
   showTitle();
 }
@@ -5145,7 +5178,18 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
     btn.addEventListener('touchend',   end,   { passive: false });
     btn.addEventListener('touchcancel',end,   { passive: false });
   });
-})();function closeIntro() {
+})();
+
+// ── 튜토리얼 대화창 / 풀스크린 인트로 — 모바일 탭으로 Space 대체 ──
+// PC는 Space 키로, 모바일은 화면(대화창/인트로 화면) 탭으로 동일하게 진행.
+// tutorialAdvanceKey()는 _tutAdvance가 null이면 아무 동작도 안 하므로(showTutorialLine의 'timer'/'silent'/true 모드,
+// 즉 G/D/Y/N 대기 중이거나 자동진행 중) 그 상태에서 탭해도 부작용 없음 — Space-다음 대기 상태에서만 실제로 진행됨.
+['tutorial-box', 'tutorial-intro-screen'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('click', tutorialAdvanceKey);
+});
+
+function closeIntro() {
   document.getElementById('stage-intro').classList.remove('show');
   GAME_STATE = 'PLAYING';
 }
