@@ -10,13 +10,6 @@
 // ── 타일 타입 ────────────────────────────────────────────────────
 const T = { WALL:0, FLOOR:1, MINE:2, ITEM:3, EXIT:4 };
 
-// ── DEV 모드 진입 — ?dev=1 파라미터로 모바일에서도 DEV 패널 노출 ──
-// 평소 배포 주소(파라미터 없음)로 접근하면 PC/모바일 모두 기존과 동일하게 DEV 패널 숨김.
-// 테스트 시에만 URL 끝에 ?dev=1을 붙여서 접근 — CSS는 index.html의 `body.mobile-ui.dev-mode #dev-toggle`에서 처리.
-if (new URLSearchParams(location.search).get('dev') === '1') {
-  document.body.classList.add('dev-mode');
-}
-
 // ── 방향 배열 상수 ───────────────────────────────────────────────
 const DIR4  = [[0,-1],[1,0],[0,1],[-1,0]];
 const DMAZE = [[0,-2],[2,0],[0,2],[-2,0]];
@@ -2615,16 +2608,6 @@ function removeFromFallenPool(unitNum) {
   return true;
 }
 
-// [방법A - 튜토리얼 대체] UNIT-00 강제 등록
-// 튜토리얼 완성 후 이 함수를 튜토리얼 사망 처리로 교체할 것
-function ensureUnit00Fallen() {
-  const pool = loadFallenPool();
-  if (!pool.find(f => f.unit === 0)) {
-    pool.push({ unit: 0, stage: 1 }); // UNIT-00, 1층에서 감염사
-    saveFallenPool(pool);
-  }
-}
-
 function loadUpgrades() {
   try { return JSON.parse(localStorage.getItem(UPGRADE_KEY) || '{}'); }
   catch(e) { return {}; }
@@ -3523,7 +3506,9 @@ function onTutorialMineCollected() {
 }
 
 function goToLobbyFromTutorial() {
-  // UNIT-00 튜토리얼 완주 — 유닛을 1로 올리고 타이틀로 복귀 (정상 플로우: 타이틀→기지)
+  // UNIT-00 튜토리얼 완주(= 감염사 처리) — 전사자 풀에 정식 등록 후 유닛을 1로 올리고 타이틀로 복귀
+  addToFallenPool(0, 1);
+  devLog('UNIT-00 전사자 풀 등록 [튜토리얼 완주]', 'warn');
   incrementUnit();
   showTitle();
 }
@@ -5195,6 +5180,14 @@ document.getElementById('lb-reset-btn').addEventListener('click', () => {
 document.getElementById('ts-start').addEventListener('click', showLobby);
 // ts-base, ts-records 제거됨 — 기지로 이동만 사용
 
+// TEST ONLY — 출시 빌드에서 반드시 제거. 모든 진행 데이터를 지우고 튜토리얼로 진입(PC/모바일 공용)
+// 데이터가 비어있으면 전사자 풀 중복방지 등 부수효과가 없어 안전 — 부분 리셋(유닛 번호만 제거) 대신 전체 초기화로 통일
+document.getElementById('ts-test-reset')?.addEventListener('click', () => {
+  if (!confirm('모든 진행 데이터(DNA·업그레이드·기록)를 초기화하고 튜토리얼로 이동합니다. 계속할까요?')) return;
+  localStorage.clear();
+  location.reload();
+});
+
 // DEV — 수집 기록 보기 (로그 패널에 출력)
 document.getElementById('d-records').addEventListener('click', () => {
   try {
@@ -5208,23 +5201,13 @@ document.getElementById('d-records').addEventListener('click', () => {
   } catch(e) { devLog('기록 읽기 실패', 'danger'); }
 });
 
-// DEV — 기록 초기화
+// DEV — 기록 초기화 (튜토리얼 우회, 바로 본게임 테스트용)
 document.getElementById('d-clearrecords').addEventListener('click', () => {
   localStorage.removeItem(RECORDS_KEY);
   localStorage.removeItem(DNA_KEY);
-  localStorage.setItem(UNIT_KEY, '1');   // UNIT-00 = 튜토리얼 사망 처리, 플레이어는 UNIT-01부터
+  localStorage.setItem(UNIT_KEY, '1');   // UNIT-00 = 튜토리얼 우회, 플레이어는 UNIT-01부터
   localStorage.removeItem(FALLEN_KEY);
-  ensureUnit00Fallen();                  // 즉시 등록 — 튜토리얼 재플레이 없이 바로 본게임 테스트용
-  devLog('수집 기록 초기화 — UNIT-01부터 시작 / UNIT-00 전사자 풀 등록됨 (튜토리얼 우회)', 'warn');
-});
-
-// DEV — 튜토리얼 재실행 (모바일 전용 ?dev=1 접근 시 콘솔 명령 대체용)
-// 기존 콘솔 워크플로우(localStorage.removeItem('outbreak_unit_number') 후 Ctrl+Shift+R)와 동일한 동작을 버튼으로 제공.
-// startTutorial()을 세션 중간에 직접 호출하지 않고 새로고침으로 처리 — 이미 검증된 정상 진입 경로(페이지 로드 시 getCurrentUnit()===0 체크)를 그대로 타게 해서
-// GAME_STATE 등 다른 상태와 충돌할 위험을 없앰.
-document.getElementById('d-replay-tutorial').addEventListener('click', () => {
-  localStorage.removeItem(UNIT_KEY); // 유닛 번호만 제거 — 기록/DNA/전사자풀 등 다른 데이터는 보존
-  location.reload();
+  devLog('수집 기록 초기화 — UNIT-01부터 시작 (튜토리얼 우회)', 'warn');
 });
 
 // DEV — 기지 UI 폰트 크기 조절
