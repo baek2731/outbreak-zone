@@ -615,6 +615,11 @@ function drawMinigame(ts) {
   const wx = player.px + ts / 2;
   const wy = player.py - ts * 0.3;
 
+  drawMinigameContent(wx, wy, ts);
+}
+
+function drawMinigameContent(wx, wy, ts) {
+
   // 타입별 박스 크기
   const boxW = minigame.type === 'mine'
     ? Math.max(minigame.pattern.length * 28 + 16, 80)
@@ -651,7 +656,6 @@ function drawMinigame(ts) {
     ctx.textBaseline = 'middle';
     ctx.fillText(minigame.result === 'success' ? '✓ OK' : '✗ FAIL', wx, by + boxH * 0.6);
     ctx.restore();
-    ctx.restore(); // 최상위 restore
     return;
   }
 
@@ -688,7 +692,8 @@ function drawMinigame(ts) {
     const gw = boxW - 16, gh = 14;
     const gx = bx + 8, gy = by + 15;
     const gaugeRatio = Math.min(1, minigame.combatGauge / MG.combatGaugeMax);
-    const timeRatio  = Math.max(0, minigame.mashTimer / MG.combatMashTime);
+    const mashTotal  = (TUT_ACTIVE) ? MG.combatMashTime * TUT_COMBAT_TIME_MULT : MG.combatMashTime;
+    const timeRatio  = Math.max(0, minigame.mashTimer / mashTotal);
 
     // 배경
     ctx.save();
@@ -769,7 +774,8 @@ function drawMinigame(ts) {
       ctx.fillText('[N] 계속 싸우기', wx, cy2 + 46);
 
       // 남은 시간 바
-      const tr = minigame.serumChoiceTimer / CONFIG.serum.choiceTime;
+      const choiceTotal = TUT_ACTIVE ? TUT_SERUM_CHOICE_TIME : CONFIG.serum.choiceTime;
+      const tr = minigame.serumChoiceTimer / choiceTotal;
       ctx.fillStyle = '#bb44ff';
       ctx.globalAlpha = 0.4;
       ctx.fillRect(cx2 + 4, cy2 + ch - 4, (cw - 8) * tr, 3);
@@ -795,6 +801,46 @@ function drawMinePrompt(ts) {
   ctx.textAlign = 'center';
   ctx.globalAlpha = 0.9;
   ctx.fillText('[E] 회수', wx, wy - ts * 0.6);
+  ctx.restore();
+}
+
+// ── 튜토리얼 평시 치료제 선택 UI — 플레이어 머리 위, 본게임 전투선택지와 비슷한 톤 ──
+function drawTutorialSerumPrompt(ts) {
+  if (!TUT_ACTIVE) return;
+  if (TUT_STEP !== 'serum_prompt' && TUT_STEP !== 'serum_use_wait') return;
+
+  const wx = player.px + ts / 2;
+  const wy = player.py - ts * 0.3;
+  const cw = 150, ch = TUT_STEP === 'serum_prompt' ? 44 : 28;
+  const cx = wx - cw / 2, cy = wy - ts * 1.1 - ch;
+
+  ctx.save();
+  ctx.globalAlpha = 0.95;
+  ctx.fillStyle   = '#0d0d1a';
+  ctx.strokeStyle = '#bb44ff';
+  ctx.lineWidth   = 1.5;
+  roundRect(ctx, cx, cy, cw, ch, 5);
+  ctx.fill(); ctx.stroke();
+
+  ctx.globalAlpha = 1;
+  ctx.textAlign   = 'center';
+  ctx.font        = `bold ${ts * 0.16}px monospace`;
+  if (TUT_STEP === 'serum_prompt') {
+    ctx.fillStyle = '#bb44ff';
+    ctx.fillText('[Y] 치료제 사용', wx, cy + 16);
+    ctx.fillStyle = '#888888';
+    ctx.fillText('[N] 보류', wx, cy + 32);
+    // 남은 시간 바
+    if (TUT_SERUM_PROMPT_TIMER > 0) {
+      const tr = TUT_SERUM_PROMPT_TIMER / 5.0;
+      ctx.fillStyle = '#bb44ff';
+      ctx.globalAlpha = 0.4;
+      ctx.fillRect(cx + 4, cy + ch - 4, (cw - 8) * tr, 3);
+    }
+  } else {
+    ctx.fillStyle = '#bb44ff';
+    ctx.fillText('[D] 치료제 사용', wx, cy + 18);
+  }
   ctx.restore();
 }
 
@@ -968,6 +1014,59 @@ function shuffle(arr) {
 // ── 게임 상태 ────────────────────────────────────────────────────
 let MAP = null, VISITED = null, VISIBLE = null;
 let vignetteGradient = null;
+
+// ── 튜토리얼 전용 동적 비네팅(터널비전) ──────────────────────────
+// radius: 0(완전 안 보임)~1(정상 시야) 비율. mode: null | 'mild'(채집중,약) | 'aftermath'(전투후,강)
+const TUT_VIGNETTE = { active: false, mode: null, radius: 1, pulseT: 0 };
+
+function drawTutorialVignette() {
+  if (!TUT_VIGNETTE.active) return;
+  const ts = CONFIG.map.tileSize;
+  const cx = W_px / 2, cy = H_px / 2;
+  // radius 0~1을 실제 픽셀 반경으로 변환 — mild는 2.2칸, aftermath는 0.5칸을 "정상 시야"로 간주
+  const maxR = ts * (TUT_VIGNETTE.mode === 'aftermath' ? 0.5 : 2.2) * ZOOM;
+  const innerR = Math.max(4, maxR * TUT_VIGNETTE.radius);
+  const outerR = innerR + ts * 0.9 * ZOOM;
+  const grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.96)');
+  ctx.save();
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W_px, H_px);
+  ctx.restore();
+}
+
+function updateTutorialVignette(dt) {
+  if (!TUT_VIGNETTE.active) return;
+  if (TUT_VIGNETTE.mode === 'aftermath') {
+    // 펄스: 0.5칸 이하를 중심으로 2~3초 주기로 천천히 줄었다 늘었다
+    TUT_VIGNETTE.pulseT += dt;
+    const period = 2.6;
+    const t = (TUT_VIGNETTE.pulseT % period) / period;
+    TUT_VIGNETTE.radius = 0.15 + 0.20 * (0.5 - 0.5 * Math.cos(t * Math.PI * 2)); // 0.15~0.35 사이 숨쉬듯
+  } else if (TUT_VIGNETTE.mode === 'precise_release') {
+    // 정밀소나 핑이 퍼지는 진행률(sonar.pulseR/pulseMaxR)에 비네팅 반경을 그대로 매핑
+    // — 핑이 퍼지는 것과 정확히 같은 속도로 시야가 풀림
+    const progress = sonar.pulseMaxR > 0 ? Math.min(1, sonar.pulseR / sonar.pulseMaxR) : 1;
+    TUT_VIGNETTE.radius = 0.30 + (1 - 0.30) * progress; // aftermath 펄스(약 0.30)에서 정상(1)까지
+    if (progress >= 1) TUT_VIGNETTE.active = false; // 다 풀리면 비네팅 종료
+  }
+}
+
+// 급속 수렴 — 현재 radius(보통 1)에서 목표(aftermath 펄스 시작값)까지 빠르게 좁혀짐
+function collapseVignetteTo(mode, durationMs, targetRadius, onDone) {
+  TUT_VIGNETTE.active = true;
+  TUT_VIGNETTE.mode = mode;
+  const startR = TUT_VIGNETTE.radius;
+  const t0 = performance.now();
+  function step() {
+    const t = Math.min(1, (performance.now() - t0) / durationMs);
+    TUT_VIGNETTE.radius = startR + (targetRadius - startR) * t;
+    if (t < 1) requestAnimationFrame(step);
+    else if (onDone) onDone();
+  }
+  requestAnimationFrame(step);
+}
 
 const player = {
   tx:1, ty:1, px:0, py:0, targetX:0, targetY:0,
@@ -1167,6 +1266,28 @@ const MG = {
   combatChoiceGauge:   80,   // 치료제 선택지 등장 게이지 임계값 (%)
 };
 
+// ── 튜토리얼 진입 시 CONFIG를 깨끗한 기본값으로 복원하기 위한 백업 ──
+// (applyUpgradeEffects가 CONFIG를 전역으로 직접 수정하는 구조라, 본게임 특성 영향을 받지 않게 함)
+const _CONFIG_DEFAULTS = {
+  oxygenMax: CONFIG.oxygen.max,
+  oxygenDrainMult: CONFIG.oxygen._drainMult ?? 1.0,
+  infectThreshold: CONFIG.oxygen.infectThreshold,
+  combatPlayerPower: MG.combatPlayerPower,
+  postCooldown: MG.postCooldown,
+  capsuleHeal: CONFIG.oxygen.capsuleHeal,
+  sonarMaxRadius: CONFIG.sonar.maxRadius,
+};
+
+function resetConfigToDefaults() {
+  CONFIG.oxygen.max             = _CONFIG_DEFAULTS.oxygenMax;
+  CONFIG.oxygen._drainMult      = _CONFIG_DEFAULTS.oxygenDrainMult;
+  CONFIG.oxygen.infectThreshold = _CONFIG_DEFAULTS.infectThreshold;
+  MG.combatPlayerPower          = _CONFIG_DEFAULTS.combatPlayerPower;
+  MG.postCooldown               = _CONFIG_DEFAULTS.postCooldown;
+  CONFIG.oxygen.capsuleHeal     = _CONFIG_DEFAULTS.capsuleHeal;
+  CONFIG.sonar.maxRadius        = _CONFIG_DEFAULTS.sonarMaxRadius;
+}
+
 // ── 패트롤 강화 상태 ─────────────────────────────────────────────
 const patrol = {
   phase:       0,     // 0=초기 1=33% 2=66% 3=100%
@@ -1232,18 +1353,23 @@ window.addEventListener('orientationchange', () => {
 
 // ================================================================
 //  튜토리얼 전용 고정 맵
-//  구조: 시작점(십자 1칸) + 오른쪽 통로(4칸) + 그 뒤 병원체 2개 인접 배치
-//  좌표 원점은 (0,0)=벽 테두리, 시작점은 (3,3)으로 둬서 사방 1칸 여유 확보
+//  구조: 시작점(십자 1칸) + 통로(4칸,소나트리거) + 병원체 A/B(인접배치,오렌지시연)
+//        + 통로 연장 + 병원체 C(단독, 치료제선택 후 회수 — 좀비 습격 트리거)
+//  좌표 원점은 (0,0)=벽 테두리, 시작점은 (3,4)로 둬서 사방 1칸 여유 확보
 // ================================================================
-const TUT_MAP_W = 16, TUT_MAP_H = 7;
-const TUT_START_TX = 3, TUT_START_TY = 3;          // 시작 타일
+const TUT_MAP_W = 18, TUT_MAP_H = 9;
+const TUT_START_TX = 3, TUT_START_TY = 4;          // 시작 타일
 const TUT_SONAR_TRIGGER_TX = TUT_START_TX + 4;     // 오른쪽 4칸 지점 — 소나 안내 트리거
-// 병원체 2개를 메인 통로 위/아래 한 칸씩에 배치 → 통로 타일에서 인접 병원체 2개(danger=2, 주황 핑) 시연
-// 소나트리거(시작+4) 지점에서 거리 2 — 소나 최소반경(minRadius=2)으로 짧게 눌러도 반드시 핑이 도달하도록
+// 병원체 A/B를 메인 통로 위/아래 한 칸씩에 인접 배치 → danger=2(오렌지) 시연
+// 소나트리거 지점에서 거리 2 — 소나 최소반경(minRadius=2)으로 짧게 눌러도 반드시 핑이 도달하도록
 const TUT_MINE_TX   = TUT_SONAR_TRIGGER_TX + 2;
-const TUT_MINE_TY_A = TUT_START_TY - 1;            // 병원체 A (통로 위)
-const TUT_MINE_TY_B = TUT_START_TY + 1;            // 병원체 B (통로 아래)
-const TUT_CORRIDOR_END_TX = TUT_MINE_TX + 2;       // 통로 끝
+const TUT_MINE_TY_A = TUT_START_TY - 1;            // 병원체 A (통로 위) — 1번째 회수
+const TUT_MINE_TY_B = TUT_START_TY + 1;            // 병원체 B (통로 아래) — 2번째 회수
+// A+B 회수 완료 후 치료제 선택 → 통로를 더 연장해 병원체 C(단독) 배치 — 3번째 회수=좀비 습격 트리거
+const TUT_MINE_C_TX  = TUT_MINE_TX + 3;
+const TUT_MINE_C_TY  = TUT_START_TY;               // 메인 통로 위에 직접 배치(단독 — 인접 병원체 없음)
+const TUT_CORRIDOR_END_TX = TUT_MINE_C_TX + 1;     // 통로 끝
+const TUT_AMBUSH_SPAWN_TY = TUT_MINE_C_TY + 3;     // 습격 좀비 출발지 — 병원체C에서 3칸 아래(멀리서 달려옴)
 
 function generateTutorialMap() {
   const W = TUT_MAP_W, H = TUT_MAP_H;
@@ -1258,17 +1384,22 @@ function generateTutorialMap() {
   tiles[idx(TUT_START_TX, TUT_START_TY + 1)] = T.FLOOR; // 아래 1칸
   tiles[idx(TUT_START_TX - 1, TUT_START_TY)] = T.FLOOR; // 왼쪽 1칸
 
-  // 오른쪽 메인 통로 — 시작점부터 병원체 구역 너머까지 일자로 개방
+  // 오른쪽 메인 통로 — 시작점부터 병원체 C 너머까지 일자로 개방
   for (let x = TUT_START_TX; x <= TUT_CORRIDOR_END_TX; x++) {
     tiles[idx(x, TUT_START_TY)] = T.FLOOR;
   }
 
-  // 병원체 2개 — 통로 위/아래로 분리 배치 (통로 타일에서 danger=2 주황 핑 시연)
+  // 병원체 A/B — 통로 위/아래로 분리 배치 (통로 타일에서 danger=2 주황 핑 시연)
   tiles[idx(TUT_MINE_TX, TUT_MINE_TY_A)] = T.MINE;
   tiles[idx(TUT_MINE_TX, TUT_MINE_TY_B)] = T.MINE;
-  // 병원체 A(위쪽)로 도달하는 1칸 분기 통로 — 회수 대상은 A 하나만 (설계 합의: "1개를 회수")
-  // 병원체 B(아래쪽)는 분기를 열지 않아 도달 불가 — danger=2 시연용으로만 존재
-  tiles[idx(TUT_MINE_TX - 1, TUT_MINE_TY_A)] = T.FLOOR; // 통로(y=3)에서 위로 꺾어 들어가는 길
+  tiles[idx(TUT_MINE_TX - 1, TUT_MINE_TY_A)] = T.FLOOR; // A로 꺾어 들어가는 분기
+  tiles[idx(TUT_MINE_TX - 1, TUT_MINE_TY_B)] = T.FLOOR; // B로 꺾어 들어가는 분기
+
+  // 병원체 C — 메인 통로 위에 단독 배치(주변 다른 병원체 없음). 회수 시작이 좀비 습격 트리거
+  tiles[idx(TUT_MINE_C_TX, TUT_MINE_C_TY)] = T.MINE;
+  for (let y = TUT_MINE_C_TY + 1; y <= TUT_AMBUSH_SPAWN_TY; y++) {
+    tiles[idx(TUT_MINE_C_TX, y)] = T.FLOOR; // C에서 아래로 길게 뚫린 습격 통로 (C 타일 자체는 보존)
+  }
 
   // 인접 병원체 수 계산 (본게임과 동일한 규칙 — 3x3 인접 MINE 개수)
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -1283,7 +1414,7 @@ function generateTutorialMap() {
   }
 
   return { tiles, numbers, detected, width: W, height: H,
-           floorCount: 0, mineCount: 2, deadEndCount: 0, deadEndRatio: 0 };
+           floorCount: 0, mineCount: 3, deadEndCount: 0, deadEndRatio: 0 };
 }
 
 // ── 초기화 ───────────────────────────────────────────────────────
@@ -1459,9 +1590,13 @@ window.addEventListener('keydown', e => {
 
   // ── PLAYING 상태 ──────────────────────────────────────────────
   // 튜토리얼 대화창 보는 중(TUT_LOCKED) — Space로 진행, 다른 입력 무시
+  // precise_prompt 단계는 G키, serum_prompt/serum_use_wait 단계는 Y/N/D키 예외로 통과
   if (TUT_ACTIVE && TUT_LOCKED) {
     if (e.code === 'Space') tutorialAdvanceKey();
-    return;
+    if (TUT_STEP === 'precise_prompt' && e.code === 'KeyG') { /* 아래로 통과 */ }
+    else if (TUT_STEP === 'serum_prompt' && (e.code === 'KeyY' || e.code === 'KeyN')) { /* 아래로 통과 */ }
+    else if (TUT_STEP === 'serum_use_wait' && e.code === 'KeyD') { /* 아래로 통과 */ }
+    else return;
   }
   // 미니게임 중 입력
   if (minigame.active && !minigame.result) {
@@ -1478,7 +1613,7 @@ window.addEventListener('keydown', e => {
 
   if (e.code === 'KeyE') {
     if (!e.repeat && !player.dead && !minigame.active) {
-      if (TUT_ACTIVE && TUT_STEP !== 'mine_collect') return; // 튜토리얼 — 소나 사용 전엔 회수 불가
+      if (TUT_ACTIVE && TUT_STEP !== 'mine_collect' && TUT_STEP !== 'mine_collect_2' && TUT_STEP !== 'mine_collect_3') return; // 튜토리얼 — 소나 사용 전엔 회수 불가
       const tileIdx = player.ty * MAP.width + player.tx;
       if (MAP.tiles[tileIdx] === T.MINE && MAP.detected[tileIdx]) {
         startMinigame('mine', tileIdx);
@@ -1500,7 +1635,7 @@ window.addEventListener('keydown', e => {
           && minigame.combatGauge >= MG.combatChoiceGauge) {
         minigame.combatGauge      = MG.combatChoiceGauge;  // 80에서 멈춤
         minigame.serumChoice      = true;
-        minigame.serumChoiceTimer = CONFIG.serum.choiceTime;
+        minigame.serumChoiceTimer = TUT_ACTIVE ? TUT_SERUM_CHOICE_TIME : CONFIG.serum.choiceTime; // 튜토리얼은 결정할 여유를 더 줌
         if (window._updateTouchUI) window._updateTouchUI();
         return;
       }
@@ -1510,20 +1645,23 @@ window.addEventListener('keydown', e => {
       return;
     }
     if (!e.repeat && !sonar.charging && !player.dead && !minigame.active) {
-      if (TUT_ACTIVE && TUT_STEP !== 'sonar_prompt') return; // 튜토리얼 — 안내 전엔 소나 비활성
+      if (TUT_ACTIVE && TUT_STEP !== 'sonar_prompt' && TUT_STEP !== 'sonar_prompt_2') return; // 튜토리얼 — 안내 전엔 소나 비활성
+      if (TUT_ACTIVE && (TUT_STEP === 'sonar_prompt' || TUT_STEP === 'sonar_prompt_2')) hideTutorialBox(); // F 차징 시작 — 대화창 숨김
       sonar.charging = true; sonar.chargeTime = 0;
     }
     return;
   }
   // Y — 치료제 투여
   if (e.code === 'KeyY') {
+    if (TUT_ACTIVE && TUT_STEP === 'serum_prompt') { onTutorialSerumChoice(true); return; }
     if (minigame.active && minigame.type === 'combat' && minigame.serumChoice && !minigame.result) {
       useSerumInCombat();
     }
     return;
   }
-  // N — 계속 싸우기 (선택지 닫기)
+  // N — 계속 싸우기 (선택지 닫기) / 튜토리얼 평시에는 치료제 보류
   if (e.code === 'KeyN') {
+    if (TUT_ACTIVE && TUT_STEP === 'serum_prompt') { onTutorialSerumChoice(false); return; }
     if (minigame.active && minigame.type === 'combat' && minigame.serumChoice) {
       minigame.serumChoice  = false;
       minigame.serumChosen  = true;
@@ -1533,14 +1671,15 @@ window.addEventListener('keydown', e => {
   }
   // D — 자가 치료제 사용 (전투 외)
   if (e.code === 'KeyD') {
-    if (TUT_ACTIVE) return; // 치료제는 PR1 범위 밖
+    if (TUT_ACTIVE && TUT_STEP === 'serum_use_wait') { onTutorialSerumUseConfirmed(); return; }
+    if (TUT_ACTIVE) return; // 그 외 튜토리얼 단계에서는 비활성
     if (!minigame.active && !player.dead && GAME_STATE === 'PLAYING') {
       useSerumSelf();
     }
     return;
   }
   if (e.code === 'KeyG') {
-    if (TUT_ACTIVE) return; // 정밀소나는 PR1 범위 밖 (후속 PR에서 시연)
+    if (TUT_ACTIVE && TUT_STEP !== 'precise_prompt') return; // 정밀소나는 습격 직후 연출 단계에서만 사용
     if (!e.repeat && !sonar.chargingPrecise && sonar.precise > 0 && !player.dead && !minigame.active) {
       sonar.chargingPrecise = true; sonar.chargeTimePrecise = 0;
     }
@@ -1591,6 +1730,7 @@ function handleInput(dt) {
   if (player.dead) { sonar.charging = false; sonar.chargingPrecise = false; }
   if (GAME_STATE !== 'PLAYING') return;
   if (TUT_ACTIVE && TUT_LOCKED) return; // 튜토리얼 대화창 보는 중 — 이동 차단
+  if (TUT_ACTIVE && (TUT_STEP === 'precise_prompt' || TUT_STEP === 'precise_revealed' || TUT_STEP === 'aftermath')) return; // 정밀소나 연출 단계 — 이동 차단(G키만 허용)
   if (player.moving || moveTimer > 0 || player.dead || minigame.active) return;
   const dir = getHeldDir();
   if (dir) { updateFacing(dir.dx, dir.dy); tryMove(dir.dx, dir.dy); }
@@ -1808,7 +1948,10 @@ function useSerumSelf() {
 }
 
 function useSerumInCombat() {
-  if (!minigame.combatZombie || player.serum <= 0) return;
+  if (!minigame.combatZombie || player.serum <= 0) {
+    if (TUT_ACTIVE) onTutorialAmbushResolved(); // 엣지케이스 — 그래도 시퀀스는 이어가야 함
+    return;
+  }
   player.serum--;
   minigame.serumChoice = false;
   minigame.serumChosen = true;
@@ -1844,27 +1987,38 @@ function useSerumInCombat() {
     }
     devLog(`치료제 투여 성공 — 감염자 안식 + DNA +${dnaBonus}`, 'good');
   } else {
-    const oxyLoss = Math.abs(MG.combatFailOxy);
-    const infGain = MG.combatFailInfect;
-    applyOxygenDamage(oxyLoss);
-    player.infection = Math.min(100, player.infection + infGain);
     const idx = zombies.indexOf(z);
     if (idx !== -1) zombies.splice(idx, 1);
-    spawnExtraZombie(true); // 크리쳐 치료제 무효 → 새 크리쳐 강제 스폰
-    minigame.result      = 'fail';
-    minigame.resultTimer = MG.resultShowTime;
-    minigame.postCooldown = MG.postCooldown;
-    addPopup('치료제 무효', '#ff4444', 0);
-    addPopup(`산소 -${oxyLoss}%`, '#ff3333', 0.2);
-    addPopup(`오염 +${infGain}%`, '#ff3333', 0.4);
-    const voiceWasted = pickVoice('serumWasted');
-    if (voiceWasted) addVoicePopup(voiceWasted);
-    SoundManager.play('combat_lose');
-    triggerFlash('red');
-    devLog('치료제 투여 — 크리쳐 무효, 전투 실패 처리', 'danger');
+    if (TUT_ACTIVE) {
+      // 튜토리얼 — 페널티 없이 크리쳐만 사라짐 (본게임 룰과 분리, 합의사항)
+      minigame.result      = 'fail';
+      minigame.resultTimer = MG.resultShowTime;
+      minigame.postCooldown = MG.postCooldown;
+      addPopup('치료제 무효', '#ff4444', 0);
+      SoundManager.play('combat_lose');
+      devLog('치료제 투여 — 크리쳐 무효 (튜토리얼: 페널티 없음)', 'warn');
+    } else {
+      const oxyLoss = Math.abs(MG.combatFailOxy);
+      const infGain = MG.combatFailInfect;
+      applyOxygenDamage(oxyLoss);
+      player.infection = Math.min(100, player.infection + infGain);
+      spawnExtraZombie(true); // 크리쳐 치료제 무효 → 새 크리쳐 강제 스폰
+      minigame.result      = 'fail';
+      minigame.resultTimer = MG.resultShowTime;
+      minigame.postCooldown = MG.postCooldown;
+      addPopup('치료제 무효', '#ff4444', 0);
+      addPopup(`산소 -${oxyLoss}%`, '#ff3333', 0.2);
+      addPopup(`오염 +${infGain}%`, '#ff3333', 0.4);
+      const voiceWasted = pickVoice('serumWasted');
+      if (voiceWasted) addVoicePopup(voiceWasted);
+      SoundManager.play('combat_lose');
+      triggerFlash('red');
+      devLog('치료제 투여 — 크리쳐 무효, 전투 실패 처리', 'danger');
+    }
   }
   updateSerumHUD();
   if (player.infection >= 100 && !player.dead) showGameOver('infected');
+  if (TUT_ACTIVE) onTutorialAmbushResolved();
 }
 
 function updateSerumHUD() {
@@ -1881,7 +2035,9 @@ function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
   }
   const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
   const fxLen = getUpgradeEffects();
-  const len = Math.max(2, CONFIG.stages[stageIdx].patternLen - fxLen.patternLenMinus);
+  const len = TUT_ACTIVE
+    ? 3 // 튜토리얼 — 특성 효과 무관하게 항상 고정 길이로 시연
+    : Math.max(2, CONFIG.stages[stageIdx].patternLen - fxLen.patternLenMinus);
 
   const zState = zombieRef ? zombieRef.state : 'WANDER';
   // 전투 drain — 상태 기반 + 특수 좀비 보정
@@ -1905,9 +2061,9 @@ function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
     combatZombie: zombieRef ?? null,
     interruptedMine: interrupted || false,
     postCooldown: 0,
-    combatGauge: 0, combatDrain: drain,
-    playerPower: stagePlayerPower,
-    mashTimer: MG.combatMashTime,
+    combatGauge: 0, combatDrain: drain, // 튜토리얼도 본게임과 동일한 드레인 — 위기감 유지(연타횟수는 playerPower로 조정)
+    playerPower: (TUT_ACTIVE && type === 'combat') ? TUT_COMBAT_PLAYER_POWER : stagePlayerPower,
+    mashTimer: (TUT_ACTIVE && type === 'combat') ? MG.combatMashTime * TUT_COMBAT_TIME_MULT : MG.combatMashTime, // 튜토리얼은 시간도 넉넉하게 — 텍스트를 읽을 여유 보장
     serumChoice: false, serumChoiceTimer: 0, serumChosen: false,
   });
   if (type === 'mine') revealAround(player.tx, player.ty, MG.visionRadMine);
@@ -1916,6 +2072,12 @@ function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
   if (type === 'mine') devLog(`병원체 회수 시작 — 패턴: ${minigame.pattern.join('-')}`, 'warn');
   else devLog(`전투 시작 [${zState}] — F키 연타로 게이지 채우기 (좀비 drain: ${drain}/s)`, 'warn');
   if (window._updateTouchUI) window._updateTouchUI();
+
+  if (type === 'mine') {
+    onTutorialMineCollectStart(mineTileIdx);
+    if (TUT_ACTIVE) collapseVignetteTo('mild', 280, 0.55, null);
+  }
+  if (type === 'combat') onTutorialCombatStart();
 }
 
 function minigameInput(dir) {
@@ -1928,6 +2090,9 @@ function minigameInput(dir) {
     if (minigame.current >= minigame.pattern.length) {
       endMinigame(true);
     }
+  } else if (TUT_ACTIVE) {
+    // 튜토리얼 — 오입력은 실패 처리하지 않고 그냥 무시 (학습 중 실수해도 패널티 없이 재시도)
+    SoundManager.play('collect_fail');
   } else {
     // 틀림 → 즉시 실패 (실패음은 endMinigame에서 처리)
     minigame.flashTimer = 0.3;
@@ -1996,11 +2161,14 @@ function endMinigame(success) {
     const interrupted = minigame.interruptedMine;
     if (success) {
       SoundManager.play('combat_win');
-      const oxyLoss = Math.abs(MG.combatSuccessOxy) + (interrupted ? 5 : 0);
-      applyOxygenDamage(oxyLoss);
-      if (interrupted) player.infection = Math.min(100, player.infection + 5);
-      addPopup(`산소 -${oxyLoss}%`, '#ffaa00', 0);
-      if (interrupted) addPopup('오염 +5%', '#ff8800', 0.18);
+      let oxyLoss = 0;
+      if (!TUT_ACTIVE) {
+        oxyLoss = Math.abs(MG.combatSuccessOxy) + (interrupted ? 5 : 0);
+        applyOxygenDamage(oxyLoss);
+        if (interrupted) player.infection = Math.min(100, player.infection + 5);
+        addPopup(`산소 -${oxyLoss}%`, '#ffaa00', 0);
+        if (interrupted) addPopup('오염 +5%', '#ff8800', 0.18);
+      }
 
       const cz = minigame.combatZombie;
       if (cz) {
@@ -2020,14 +2188,26 @@ function endMinigame(success) {
         } else {
           // ── 크리쳐: 워프 이탈 ─────────────────────────────────
           setTimeout(() => {
+            if (TUT_ACTIVE) {
+              // 튜토리얼 맵은 좁아서 워프 후보지가 없어 스턴만 걸리고 다시 인식하는 문제가 있음
+              // → 본게임과 달리 그냥 제거(눈앞에서 사라짐, 합의된 연출)
+              // cz가 이미 사라졌어도(좀비 정리 등) 시퀀스는 반드시 이어가야 함
+              const idx = zombies.indexOf(cz);
+              if (idx !== -1) zombies.splice(idx, 1);
+              onTutorialAmbushResolved();
+              return;
+            }
             if (!zombies.includes(cz)) return;
             warpZombie(cz);
           }, 220);
           const voiceWarp = pickVoice('creatureWarp');
           if (voiceWarp) addVoicePopup(voiceWarp);
         }
+      } else if (TUT_ACTIVE) {
+        // cz가 null인 엣지 케이스 — 그래도 튜토리얼 시퀀스는 반드시 이어가야 함
+        onTutorialAmbushResolved();
       }
-      devLog(`전투 성공 — 산소 -${oxyLoss}%${interrupted ? ' (급습 패널티)' : ''}`, 'warn');
+      devLog(`전투 성공${TUT_ACTIVE ? ' (튜토리얼)' : ` — 산소 -${oxyLoss}%${interrupted ? ' (급습 패널티)' : ''}`}`, 'warn');
     } else {
       SoundManager.play('combat_lose');
       const oxyLoss2 = Math.abs(MG.combatFailOxy) + (interrupted ? 10 : 0);
@@ -2078,9 +2258,24 @@ function updateMinigame(dt) {
     minigame.combatGauge = Math.max(0, minigame.combatGauge - minigame.combatDrain * dt);
     // 제한 시간
     minigame.mashTimer -= dt;
+
+    // 튜토리얼 — 시간 70% 경과(남은시간 30% 이하) 시 F연타 강제 안내, 1회만
+    // (튜토리얼 전투는 mashTimer 자체가 늘어나므로, 그 늘어난 총량 기준으로 비율 계산)
+    const tutMashTotal = MG.combatMashTime * TUT_COMBAT_TIME_MULT;
+    if (TUT_ACTIVE && !TUT_FORCE_MASH_SHOWN && !minigame.serumChosen
+        && minigame.mashTimer <= tutMashTotal * 0.3) {
+      TUT_FORCE_MASH_SHOWN = true;
+      addPopup('F키를 연타하세요!', '#ffaa00', 0);
+    }
+
     if (minigame.mashTimer <= 0) {
-      devLog('전투 시간 초과 — 실패', 'danger');
-      endMinigame(false);
+      if (TUT_ACTIVE) {
+        devLog('전투 시간 초과 (튜토리얼 — 성공 처리)', 'warn');
+        endMinigame(true);
+      } else {
+        devLog('전투 시간 초과 — 실패', 'danger');
+        endMinigame(false);
+      }
     }
   }
 
@@ -2088,6 +2283,9 @@ function updateMinigame(dt) {
     minigame.resultTimer -= dt;
     if (minigame.resultTimer <= 0) {
       // 미니게임 종료 — 시야 복구
+      if (TUT_ACTIVE && minigame.type === 'mine' && TUT_VIGNETTE.mode === 'mild') {
+        collapseVignetteTo('mild', 300, 1, () => { TUT_VIGNETTE.active = false; });
+      }
       minigame.active = false;
       minigame.type   = null;
       revealAround(player.tx, player.ty, CONFIG.player.visionRad);
@@ -2697,6 +2895,8 @@ function showTitle() {
   TUT_ACTIVE = false;
   TUT_LOCKED = false;
   TUT_STEP   = null;
+  TUT_FREEZE_ZOMBIES = false;
+  TUT_VIGNETTE.active = false;
   hideTutorialBox();
   hideTutorialIntroScreen();
   document.getElementById('title-screen').classList.add('show');
@@ -2744,7 +2944,14 @@ function applyUpgradeEffects() {
 // ================================================================
 let TUT_ACTIVE = false;   // 튜토리얼 진행 중 여부
 let TUT_LOCKED = false;   // true면 이동 입력 차단 (대화창 보는 중)
-let TUT_STEP   = null;    // 'world_intro' | 'move_intro' | 'moving' | 'sonar_prompt' | 'sonar_used' | 'mine_collect' | 'done'
+let TUT_STEP   = null;    // 'world_intro'|'move_intro'|'moving'|'sonar_prompt'|'sonar_result'|'mine_collect'|'mine_collect_2'|'serum_prompt'|'serum_use_wait'|'sonar_prompt_2'|'sonar_result_2'|'mine_collect_3'|'ambush'|'aftermath'|'precise_prompt'|'precise_revealed'|'done'
+let TUT_FORCE_MASH_SHOWN = false; // 전투 중 F연타 강제안내 1회 표시 플래그
+let TUT_FREEZE_ZOMBIES = false;   // true면 좀비 AI 갱신 정지 (정밀소나 연출용 — 다가오면 안 됨)
+let TUT_SERUM_PROMPT_TIMER = 0;   // 치료제 선택(Y/N) 자동 타임아웃 — 0이면 비활성
+let TUT_SERUM_PROMPT_ACTIVE = false; // 평시 Y/N 선택지가 화면에 떠 있는 동안만 true — TUT_STEP과 별개로 모바일 터치 UI 노출 제어용 (N 선택 후 후속 대사 중엔 TUT_STEP은 그대로지만 선택지는 이미 닫혀야 함)
+const TUT_COMBAT_TIME_MULT = 2.2; // 튜토리얼 전투 제한시간 배율 — 텍스트 읽을 여유 보장
+const TUT_COMBAT_PLAYER_POWER = 11; // 튜토리얼 전투 F연타당 게이지 증가량 — 드레인은 본게임 그대로 두고 이 값으로 "F 10번 안팎" 조정
+const TUT_SERUM_CHOICE_TIME = 7.0; // 튜토리얼 치료제 선택지(Y/N) 결정 시간 — 본게임 3초보다 충분히 여유있게
 
 const TUT_WORLD_LINES = [
   '[수신: 격리구역 통신망]',
@@ -2752,20 +2959,106 @@ const TUT_WORLD_LINES = [
   '...이곳은 한때 평범한 병원이었다.',
   '지금은 아니다.',
   '',
-  '임무: 병원체 회수. 생존자는 없다고 가정하라.',
+  '임무: 병원체 회수.',
+  '생존자는 없다고 가정하라.',
   '— 단, 정말 그런지는 직접 확인하게 될 것이다.',
 ];
 
 const TUT_MOVE_LINES = [
+  '목표 지점 도착했습니다.',
+  '즉시 이동하여 탐색을 시작합니다.',
+];
+
+// 산소 안내 — 도착보고 다음 (Space로 진행)
+const TUT_OXYGEN_LINES = [
+  '가용 산소 100%.',
+  '생존 가능 시간 약 50초입니다.',
+  '그 이후로는 오염도가 증가합니다.',
+];
+
+// 이동 지시 — 산소안내 다음 (자동진행, 이동 시작 시 닫힘)
+const TUT_MOVE_GO_LINES = [
   '상하좌우 방향키로 이동합니다.',
-  '',
-  '→ 직접 움직여 보세요.',
 ];
 
 const TUT_SONAR_LINES = [
-  '전방에 반응이 있다.',
+  '병원체 탐색을 위해',
+  '소나를 가동합니다.',
   '',
   '[F] 키를 꾹 눌러 소나를 사용하세요.',
+];
+
+const TUT_SONAR_RESULT_LINES = [
+  '인근 병원체 반응 확인. 코드 오렌지.',
+  '주변에 약한 반응(옐로우)도 감지됩니다.',
+  '',
+  '채집을 시작합니다.',
+];
+
+// 치료제 선택 — 2번째 회수 직후. Y(거친 선택)/N(아낀다) 둘 다 직접 만든 입력 핸들러로 처리
+const TUT_SERUM_PROMPT_LINES = [
+  '병원체 2개 회수 완료. 경미한 오염 발생.',
+  '',
+  '치료제를 사용하시겠습니까?',
+  '[Y] 사용  /  [N] 보류',
+];
+
+const TUT_SERUM_USE_LINES = [
+  '[D] 키를 눌러 치료제를 사용하세요.',
+];
+
+const TUT_SERUM_HOLD_LINES = [
+  '이건 내가 쓸 게 아니야.',
+  '그들을 위해서 남겨둬야 해.',
+];
+
+const TUT_SERUM_DONE_LINES = [
+  '남은 병원체 1개. 회수 후 즉시 복귀합니다.',
+];
+
+// 3번째 병원체 탐지를 위한 소나 재사용 안내 — 자동진행(F차징 시작 시 닫힘)
+const TUT_SONAR2_LINES = [
+  '남은 병원체 탐지를 위해',
+  '소나를 다시 가동합니다.',
+  '',
+  '[F] 키를 꾹 눌러 소나를 사용하세요.',
+];
+
+const TUT_SONAR2_RESULT_LINES = [
+  '병원체 반응 확인.',
+  '',
+  '채집을 시작합니다.',
+];
+
+// ── 습격 시퀀스 (시간기반 자동진행 — 다급함을 끊지 않기 위해 Space 불필요) ──
+const TUT_AMBUSH_LINES = [
+  '제기랄, 코드 레드! 코드 레드!',
+  '대상 생명체 진위 확인 미실시',
+  '— 정밀소나 사용 불가.',
+];
+
+// 전투 시작 대사 — player.serum 값으로 분기(0=이미 사용함, >0=아직 있음)
+const TUT_AMBUSH_NOSERUM_LINES = [
+  '제길, 치료제가...!',
+];
+
+const TUT_AMBUSH_HASSERUM_LINES = [
+  '치료제를 사용해야 하나?',
+  '식별이 안 됐는데!!',
+];
+
+const TUT_PRECISE_LINES = [
+  '(거친 숨소리)',
+  '',
+  '미확인 크리쳐의 접근으로 접촉상황 발생.',
+  '추가 크리쳐 및 감염자 확인을 위해',
+  '정밀소나를 사용합니다.',
+  '',
+  '[G] 키를 눌러 정밀소나를 사용하세요.',
+];
+
+const TUT_DESPAIR_LINES = [
+  '.....제기랄.',
 ];
 
 function startTutorial() {
@@ -2774,6 +3067,17 @@ function startTutorial() {
   TUT_ACTIVE = true;
   TUT_LOCKED = true;
   TUT_STEP   = 'world_intro';
+  resetOriginFlash(); // 깨끗한 상태로 시작 — 습격 직후 화이트플래시 보장
+
+  // 콘솔 강제 초기화 후 재실행 등 비정상 재시작 경로에서 이전 잔여값이 남지 않도록 명시적 리셋
+  TUT_FREEZE_ZOMBIES     = false;
+  TUT_FORCE_MASH_SHOWN   = false;
+  TUT_SERUM_PROMPT_TIMER = 0;
+  TUT_SERUM_PROMPT_ACTIVE = false;
+  TUT_VIGNETTE.active = false;
+  TUT_VIGNETTE.mode   = null;
+  TUT_VIGNETTE.radius = 1;
+  TUT_VIGNETTE.pulseT = 0;
 
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
@@ -2781,7 +3085,8 @@ function startTutorial() {
   player.totalCollected = 0;
   player.recordSaved    = false;
   player.serum          = CONFIG.serum.initialCount;
-  applyUpgradeEffects();
+  // 튜토리얼은 본게임 특성(업그레이드) 효과를 적용하지 않음 — 항상 기본값으로 동일하게 시연
+  resetConfigToDefaults();
   player.oxygen = CONFIG.oxygen.max;
 
   MAP = generateTutorialMap();
@@ -2833,16 +3138,22 @@ function startTutorial() {
     GAME_STATE = 'PLAYING';
     TUT_STEP = 'move_intro';
     showTutorialLine(TUT_MOVE_LINES, () => {
-      TUT_STEP = 'moving';
-      TUT_LOCKED = false; // 이동 허용
-      hideTutorialBox();  // 타이핑 끝나면 바로 닫힘 — Space 대기 없음
-    }, true); // autoAdvance: 타이핑 완성 시 즉시 진행
+      // 도착보고 다음 — 산소 안내(Space로 진행)
+      showTutorialLine(TUT_OXYGEN_LINES, () => {
+        // 산소안내 다음 — 이동 지시(자동진행, 실제 이동 시작 시 닫힘)
+        showTutorialLine(TUT_MOVE_GO_LINES, () => {
+          TUT_STEP = 'moving';
+          TUT_LOCKED = false; // 이동 허용 — 대화창은 플레이어가 실제로 움직이기 시작할 때 닫힘
+        }, true); // autoAdvance
+      }); // Space로 진행
+    }); // Space로 진행
   });
 }
 
 // ── 튜토리얼 텍스트 진행 공용 키 핸들러 (F/Space) ────────────────
 // _tutAdvance: 현재 호출하면 "타이핑 즉시완성" 또는 "다음 단계로" 동작하는 함수. null이면 대기 중 아님.
 let _tutAdvance = null;
+let _tutBoxToken = 0; // showTutorialLine 호출마다 갱신 — 'timer' 모드의 뒤늦은 정리 타이머가 최신 텍스트를 잘못 지우는 것 방지
 
 function tutorialAdvanceKey() {
   if (_tutAdvance) _tutAdvance();
@@ -2856,10 +3167,13 @@ function showTutorialIntroScreen(lines, onDone) {
   const textEl   = document.getElementById('tutorial-intro-text');
   const cursorEl = document.getElementById('tutorial-intro-cursor');
   const hintEl   = document.getElementById('tutorial-intro-hint');
-  if (!screen || !textEl) { if (onDone) onDone(); return; }
+  if (!screen || !textEl || !cursorEl) { if (onDone) onDone(); return; }
 
   screen.classList.add('show');
+  const textNode = document.createTextNode('');
   textEl.textContent = '';
+  textEl.appendChild(textNode);
+  textEl.appendChild(cursorEl);
   cursorEl.style.display = '';
   if (hintEl) hintEl.style.display = 'none';
 
@@ -2870,19 +3184,20 @@ function showTutorialIntroScreen(lines, onDone) {
 
   function finishTyping() {
     typingDone = true;
-    textEl.textContent = FULL_TEXT;
+    textNode.textContent = FULL_TEXT;
     cursorEl.style.display = 'none';
     if (hintEl) hintEl.style.display = '';
     _tutAdvance = () => { _tutAdvance = null; if (onDone) onDone(); };
   }
 
   function typeNext() {
+    if (typingDone) return; // 이미 즉시완성됐다면 예약된 타이머는 더 진행하지 않음 (중복출력 방지)
     if (charIdx >= FULL_TEXT.length) { finishTyping(); return; }
-    textEl.textContent += FULL_TEXT[charIdx++];
+    textNode.textContent += FULL_TEXT[charIdx++];
     setTimeout(typeNext, SPEED);
   }
 
-  _tutAdvance = () => { if (!typingDone) finishTyping(); };
+  // 타이핑 중에는 Space로 스킵 불가 — 끝까지 자연스러운 속도로 출력됨
   // 커서만 잠시 깜빡이다가 타이핑 시작 — 검은 화면에 커서만 깜빡이는 느낌
   setTimeout(typeNext, 900);
 }
@@ -2893,15 +3208,25 @@ function hideTutorialIntroScreen() {
 }
 
 // ── 튜토리얼 대화창 타이핑 엔진 (엔딩 터미널과 동일한 패턴) ──────
+// autoAdvance: true(행동트리거형 — 타이핑끝나면 onDone 즉시, 닫힘은 호출측이 처리) |
+//              'timer'(시간기반 자동진행 — 최소체류시간 보장 후 자동으로 onDone+페이드아웃 닫힘) |
+//              false/undefined(Space로 진행)
 function showTutorialLine(lines, onDone, autoAdvance) {
   const box     = document.getElementById('tutorial-box');
   const textEl  = document.getElementById('tutorial-text');
   const cursorEl= document.getElementById('tutorial-cursor');
   const hintEl  = document.getElementById('tutorial-hint');
-  if (!box || !textEl) { if (onDone) onDone(); return; }
+  if (!box || !textEl || !cursorEl) { if (onDone) onDone(); return; }
 
+  const myToken = ++_tutBoxToken; // 이 호출의 고유 토큰 — 이후 다른 showTutorialLine이 호출되면 갱신됨
+
+  box.classList.remove('fade-out');
   box.classList.add('show');
-  textEl.textContent = '';
+  // 텍스트는 커서(span) 앞에 별도 텍스트노드로 삽입 — textContent 직접 덮어쓰면 커서 자식이 같이 지워지므로
+  const textNode = document.createTextNode('');
+  textEl.textContent = ''; // 기존 내용(이전 텍스트노드+커서) 정리
+  textEl.appendChild(textNode);
+  textEl.appendChild(cursorEl);
   cursorEl.style.display = '';
   hintEl.style.display = 'none';
 
@@ -2912,9 +3237,23 @@ function showTutorialLine(lines, onDone, autoAdvance) {
 
   function finishTyping() {
     typingDone = true;
-    textEl.textContent = FULL_TEXT;
+    textNode.textContent = FULL_TEXT;
     cursorEl.style.display = 'none';
-    if (autoAdvance) {
+    if (autoAdvance === 'timer') {
+      // 최소 체류시간 보장 — 글자수 비례, 최소 1.3초 — 다급한 장면이라도 읽을 시간은 확보
+      const minHoldMs = Math.max(1300, FULL_TEXT.length * 35);
+      setTimeout(() => {
+        // onDone() 안에서 새 showTutorialLine이 즉시 호출되면 토큰이 바뀜 — 그러면 이 텍스트는 더 이상 "현재 표시 중"이 아니므로 박스를 건드리지 않음
+        if (_tutBoxToken === myToken) box.classList.add('fade-out'); // 부드럽게 사라짐 — 훅 끊기지 않게
+        if (onDone) onDone();
+        setTimeout(() => {
+          if (_tutBoxToken === myToken) box.classList.remove('show', 'fade-out');
+        }, 260);
+      }, minHoldMs);
+    } else if (autoAdvance === 'silent') {
+      // 외부 입력(G키 등)으로만 다음 진행 — 힌트/Space 둘 다 비활성
+      _tutAdvance = null;
+    } else if (autoAdvance) {
       _tutAdvance = null;
       if (onDone) onDone();
     } else {
@@ -2924,48 +3263,249 @@ function showTutorialLine(lines, onDone, autoAdvance) {
   }
 
   function typeNext() {
+    if (typingDone) return; // 이미 즉시완성됐다면 예약된 타이머는 더 진행하지 않음 (중복출력 방지)
     if (charIdx >= FULL_TEXT.length) { finishTyping(); return; }
-    textEl.textContent += FULL_TEXT[charIdx++];
+    textNode.textContent += FULL_TEXT[charIdx++];
     setTimeout(typeNext, SPEED);
   }
 
-  _tutAdvance = () => { if (!typingDone) finishTyping(); };
+  // 타이핑 중에는 Space로 스킵 불가 — 끝까지 자연스러운 속도로 출력됨
+  // (완료 후 Space로 다음 진행하는 기능은 finishTyping() 내부에서 별도 설정)
   setTimeout(typeNext, 200);
 }
 
 function hideTutorialBox() {
   const box = document.getElementById('tutorial-box');
-  if (box) box.classList.remove('show');
+  if (box) box.classList.remove('show', 'fade-out');
 }
 
 // ── 이동 거리 체크 — 매 onStep마다 호출 (moving 단계에서만 동작) ──
 function checkTutorialMoveProgress() {
-  if (!TUT_ACTIVE || TUT_STEP !== 'moving') return;
+  if (!TUT_ACTIVE) return;
+  if (TUT_STEP === 'mine_collect' || TUT_STEP === 'mine_collect_2' || TUT_STEP === 'mine_collect_3') {
+    hideTutorialBox(); // 회수 대기 중 이동 — 대화창이 화면을 가리지 않도록 즉시 숨김
+    return;
+  }
+  if (TUT_STEP !== 'moving') return;
   hideTutorialBox(); // 이동 시작 — 대화창이 화면을 가리지 않도록 즉시 숨김
   if (player.tx >= TUT_SONAR_TRIGGER_TX) {
     TUT_STEP = 'sonar_prompt';
     TUT_LOCKED = true; // 이동 다시 차단
     showTutorialLine(TUT_SONAR_LINES, () => {
-      // 타이핑 끝나면 자동으로 잠금 해제 — 이후 진행은 F를 꾹 눌러 소나 사용
+      // 타이핑 끝나면 자동으로 잠금 해제 — 대화창은 F 차징을 시작하는 순간 닫힘
       TUT_LOCKED = false;
-      hideTutorialBox();
     }, true); // autoAdvance
   }
 }
 
 // ── 소나 발사 후 처리 — fireSonar 내부에서 튜토리얼이면 호출 ──────
 function onTutorialSonarFired() {
-  if (!TUT_ACTIVE || TUT_STEP !== 'sonar_prompt') return;
-  TUT_STEP = 'mine_collect';
-  TUT_LOCKED = true; // 이동 다시 차단 — 핑을 관찰하게 함
-  setTimeout(() => {
-    TUT_LOCKED = false; // 곧 다시 풀어서 회수 위치로 이동 가능하게
-  }, 1200);
+  if (!TUT_ACTIVE) return;
+  if (TUT_STEP === 'sonar_prompt') {
+    TUT_STEP = 'sonar_result';
+    TUT_LOCKED = true; // 이동 다시 차단 — 핑을 관찰하게 함
+    setTimeout(() => {
+      showTutorialLine(TUT_SONAR_RESULT_LINES, () => {
+        TUT_STEP = 'mine_collect';
+        TUT_LOCKED = false; // 타이핑 끝나면 자동으로 이동 가능
+      }, true); // autoAdvance — Space 불필요, 힌트도 안 뜸
+    }, 1200);
+    return;
+  }
+  if (TUT_STEP === 'sonar_prompt_2') {
+    TUT_STEP = 'sonar_result_2';
+    TUT_LOCKED = true; // 이동 다시 차단 — 핑을 관찰하게 함
+    setTimeout(() => {
+      showTutorialLine(TUT_SONAR2_RESULT_LINES, () => {
+        TUT_STEP = 'mine_collect_3';
+        TUT_LOCKED = false; // 타이핑 끝나면 자동으로 이동 가능
+      }, true); // autoAdvance
+    }, 1200);
+    return;
+  }
 }
 
-// ── 회수 완료 후 처리 — endMinigame(mine, success) 내부에서 호출 ──
+// ── 회수 미니게임 시작 시 호출 — 3번째 병원체(C) 회수 시작이 좀비 습격 트리거 ──
+function onTutorialMineCollectStart(mineTileIdx) {
+  if (!TUT_ACTIVE || TUT_STEP !== 'mine_collect_3') return;
+  const mineCIdx = TUT_MINE_C_TY * MAP.width + TUT_MINE_C_TX;
+  if (mineTileIdx !== mineCIdx) return; // C가 아니면(이론상 발생 안 함) 무시
+  TUT_STEP = 'ambush';
+  spawnTutorialAmbushZombie();
+}
+
+// ── 튜토리얼 전용 습격 좀비 스폰 — 처음부터 CHASE 상태로 플레이어에게 직진 ──
+function spawnTutorialAmbushZombie() {
+  const ts = CONFIG.map.tileSize;
+  const spawnTx = TUT_MINE_C_TX, spawnTy = TUT_AMBUSH_SPAWN_TY; // 멀리서 — 화면을 가로질러 달려오게
+  const z = makeZombieObj(spawnTx, spawnTy, ts, 'BASIC', 'CREATURE');
+  z.state = 'CHASE';
+  z.hasTarget = true;
+  z.targetWx = player.px + ts / 2;
+  z.targetWy = player.py + ts / 2;
+  z.memoryTimer = 999; // 튜토리얼 한 장면용 — 기억 소멸로 풀릴 일 없게
+  z.tutBoost = 2.4;    // 급속 접근 — 본게임 좀비는 영향 없음(기본값 1)
+  zombies.push(z);
+  SoundManager.playZombieChase();
+}
+
+// ── 전투 미니게임 시작 시 호출 — 습격 직후 코드레드 보고 ──────────
+function onTutorialCombatStart() {
+  if (!TUT_ACTIVE || TUT_STEP !== 'ambush') return;
+  TUT_FORCE_MASH_SHOWN = false;
+  showTutorialLine(TUT_AMBUSH_LINES, () => {
+    // 치료제 보유 여부에 따라 분기된 후속 대사
+    const lines = player.serum > 0 ? TUT_AMBUSH_HASSERUM_LINES : TUT_AMBUSH_NOSERUM_LINES;
+    showTutorialLine(lines, null, 'timer');
+  }, 'timer'); // 시간기반 자동진행 — 다급함을 끊지 않음
+}
+
+// ── 습격 전투 종료 후 — 화이트플래시 → 정적 → 강한 비네팅 → 거친숨+G키 안내 → (G키 입력) → 좀비노출 → 제기랄 → 암전 → 비명 → 타이틀 ──
+function onTutorialAmbushResolved() {
+  if (!TUT_ACTIVE || TUT_STEP !== 'ambush') return;
+  TUT_STEP = 'aftermath';
+  TUT_LOCKED = true;
+
+  triggerOriginFlash(); // 기존 화이트플래시 100% 재사용
+
+  // 화이트플래시(약 0.55초) 끝난 뒤 짧은 정적(1.5초, 텍스트 없음) → 비네팅 강한 수렴
+  setTimeout(() => {
+    if (!TUT_ACTIVE || TUT_STEP !== 'aftermath') return; // 그 사이 상태가 바뀌었으면(강제 초기화 등) 중단
+    collapseVignetteTo('aftermath', 2200, 0.30, () => {
+      // 펄스 유지 상태로 — updateTutorialVignette가 이후 자동으로 0.15~0.35 사이 숨쉬듯 유지
+    });
+    setTimeout(() => {
+      if (!TUT_ACTIVE || TUT_STEP !== 'aftermath') return; // 동일 가드 — 늦게 실행되는 경우 방지
+      TUT_STEP = 'precise_prompt';
+      TUT_LOCKED = false; // G키 입력을 받기 위해 잠금 해제 (이동은 별도 가드로 차단됨)
+      showTutorialLine(TUT_PRECISE_LINES, null, 'silent'); // G키로만 진행, 잘못된 힌트 노출 방지
+    }, 2600);
+  }, 700);
+}
+
+// ── 정밀소나용 좀비 스폰 — WALL 타일을 피해 안전한 FLOOR에 배치, AI 동결 상태로 대기 ──
+function spawnTutorialPreciseZombies() {
+  const ts = CONFIG.map.tileSize;
+  TUT_FREEZE_ZOMBIES = true; // 다가오지 않도록 AI 동결
+  const count = 6;
+  let placed = 0, attempts = 0;
+  while (placed < count && attempts < 60) {
+    attempts++;
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 1.2 + Math.random() * 1.8;
+    const ztx = Math.round(player.tx + Math.cos(ang) * dist);
+    const zty = Math.round(player.ty + Math.sin(ang) * dist);
+    if (ztx < 0 || zty < 0 || ztx >= MAP.width || zty >= MAP.height) continue;
+    if (MAP.tiles[zty * MAP.width + ztx] === T.WALL) continue; // 벽 회피 — 화면에 안 보이는 문제 방지
+    const z = makeZombieObj(ztx, zty, ts, 'BASIC', 'CREATURE');
+    z.state = 'WANDER';
+    zombies.push(z);
+    placed++;
+  }
+}
+
+// ── 정밀소나 발사 직후 호출 — fireSonar 내부에서 튜토리얼 precise_prompt 단계면 호출 ──
+function onTutorialPreciseFired() {
+  if (!TUT_ACTIVE || TUT_STEP !== 'precise_prompt') return;
+  TUT_STEP = 'precise_revealed';
+  TUT_LOCKED = true;
+  // 좀비를 발사 직후에 스폰 — G키를 누르는 순간 드러나는 느낌, VISIBLE 잔존으로 미리 보이는 문제도 방지
+  spawnTutorialPreciseZombies();
+  revealAround(player.tx, player.ty, 6); // 좀비들이 보이도록 시야 확보
+  // 비네팅 해제를 핑 확산 진행률(sonar.pulseR/pulseMaxR)에 직접 연동
+  // — 정밀소나가 퍼지는 것과 정확히 같은 속도로 시야가 풀림
+  TUT_VIGNETTE.active = true;
+  TUT_VIGNETTE.mode = 'precise_release';
+
+  setTimeout(() => {
+    if (!TUT_ACTIVE || TUT_STEP !== 'precise_revealed') return; // 그 사이 상태가 바뀌었으면 중단
+    showTutorialLine(TUT_DESPAIR_LINES, () => {
+      onTutorialFinalBlackout();
+    }, 'timer'); // 시간기반 자동진행
+  }, 1300);
+}
+
+// ── 최종 암전 → 비명 → 타이틀 복귀 ──────────────────────────────
+function onTutorialFinalBlackout() {
+  const overlay = document.getElementById('origin-flash');
+  if (overlay) {
+    overlay.style.transition = 'opacity 0.8s ease';
+    overlay.style.backgroundColor = '#000000';
+    overlay.style.opacity = '1';
+  }
+  SoundManager.play('gameover_infected'); // 비명류 사운드 — 기존 자원 재사용
+  setTimeout(() => {
+    TUT_ACTIVE = false;
+    TUT_VIGNETTE.active = false;
+    TUT_FREEZE_ZOMBIES = false;
+    hideTutorialBox();
+    goToLobbyFromTutorial();
+    if (overlay) { overlay.style.transition = 'none'; overlay.style.opacity = '0'; }
+  }, 1600);
+}
+
+// ── 치료제 선택 시퀀스 — 2번째 회수 완료 직후 트리거 ──────────────
+function onTutorialSerumPromptStart() {
+  TUT_STEP = 'serum_prompt';
+  TUT_LOCKED = true;
+  showTutorialLine(TUT_SERUM_PROMPT_LINES, () => {
+    TUT_SERUM_PROMPT_TIMER = 5.0; // 5초 내 미선택 시 자동 N 처리(update 루프에서 감소)
+    TUT_SERUM_PROMPT_ACTIVE = true;
+    if (window._updateTouchUI) window._updateTouchUI(); // 모바일 Y/N 버튼 노출
+  }); // Space로 타이핑은 즉시완성 가능, 이후 Y/N 입력 대기(타이머 시작은 finishTyping 콜백에서)
+}
+
+// Y(true)/N(false) 선택 처리 — 사용자 입력 또는 타임아웃에서 호출
+function onTutorialSerumChoice(useIt) {
+  if (!TUT_ACTIVE || TUT_STEP !== 'serum_prompt') return;
+  TUT_SERUM_PROMPT_TIMER = 0;
+  TUT_SERUM_PROMPT_ACTIVE = false; // 선택 즉시 닫힘 — 이후 후속 대사 중엔 TUT_STEP이 같아도 버튼이 다시 뜨지 않음
+  if (window._updateTouchUI) window._updateTouchUI();
+  if (useIt) {
+    TUT_STEP = 'serum_use_wait';
+    showTutorialLine(TUT_SERUM_USE_LINES, null, 'silent'); // D키로만 진행
+  } else {
+    showTutorialLine(TUT_SERUM_HOLD_LINES, () => {
+      onTutorialSerumSequenceDone();
+    }, 'timer'); // 시간기반 자동진행 — 짧은 독백, Space 불필요
+  }
+}
+
+// D키로 실제 치료제 사용 확정
+function onTutorialSerumUseConfirmed() {
+  if (!TUT_ACTIVE || TUT_STEP !== 'serum_use_wait') return;
+  useSerumSelf(); // 기존 자가 치료제 함수 재사용 — 오염도 감소가 실제로 적용됨
+  onTutorialSerumSequenceDone();
+}
+
+// 선택 시퀀스 종료 — 다음 회수 단계로
+function onTutorialSerumSequenceDone() {
+  showTutorialLine(TUT_SERUM_DONE_LINES, () => {
+    TUT_STEP = 'sonar_prompt_2';
+    showTutorialLine(TUT_SONAR2_LINES, () => {
+      TUT_LOCKED = false; // 타이핑 끝나면 F차징 가능 (대화창은 F 차징 시작 시 닫힘)
+    }, true); // autoAdvance
+  }, true); // autoAdvance — 타이핑 끝나면 바로 다음 안내로
+}
+
 function onTutorialMineCollected() {
   if (!TUT_ACTIVE) return;
+  if (TUT_STEP === 'mine_collect') {
+    // 1번째 회수 완료 — 2번째로 유도
+    TUT_STEP = 'mine_collect_2';
+    return;
+  }
+  if (TUT_STEP === 'mine_collect_2') {
+    // 2번째 회수 완료 — 회수 결과표시(약 1초)가 끝난 뒤 치료제 선택 시퀀스로 진입
+    TUT_LOCKED = true; // 결과표시 동안 다른 입력 방지
+    setTimeout(() => { onTutorialSerumPromptStart(); }, 1050);
+    return;
+  }
+  if (TUT_STEP === 'ambush') {
+    // 3번째(C) 회수를 좀비에게 안 걸리고 끝까지 마친 경우 — 회수 자체는 성공이지만
+    // 습격 시퀀스(전투→화이트플래시→비네팅→정밀소나→암전)는 별도 트리거(zombieContact)로 진행되므로 여기선 아무 처리도 안 함
+    return;
+  }
   TUT_STEP = 'done';
   TUT_LOCKED = true;
   setTimeout(() => {
@@ -3199,7 +3739,7 @@ function spawnExtraZombie(forceCreature = false) {
 // ── 소나 ─────────────────────────────────────────────────────────
 function fireSonar(isPrecise) {
   const cfg = CONFIG.sonar;
-  const chargeTime = isPrecise ? sonar.chargeTimePrecise : sonar.chargeTime;
+  const chargeTime = TUT_ACTIVE ? cfg.maxCharge : (isPrecise ? sonar.chargeTimePrecise : sonar.chargeTime);
   const ratio  = Math.min(chargeTime, cfg.maxCharge) / cfg.maxCharge;
   const radius = Math.round(cfg.minRadius + (cfg.maxRadius - cfg.minRadius) * ratio);
   const ts = CONFIG.map.tileSize;
@@ -3208,6 +3748,7 @@ function fireSonar(isPrecise) {
   else           { sonar.charging = false; sonar.chargeTime = 0; }
 
   if (!isPrecise) onTutorialSonarFired();
+  if (isPrecise) onTutorialPreciseFired();
 
   // 사운드
   SoundManager.play(isPrecise ? 'sonar_precise' : 'sonar_fire');
@@ -3449,10 +3990,11 @@ function updateZombies(dt) {
 
     // 타입별 파라미터 적용
     const zt  = CONFIG.zombieTypes[z.type] || CONFIG.zombieTypes.BASIC;
-    const spd = (ts / CONFIG.player.moveDelay) * zt.speed * patrol.speedMult * dt;
+    const boost = z.tutBoost || 1; // 튜토리얼 전용 급속접근 배율 (본게임 좀비는 기본 1, 영향 없음)
+    const spd = (ts / CONFIG.player.moveDelay) * zt.speed * patrol.speedMult * dt * boost;
     // RUSHER: CHASE 중엔 rushSpeed 사용
     const chaseSpd = zt.rushSpeed
-      ? (ts / CONFIG.player.moveDelay) * zt.rushSpeed * patrol.speedMult * dt
+      ? (ts / CONFIG.player.moveDelay) * zt.rushSpeed * patrol.speedMult * dt * boost
       : spd;
 
     const c = {
@@ -3841,10 +4383,18 @@ function update(dt) {
   }
   // PLAYING 상태일 때만 게임 로직 실행
   if (GAME_STATE !== 'PLAYING') return;
-  updateZombies(dt);
+  if (!TUT_FREEZE_ZOMBIES) updateZombies(dt);
   updateMinigame(dt);
   updateOxygenInfection(dt);
   updateZombieFX(dt);
+  updateTutorialVignette(dt);
+  if (TUT_SERUM_PROMPT_TIMER > 0) {
+    TUT_SERUM_PROMPT_TIMER -= dt;
+    if (TUT_SERUM_PROMPT_TIMER <= 0) {
+      TUT_SERUM_PROMPT_TIMER = 0;
+      onTutorialSerumChoice(false); // 시간 초과 → N(보류) 처리
+    }
+  }
   if (player.exitCooldown > 0) player.exitCooldown -= dt;
 
   // 소음 파동 업데이트
@@ -3865,6 +4415,7 @@ let _prevInfZone = 'low';    // 'low' | 'mid' | 'high'
 function updateOxygenInfection(dt) {
   if (player.dead) return;
   if (GAME_STATE !== 'PLAYING') return;
+  if (TUT_ACTIVE && TUT_LOCKED) return; // 튜토리얼 대화창을 보는 동안만 산소/감염 자연 변화 정지
   const cfg = CONFIG.oxygen;
 
   // 산소 자연 감소 (스테이지별 속도)
@@ -4005,6 +4556,17 @@ function render() {
   drawZombieFX(ts);
   drawPlayer(ts);
   drawMinePrompt(ts);
+  drawTutorialSerumPrompt(ts);
+
+  // 튜토리얼 비네팅 — 미니게임보다 먼저 그려서 미니게임이 비네팅 위에 보이게 함
+  // (카메라 변환이 걸린 상태이므로 일시 해제하고 화면좌표로 그린 뒤 복귀)
+  if (TUT_VIGNETTE.active) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // 카메라 translate 일시 해제 — 화면 좌표계로
+    drawTutorialVignette();
+    ctx.restore();
+  }
+
   drawMinigame(ts);
   // END RESOURCE LAYER
 
@@ -4116,10 +4678,9 @@ function updateHUD() {
   // 남은 병원체 (회수 / 전체)
   const mineEl = document.getElementById('hud-mines');
   if (mineEl) {
-    const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
-    const total = CONFIG.stages[stageIdx].mineCount;
     let remaining = 0;
     for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remaining++;
+    const total = TUT_ACTIVE ? MAP.mineCount : CONFIG.stages[Math.min(player.stage, CONFIG.stages.length - 1)].mineCount;
     const collected = total - remaining;
     mineEl.textContent = `${collected}/${total}`;
     mineEl.style.color = remaining === 0 ? '#00ff88' : '#ff6644'; // 전부 회수 시 초록
@@ -4510,7 +5071,7 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
     if (!joystickWrap || !minigameDpad) return;
     const isMinigame   = minigame.active && minigame.type === 'mine';
     const isCombat     = minigame.active && minigame.type === 'combat';
-    const isChoice     = isCombat && minigame.serumChoice;
+    const isChoice     = (isCombat && minigame.serumChoice) || TUT_SERUM_PROMPT_ACTIVE; // 전투 중 강제선택 + 튜토리얼 평시 자율선택
     const isMoveLocked = minigame.active;  // 회수든 전투든 — 이동 불가 시 조이스틱 숨김
 
     // 조이스틱 — 이동 가능할 때만 표시 (전투 중에도 숨김, dpad는 회수에만)

@@ -241,27 +241,39 @@ body.mobile-ui #dev-toggle { display:none; }
 }
 #tutorial-intro-screen.show { display:flex; }
 #tutorial-intro-box {
-  font-family:'Courier New',monospace; font-size:1.3rem; color:#00cc66; text-align:left;
-  line-height:2.0; max-width:680px; width:92%; height:280px; border:1px solid #0a3a1a;
-  padding:28px 34px; background:rgba(0,10,0,0.85); white-space:pre-wrap;
+  position:relative; font-family:'Courier New',monospace; font-size:1.05rem; color:#00cc66; text-align:left;
+  line-height:1.75; max-width:620px; width:90%; height:310px; border:1px solid #0a3a1a;
+  padding:22px 28px; background:rgba(0,10,0,0.85);
   overflow:hidden; box-sizing:border-box;
+  display:flex; flex-direction:column; justify-content:center;
 }
-#tutorial-intro-cursor { display:inline-block; width:10px; height:1.1em; background:#00cc66; animation:blink 0.8s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
-#tutorial-intro-hint { font-size:0.85rem; }
+#tutorial-intro-text { white-space:pre-wrap; }
+#tutorial-intro-cursor { display:inline-block; width:8px; height:1em; background:#00cc66; animation:blink 0.8s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
+#tutorial-intro-hint {
+  position:absolute; right:20px; bottom:14px; font-size:0.78rem; color:#2a5a3a;
+  letter-spacing:0.08em; animation:blink 1.1s step-end infinite;
+}
 
 /* ── 튜토리얼 하단 대화창 (인게임 위 오버레이) ── */
 #tutorial-box {
-  display:none; position:absolute; left:50%; bottom:3%; transform:translateX(-50%);
-  width:84%; max-width:620px; height:160px;
-  font-family:'Courier New',monospace; font-size:1.2rem; color:#00cc66; text-align:left;
-  line-height:1.6; border:1px solid #0a3a1a; border-radius:4px;
-  padding:14px 22px; background:rgba(0,10,0,0.88); white-space:pre-wrap;
+  display:none; position:absolute; left:50%; bottom:9%; transform:translateX(-50%);
+  width:80%; max-width:560px; min-height:74px; max-height:215px;
+  font-family:'Courier New',monospace; font-size:1.05rem; color:#00cc66; text-align:left;
+  line-height:1.55; border:1px solid #0a3a1a; border-radius:4px;
+  padding:12px 20px; background:rgba(0,10,0,0.88);
   z-index:30; box-shadow:0 0 24px rgba(0,0,0,0.6);
   overflow:hidden; box-sizing:border-box;
+  opacity:1; transition:opacity 0.26s ease;
+  flex-direction:column; justify-content:center;
 }
-#tutorial-box.show { display:block; }
-#tutorial-cursor { display:inline-block; width:10px; height:1.1em; background:#00cc66; animation:blink 0.8s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
-#tutorial-hint { font-size:0.85rem; color:#2a5a3a; margin-top:8px; letter-spacing:0.08em; }
+#tutorial-box.show { display:flex; }
+#tutorial-box.fade-out { opacity:0; }
+#tutorial-text { white-space:pre-wrap; }
+#tutorial-cursor { display:inline-block; width:8px; height:1em; background:#00cc66; animation:blink 0.8s step-end infinite; vertical-align:text-bottom; margin-left:2px; }
+#tutorial-hint {
+  position:absolute; right:18px; bottom:10px; font-size:0.78rem; color:#2a5a3a;
+  letter-spacing:0.08em; animation:blink 1.1s step-end infinite;
+}
 
 /* ── 엔딩 ── */
 #ending-screen { display:none; position:absolute; inset:0; background:#000; flex-direction:column; align-items:center; justify-content:center; z-index:25; overflow:hidden; }
@@ -509,8 +521,8 @@ body.mobile-ui #mobile-pause {
 
         <!-- 튜토리얼 대화창 (인게임 위 오버레이) -->
         <div id="tutorial-box">
-          <span id="tutorial-text"></span><span id="tutorial-cursor"></span>
-          <div id="tutorial-hint" style="display:none;">[ F / Space — 다음 ]</div>
+          <div id="tutorial-text" style="white-space:pre-wrap;"><span id="tutorial-cursor"></span></div>
+          <div id="tutorial-hint" style="display:none;">[ Space — 다음 ]</div>
         </div>
       </div>
 
@@ -581,8 +593,10 @@ body.mobile-ui #mobile-pause {
 
     <!-- 튜토리얼 인트로 (풀스크린 암전 — 세계관 설명) -->
     <div id="tutorial-intro-screen">
-      <div id="tutorial-intro-box"><span id="tutorial-intro-text"></span><span id="tutorial-intro-cursor"></span></div>
-      <div id="tutorial-intro-hint" style="font-size:0.75rem;color:#2a5a3a;margin-top:10px;letter-spacing:0.1em;">[ F / Space — 다음 ]</div>
+      <div id="tutorial-intro-box">
+        <div id="tutorial-intro-text" style="white-space:pre-wrap;"><span id="tutorial-intro-cursor"></span></div>
+        <div id="tutorial-intro-hint">[ Space — 다음 ]</div>
+      </div>
     </div>
 
     <canvas id="canvas" tabindex="0"></canvas>
