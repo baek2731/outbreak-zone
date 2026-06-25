@@ -734,8 +734,8 @@ function drawMinigameContent(wx, wy, ts) {
     ctx.fillText('< F 연타 >', wx, gy + gh / 2);
     ctx.restore();
 
-    // ── 치료제 선택지 오버레이 ──────────────────────────────
-    if (minigame.serumChoice) {
+    // ── 치료제 선택지 오버레이 (본게임 전용 — 튜토리얼은 화면 정중앙 오버레이가 전담) ──
+    if (minigame.serumChoice && !TUT_ACTIVE) {
       const z        = minigame.combatZombie;
       const faction  = z ? z.faction : null;
       const identified = z ? z.identified : false;
@@ -829,8 +829,8 @@ function drawMinePrompt(ts) {
 function drawTutorialSerumPrompt(ts) {
   if (!TUT_ACTIVE) return;
   if (TUT_STEP !== 'serum_prompt' && TUT_STEP !== 'serum_use_wait') return;
-  // 모바일은 하단에 별도의 터치 Y/N 버튼이 이미 떠 있어 중복/겹침이 생기므로 이 단계만 캔버스 힌트 숨김
-  if (_touchControlsActive && TUT_STEP === 'serum_prompt') return;
+  // serum_prompt(Y/N) 단계는 화면 정중앙 오버레이가 전담 — 캔버스 힌트 불필요(PC/모바일 공통)
+  if (TUT_STEP === 'serum_prompt') return;
 
   const wx = player.px + ts / 2;
   const wy = player.py - ts * 0.3;
@@ -1659,8 +1659,8 @@ window.addEventListener('keydown', e => {
         minigame.combatGauge      = MG.combatChoiceGauge;  // 80에서 멈춤
         minigame.serumChoice      = true;
         minigame.serumChoiceTimer = TUT_ACTIVE ? TUT_SERUM_CHOICE_TIME : CONFIG.serum.choiceTime; // 튜토리얼은 결정할 여유를 더 줌
-        // 모바일에서 F연타가 빨라 "코드레드!" 안내 대화창이 아직 떠 있는 채로 80%에 도달할 수 있음 — 선택지 버튼과 겹치므로 닫음
-        if (_touchControlsActive) hideTutorialBox();
+        // 튜토리얼은 화면 정중앙 오버레이로 표시 (PC/모바일 공용) — 본게임은 기존 방식(캔버스+하단 터치) 유지
+        if (TUT_ACTIVE) showTutChoiceCenter('치료제 투여', '계속 싸우기');
         if (window._updateTouchUI) window._updateTouchUI();
         return;
       }
@@ -1690,6 +1690,7 @@ window.addEventListener('keydown', e => {
     if (minigame.active && minigame.type === 'combat' && minigame.serumChoice) {
       minigame.serumChoice  = false;
       minigame.serumChosen  = true;
+      hideTutChoiceCenter();
       if (window._updateTouchUI) window._updateTouchUI();
     }
     return;
@@ -1704,7 +1705,7 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (e.code === 'KeyG') {
-    if (TUT_ACTIVE && TUT_STEP !== 'precise_prompt') return; // 정밀소나는 습격 직후 연출 단계에서만 사용
+    if (TUT_ACTIVE && (TUT_STEP !== 'precise_prompt' || !TUT_PRECISE_READY)) return; // 정밀소나는 습격 직후 연출 단계 + 텍스트 타이핑 완료 후에만 사용
     if (!e.repeat && !sonar.chargingPrecise && sonar.precise > 0 && !player.dead && !minigame.active) {
       sonar.chargingPrecise = true; sonar.chargeTimePrecise = 0;
     }
@@ -1980,6 +1981,8 @@ function useSerumInCombat() {
   player.serum--;
   minigame.serumChoice = false;
   minigame.serumChosen = true;
+  hideTutChoiceCenter();
+  if (window._updateTouchUI) window._updateTouchUI();
 
   const z       = minigame.combatZombie;
   const faction = z.faction;
@@ -2279,6 +2282,7 @@ function updateMinigame(dt) {
         // 시간 초과 → N 선택과 동일 (계속 싸우기)
         minigame.serumChoice = false;
         minigame.serumChosen = true;
+        hideTutChoiceCenter();
         if (window._updateTouchUI) window._updateTouchUI();
       }
       return;
@@ -3000,6 +3004,7 @@ let TUT_FORCE_MASH_SHOWN = false; // 전투 중 F연타 강제안내 1회 표시
 let TUT_FREEZE_ZOMBIES = false;   // true면 좀비 AI 갱신 정지 (정밀소나 연출용 — 다가오면 안 됨)
 let TUT_SERUM_PROMPT_TIMER = 0;   // 치료제 선택(Y/N) 자동 타임아웃 — 0이면 비활성
 let TUT_SERUM_PROMPT_ACTIVE = false; // 평시 Y/N 선택지가 화면에 떠 있는 동안만 true — TUT_STEP과 별개로 모바일 터치 UI 노출 제어용 (N 선택 후 후속 대사 중엔 TUT_STEP은 그대로지만 선택지는 이미 닫혀야 함)
+let TUT_PRECISE_READY = false; // precise_prompt 텍스트 타이핑이 끝나야 true — 그 전엔 G키를 눌러도 무시(너무 빨리 지나가는 문제 방지)
 const TUT_COMBAT_TIME_MULT = 2.2; // 튜토리얼 전투 제한시간 배율 — 텍스트 읽을 여유 보장
 const TUT_COMBAT_PLAYER_POWER = 11; // 튜토리얼 전투 F연타당 게이지 증가량 — 드레인은 본게임 그대로 두고 이 값으로 "F 10번 안팎" 조정
 const TUT_SERUM_CHOICE_TIME = 7.0; // 튜토리얼 치료제 선택지(Y/N) 결정 시간 — 본게임 3초보다 충분히 여유있게
@@ -3125,6 +3130,8 @@ function startTutorial() {
   TUT_FORCE_MASH_SHOWN   = false;
   TUT_SERUM_PROMPT_TIMER = 0;
   TUT_SERUM_PROMPT_ACTIVE = false;
+  TUT_PRECISE_READY = false;
+  hideTutChoiceCenter();
   TUT_VIGNETTE.active = false;
   TUT_VIGNETTE.mode   = null;
   TUT_VIGNETTE.radius = 1;
@@ -3330,6 +3337,23 @@ function hideTutorialBox() {
   if (box) box.classList.remove('show', 'fade-out');
 }
 
+// ── 튜토리얼 전용 화면 정중앙 Y/N 선택 오버레이 ───────────────────
+function showTutChoiceCenter(yLabel, nLabel, subLabel) {
+  const el = document.getElementById('tut-choice-center');
+  if (!el) return;
+  const yEl = document.getElementById('tcc-y-label');
+  const nEl = document.getElementById('tcc-n-label');
+  const subEl = document.getElementById('tut-choice-sub');
+  if (yEl) yEl.textContent = yLabel;
+  if (nEl) nEl.textContent = nLabel;
+  if (subEl) subEl.textContent = subLabel || '';
+  el.classList.add('show');
+}
+function hideTutChoiceCenter() {
+  const el = document.getElementById('tut-choice-center');
+  if (el) el.classList.remove('show');
+}
+
 // ── 이동 거리 체크 — 매 onStep마다 호출 (moving 단계에서만 동작) ──
 function checkTutorialMoveProgress() {
   if (!TUT_ACTIVE) return;
@@ -3429,7 +3453,8 @@ function onTutorialAmbushResolved() {
       if (!TUT_ACTIVE || TUT_STEP !== 'aftermath') return; // 동일 가드 — 늦게 실행되는 경우 방지
       TUT_STEP = 'precise_prompt';
       TUT_LOCKED = false; // G키 입력을 받기 위해 잠금 해제 (이동은 별도 가드로 차단됨)
-      showTutorialLine(TUT_PRECISE_LINES, null, 'silent'); // G키로만 진행, 잘못된 힌트 노출 방지
+      TUT_PRECISE_READY = false; // 타이핑 끝나기 전엔 G키 무시 — 너무 빨리 지나가는 문제 방지
+      showTutorialLine(TUT_PRECISE_LINES, () => { TUT_PRECISE_READY = true; }, true);
     }, 2600);
   }, 700);
 }
@@ -3502,10 +3527,9 @@ function onTutorialSerumPromptStart() {
   showTutorialLine(TUT_SERUM_PROMPT_LINES, () => {
     TUT_SERUM_PROMPT_TIMER = 5.0; // 5초 내 미선택 시 자동 N 처리(update 루프에서 감소)
     TUT_SERUM_PROMPT_ACTIVE = true;
-    // 모바일은 터치 Y/N 버튼이 대화창과 같은 화면 하단 영역에 겹쳐 텍스트를 가리는 문제가 있어,
-    // 텍스트를 다 보여준 뒤 대화창을 닫고 선택지만 표시. PC는 대화창 텍스트 자체가 안내문 역할을 하므로 그대로 유지.
-    if (_touchControlsActive) hideTutorialBox();
-    if (window._updateTouchUI) window._updateTouchUI(); // 모바일 Y/N 버튼 노출
+    // 대화창은 그대로 유지 — 화면 정중앙에 Y/N 오버레이를 별도로 띄워서 안 겹치게 함 (PC/모바일 공용)
+    showTutChoiceCenter('사용한다', '아껴둔다');
+    if (window._updateTouchUI) window._updateTouchUI();
   }, true); // 타이핑이 끝나면 별도 Space 확인 없이 즉시 Y/N 선택 가능 — 5초 타임아웃도 이 시점부터 시작
 }
 
@@ -3514,6 +3538,7 @@ function onTutorialSerumChoice(useIt) {
   if (!TUT_ACTIVE || TUT_STEP !== 'serum_prompt' || !TUT_SERUM_PROMPT_ACTIVE) return; // 이미 선택 완료된 후 재입력(중복 호출) 방지
   TUT_SERUM_PROMPT_TIMER = 0;
   TUT_SERUM_PROMPT_ACTIVE = false; // 선택 즉시 닫힘 — 이후 후속 대사 중엔 TUT_STEP이 같아도 버튼이 다시 뜨지 않음
+  hideTutChoiceCenter();
   if (window._updateTouchUI) window._updateTouchUI();
   if (useIt) {
     TUT_STEP = 'serum_use_wait';
@@ -5128,17 +5153,21 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
     if (!joystickWrap || !minigameDpad) return;
     const isMinigame   = minigame.active && minigame.type === 'mine';
     const isCombat     = minigame.active && minigame.type === 'combat';
-    const isChoice     = (isCombat && minigame.serumChoice) || TUT_SERUM_PROMPT_ACTIVE; // 전투 중 강제선택 + 튜토리얼 평시 자율선택
+    // 본게임 전투 선택지 — 화면 하단 터치 버튼 사용 (스크립트가 없어 하단도 안 겹침)
+    const isMainChoice = isCombat && minigame.serumChoice && !TUT_ACTIVE;
+    // 튜토리얼 선택지(평시 Y/N + 전투 강제선택) — 화면 정중앙 오버레이를 따로 사용, 여기선 액션버튼 숨김 용도로만 참조
+    const isTutChoice  = TUT_ACTIVE && (TUT_SERUM_PROMPT_ACTIVE || (isCombat && minigame.serumChoice));
+    const isChoice     = isMainChoice || isTutChoice;
     const isMoveLocked = minigame.active;  // 회수든 전투든 — 이동 불가 시 조이스틱 숨김
 
     // 조이스틱 — 이동 가능할 때만 표시 (전투 중에도 숨김, dpad는 회수에만)
     joystickWrap.style.display  = isMoveLocked ? 'none' : '';
     minigameDpad.classList.toggle('show', isMinigame);
 
-    // 미니게임(회수) 중엔 액션버튼 숨김 — dpad 입력과 오조작 방지
+    // 미니게임(회수) 중엔 액션버튼 숨김 — dpad 입력과 오조작 방지. 선택지 표시 중에도 오조작 방지로 숨김
     const actionBtnsEl = document.getElementById('action-btns');
-    if (actionBtnsEl && !isChoice) {
-      actionBtnsEl.style.display = isMinigame ? 'none' : '';
+    if (actionBtnsEl && !isMainChoice) {
+      actionBtnsEl.style.display = (isMinigame || isTutChoice) ? 'none' : '';
     }
 
     // 전투 중엔 G/E 숨김 — F(연타)만 유효한 입력
@@ -5151,17 +5180,17 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
     const dBtn = document.getElementById('touch-d');
     if (dBtn) dBtn.style.display = (player.serum > 0 && !minigame.active) ? '' : 'none';
 
-    // 전투 선택지 Y/N 버튼 — action-btns 전체 숨기고 중앙 Y/N 표시
+    // 본게임 전투 선택지 Y/N 버튼 — action-btns 전체 숨기고 하단 중앙 Y/N 표시 (튜토리얼은 화면 정중앙 오버레이를 따로 사용)
     const choiceEl = document.getElementById('touch-serum-choice');
     const actionBtns = document.getElementById('action-btns');
     if (choiceEl) {
-      if (isChoice) {
+      if (isMainChoice) {
         choiceEl.classList.add('show');
         if (actionBtns) actionBtns.style.display = 'none';
       } else {
         choiceEl.classList.remove('show');
-        // 미니게임 중이 아닐 때만 복원 (위에서 이미 처리)
-        if (actionBtns && !isMinigame) actionBtns.style.display = '';
+        // 미니게임/튜토리얼 선택지 중이 아닐 때만 복원 (위에서 이미 처리)
+        if (actionBtns && !isMinigame && !isTutChoice) actionBtns.style.display = '';
       }
     }
   };
@@ -5220,6 +5249,24 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
   if (introEl) {
     introEl.addEventListener('touchstart', (e) => { e.preventDefault(); tutorialAdvanceKey(); }, { passive: false });
     introEl.addEventListener('click', tutorialAdvanceKey);
+  }
+}
+
+// ── 튜토리얼 중앙 Y/N 오버레이 버튼 — 클릭/탭 시 실제 Y/N 키 입력과 동일하게 처리 ──
+// 기존 키보드 Y/N 핸들러(평시 선택/전투 선택 모두)를 그대로 재사용 — 가상 keydown 이벤트만 디스패치
+{
+  const fireYN = (code) => window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true, cancelable: true }));
+  const yBtn = document.getElementById('tcc-y-btn');
+  const nBtn = document.getElementById('tcc-n-btn');
+  if (yBtn) {
+    yBtn.addEventListener('touchstart', (e) => { e.preventDefault(); yBtn.classList.add('pressed'); fireYN('KeyY'); }, { passive: false });
+    yBtn.addEventListener('touchend',   (e) => { e.preventDefault(); yBtn.classList.remove('pressed'); }, { passive: false });
+    yBtn.addEventListener('click', () => fireYN('KeyY'));
+  }
+  if (nBtn) {
+    nBtn.addEventListener('touchstart', (e) => { e.preventDefault(); nBtn.classList.add('pressed'); fireYN('KeyN'); }, { passive: false });
+    nBtn.addEventListener('touchend',   (e) => { e.preventDefault(); nBtn.classList.remove('pressed'); }, { passive: false });
+    nBtn.addEventListener('click', () => fireYN('KeyN'));
   }
 }
 
