@@ -256,7 +256,7 @@ body.mobile-ui #dev-toggle { display:none; }
 
 /* ── 튜토리얼 하단 대화창 (인게임 위 오버레이) ── */
 #tutorial-box {
-  display:none; position:absolute; left:50%; bottom:9%; transform:translateX(-50%);
+  display:none; position:absolute; left:50%; bottom:calc(9% + 20px); transform:translateX(-50%);
   width:80%; max-width:560px; min-height:74px; max-height:215px;
   font-family:'Courier New',monospace; font-size:1.05rem; color:#00cc66; text-align:left;
   line-height:1.55; border:1px solid #0a3a1a; border-radius:4px;
@@ -282,23 +282,29 @@ body.mobile-ui #tutorial-box {
 /* ── 튜토리얼 전용 — 화면 정중앙 Y/N 선택 오버레이 ── */
 #tut-choice-center {
   display:none; position:absolute; left:50%; top:46%; transform:translate(-50%,-50%);
-  z-index:35; flex-direction:column; align-items:center; gap:10px;
+  z-index:35;
 }
 #tut-choice-center.show { display:flex; }
-#tut-choice-sub { font-family:'Courier New',monospace; font-size:0.85rem; color:#aaaaaa; letter-spacing:0.05em; text-shadow:0 1px 4px rgba(0,0,0,0.9); }
+#tcc-panel {
+  display:flex; flex-direction:column; align-items:center; gap:16px;
+  background:rgba(8,4,16,0.94); border:1px solid #5a2a7a; border-radius:12px;
+  padding:22px 32px 18px; box-shadow:0 10px 36px rgba(0,0,0,0.65);
+}
+#tut-choice-sub { font-family:'Courier New',monospace; font-size:0.9rem; color:#cccccc; letter-spacing:0.05em; }
 .tcc-row { display:flex; gap:24px; }
 .tcc-btn {
   display:flex; flex-direction:column; align-items:center; gap:5px;
   width:140px; padding:14px 10px; border-radius:10px; cursor:pointer;
-  background:rgba(10,5,20,0.92); border:2px solid #bb44ff; color:#eeeeee;
+  background:rgba(255,255,255,0.04); border:2px solid #bb44ff; color:#eeeeee;
   font-family:'Courier New',monospace; user-select:none; touch-action:none;
-  box-shadow:0 4px 18px rgba(0,0,0,0.5);
 }
 .tcc-btn.tcc-n { border-color:#666; }
 .tcc-btn:active, .tcc-btn.pressed { background:rgba(0,255,136,0.18); }
 .tcc-key { font-size:1.4rem; font-weight:bold; color:#bb44ff; }
 .tcc-btn.tcc-n .tcc-key { color:#aaaaaa; }
 .tcc-label { font-size:0.85rem; }
+#tcc-timer-track { width:100%; height:5px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden; }
+#tcc-timer-fill { height:100%; width:100%; background:#bb44ff; transition:width 0.08s linear; }
 
 /* ── 엔딩 ── */
 #ending-screen { display:none; position:absolute; inset:0; background:#000; flex-direction:column; align-items:center; justify-content:center; z-index:25; overflow:hidden; }
@@ -552,10 +558,13 @@ body.mobile-ui #mobile-pause {
 
         <!-- 튜토리얼 전용 — 화면 정중앙 Y/N 선택 오버레이 (PC 클릭/모바일 탭/키보드 Y·N 모두 지원) -->
         <div id="tut-choice-center">
-          <div id="tut-choice-sub"></div>
-          <div class="tcc-row">
-            <button class="tcc-btn tcc-y" id="tcc-y-btn"><span class="tcc-key">Y</span><span class="tcc-label" id="tcc-y-label"></span></button>
-            <button class="tcc-btn tcc-n" id="tcc-n-btn"><span class="tcc-key">N</span><span class="tcc-label" id="tcc-n-label"></span></button>
+          <div id="tcc-panel">
+            <div id="tut-choice-sub"></div>
+            <div class="tcc-row">
+              <button class="tcc-btn tcc-y" id="tcc-y-btn"><span class="tcc-key">Y</span><span class="tcc-label" id="tcc-y-label"></span></button>
+              <button class="tcc-btn tcc-n" id="tcc-n-btn"><span class="tcc-key">N</span><span class="tcc-label" id="tcc-n-label"></span></button>
+            </div>
+            <div id="tcc-timer-track"><div id="tcc-timer-fill"></div></div>
           </div>
         </div>
       </div>

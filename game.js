@@ -2278,6 +2278,10 @@ function updateMinigame(dt) {
     // 치료제 선택지 표시 중 — 게이지 감소/타임아웃 정지
     if (minigame.serumChoice) {
       minigame.serumChoiceTimer -= dt;
+      if (TUT_ACTIVE) {
+        const choiceTotal = TUT_SERUM_CHOICE_TIME;
+        updateTutChoiceTimerBar(minigame.serumChoiceTimer / choiceTotal);
+      }
       if (minigame.serumChoiceTimer <= 0) {
         // 시간 초과 → N 선택과 동일 (계속 싸우기)
         minigame.serumChoice = false;
@@ -3344,14 +3348,21 @@ function showTutChoiceCenter(yLabel, nLabel, subLabel) {
   const yEl = document.getElementById('tcc-y-label');
   const nEl = document.getElementById('tcc-n-label');
   const subEl = document.getElementById('tut-choice-sub');
+  const fillEl = document.getElementById('tcc-timer-fill');
   if (yEl) yEl.textContent = yLabel;
   if (nEl) nEl.textContent = nLabel;
   if (subEl) subEl.textContent = subLabel || '';
+  if (fillEl) fillEl.style.width = '100%'; // 표시 시점에 가득 채운 상태로 초기화
   el.classList.add('show');
 }
 function hideTutChoiceCenter() {
   const el = document.getElementById('tut-choice-center');
   if (el) el.classList.remove('show');
+}
+// 남은 시간 비율(0~1)에 맞춰 중앙 오버레이의 시간 게이지 바 갱신
+function updateTutChoiceTimerBar(ratio) {
+  const fillEl = document.getElementById('tcc-timer-fill');
+  if (fillEl) fillEl.style.width = `${Math.max(0, Math.min(1, ratio)) * 100}%`;
 }
 
 // ── 이동 거리 체크 — 매 onStep마다 호출 (moving 단계에서만 동작) ──
@@ -4472,6 +4483,7 @@ function update(dt) {
   updateTutorialVignette(dt);
   if (TUT_SERUM_PROMPT_TIMER > 0) {
     TUT_SERUM_PROMPT_TIMER -= dt;
+    updateTutChoiceTimerBar(TUT_SERUM_PROMPT_TIMER / 5.0);
     if (TUT_SERUM_PROMPT_TIMER <= 0) {
       TUT_SERUM_PROMPT_TIMER = 0;
       onTutorialSerumChoice(false); // 시간 초과 → N(보류) 처리
