@@ -739,22 +739,6 @@ function drawMinigameContent(wx, wy, ts) {
       const z        = minigame.combatZombie;
       const faction  = z ? z.faction : null;
       const identified = z ? z.identified : false;
-
-      // 배경 박스 (더 넓게)
-      const cw = 160, ch = 62;
-      const cx2 = wx - cw / 2, cy2 = by - ch - 6;
-      ctx.save();
-      ctx.globalAlpha = 0.95;
-      ctx.fillStyle   = '#0d0d1a';
-      ctx.strokeStyle = '#bb44ff';
-      ctx.lineWidth   = 1.5;
-      roundRect(ctx, cx2, cy2, cw, ch, 5);
-      ctx.fill(); ctx.stroke();
-
-      // 식별 상태 텍스트
-      ctx.globalAlpha = 1;
-      ctx.textAlign   = 'center';
-      ctx.font        = `bold ${ts * 0.16}px monospace`;
       let identLabel, identCol;
       if (!identified) {
         identLabel = '정체 불명'; identCol = '#aaaaaa';
@@ -763,24 +747,61 @@ function drawMinigameContent(wx, wy, ts) {
       } else {
         identLabel = '크리쳐 확인됨'; identCol = '#ff4444';
       }
-      ctx.fillStyle = identCol;
-      ctx.fillText(identLabel, wx, cy2 + 12);
 
-      // Y/N 버튼
-      ctx.font      = `bold ${ts * 0.17}px monospace`;
-      ctx.fillStyle = '#bb44ff';
-      ctx.fillText('[Y] 치료제 투여', wx, cy2 + 30);
-      ctx.fillStyle = '#888888';
-      ctx.fillText('[N] 계속 싸우기', wx, cy2 + 46);
+      if (_touchControlsActive) {
+        // 모바일 — Y/N은 하단 터치 버튼(#touch-serum-choice)이 전담. 캔버스에는 식별 정보만 작게 표시해
+        // 화면 하단의 터치 버튼과 겹치지 않게 함 (기존엔 Y/N 텍스트까지 포함된 큰 박스가 플레이어 위치에 따라 겹쳤음)
+        const cw = 150, ch = 28;
+        const cx2 = wx - cw / 2, cy2 = by - ch - 6;
+        ctx.save();
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle   = '#0d0d1a';
+        ctx.strokeStyle = '#bb44ff';
+        ctx.lineWidth   = 1.5;
+        roundRect(ctx, cx2, cy2, cw, ch, 5);
+        ctx.fill(); ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.textAlign   = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font        = `bold ${ts * 0.16}px monospace`;
+        ctx.fillStyle   = identCol;
+        ctx.fillText(identLabel, wx, cy2 + ch / 2 + 1);
+        ctx.restore();
+      } else {
+        // 배경 박스 (더 넓게)
+        const cw = 160, ch = 62;
+        const cx2 = wx - cw / 2, cy2 = by - ch - 6;
+        ctx.save();
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle   = '#0d0d1a';
+        ctx.strokeStyle = '#bb44ff';
+        ctx.lineWidth   = 1.5;
+        roundRect(ctx, cx2, cy2, cw, ch, 5);
+        ctx.fill(); ctx.stroke();
 
-      // 남은 시간 바
-      const choiceTotal = TUT_ACTIVE ? TUT_SERUM_CHOICE_TIME : CONFIG.serum.choiceTime;
-      const tr = minigame.serumChoiceTimer / choiceTotal;
-      ctx.fillStyle = '#bb44ff';
-      ctx.globalAlpha = 0.4;
-      ctx.fillRect(cx2 + 4, cy2 + ch - 4, (cw - 8) * tr, 3);
+        // 식별 상태 텍스트
+        ctx.globalAlpha = 1;
+        ctx.textAlign   = 'center';
+        ctx.font        = `bold ${ts * 0.16}px monospace`;
+        ctx.fillStyle = identCol;
+        ctx.fillText(identLabel, wx, cy2 + 12);
 
-      ctx.restore();
+        // Y/N 버튼
+        ctx.font      = `bold ${ts * 0.17}px monospace`;
+        ctx.fillStyle = '#bb44ff';
+        ctx.fillText('[Y] 치료제 투여', wx, cy2 + 30);
+        ctx.fillStyle = '#888888';
+        ctx.fillText('[N] 계속 싸우기', wx, cy2 + 46);
+
+        // 남은 시간 바
+        const choiceTotal = TUT_ACTIVE ? TUT_SERUM_CHOICE_TIME : CONFIG.serum.choiceTime;
+        const tr = minigame.serumChoiceTimer / choiceTotal;
+        ctx.fillStyle = '#bb44ff';
+        ctx.globalAlpha = 0.4;
+        ctx.fillRect(cx2 + 4, cy2 + ch - 4, (cw - 8) * tr, 3);
+
+        ctx.restore();
+      }
     }
   }
 
@@ -1638,6 +1659,8 @@ window.addEventListener('keydown', e => {
         minigame.combatGauge      = MG.combatChoiceGauge;  // 80에서 멈춤
         minigame.serumChoice      = true;
         minigame.serumChoiceTimer = TUT_ACTIVE ? TUT_SERUM_CHOICE_TIME : CONFIG.serum.choiceTime; // 튜토리얼은 결정할 여유를 더 줌
+        // 모바일에서 F연타가 빨라 "코드레드!" 안내 대화창이 아직 떠 있는 채로 80%에 도달할 수 있음 — 선택지 버튼과 겹치므로 닫음
+        if (_touchControlsActive) hideTutorialBox();
         if (window._updateTouchUI) window._updateTouchUI();
         return;
       }
