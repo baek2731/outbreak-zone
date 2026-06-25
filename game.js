@@ -10,6 +10,13 @@
 // ── 타일 타입 ────────────────────────────────────────────────────
 const T = { WALL:0, FLOOR:1, MINE:2, ITEM:3, EXIT:4 };
 
+// ── DEV 모드 진입 — ?dev=1 파라미터로 모바일에서도 DEV 패널 노출 ──
+// 평소 배포 주소(파라미터 없음)로 접근하면 PC/모바일 모두 기존과 동일하게 DEV 패널 숨김.
+// 테스트 시에만 URL 끝에 ?dev=1을 붙여서 접근 — CSS는 index.html의 `body.mobile-ui.dev-mode #dev-toggle`에서 처리.
+if (new URLSearchParams(location.search).get('dev') === '1') {
+  document.body.classList.add('dev-mode');
+}
+
 // ── 방향 배열 상수 ───────────────────────────────────────────────
 const DIR4  = [[0,-1],[1,0],[0,1],[-1,0]];
 const DMAZE = [[0,-2],[2,0],[0,2],[-2,0]];
@@ -5209,6 +5216,15 @@ document.getElementById('d-clearrecords').addEventListener('click', () => {
   localStorage.removeItem(FALLEN_KEY);
   ensureUnit00Fallen();                  // 즉시 등록 — 튜토리얼 재플레이 없이 바로 본게임 테스트용
   devLog('수집 기록 초기화 — UNIT-01부터 시작 / UNIT-00 전사자 풀 등록됨 (튜토리얼 우회)', 'warn');
+});
+
+// DEV — 튜토리얼 재실행 (모바일 전용 ?dev=1 접근 시 콘솔 명령 대체용)
+// 기존 콘솔 워크플로우(localStorage.removeItem('outbreak_unit_number') 후 Ctrl+Shift+R)와 동일한 동작을 버튼으로 제공.
+// startTutorial()을 세션 중간에 직접 호출하지 않고 새로고침으로 처리 — 이미 검증된 정상 진입 경로(페이지 로드 시 getCurrentUnit()===0 체크)를 그대로 타게 해서
+// GAME_STATE 등 다른 상태와 충돌할 위험을 없앰.
+document.getElementById('d-replay-tutorial').addEventListener('click', () => {
+  localStorage.removeItem(UNIT_KEY); // 유닛 번호만 제거 — 기록/DNA/전사자풀 등 다른 데이터는 보존
+  location.reload();
 });
 
 // DEV — 기지 UI 폰트 크기 조절
