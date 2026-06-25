@@ -1664,6 +1664,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'KeyG') {
     if (TUT_ACTIVE && (TUT_STEP !== 'precise_prompt' || !TUT_PRECISE_READY)) return; // 정밀소나는 습격 직후 연출 단계 + 텍스트 타이핑 완료 후에만 사용
     if (!e.repeat && !sonar.chargingPrecise && sonar.precise > 0 && !player.dead && !minigame.active) {
+      if (TUT_ACTIVE) hideTutorialBox(); // G를 누르는 순간 즉시 대화창 닫기 — 충전 중에도 화면을 가리지 않게
       sonar.chargingPrecise = true; sonar.chargeTimePrecise = 0;
     }
     return;
@@ -3448,14 +3449,11 @@ function spawnTutorialPreciseZombies() {
   }
   if (candidates.length === 0) candidates.push({ tx: player.tx, ty: player.ty });
 
-  // 같은 타일에 여러 마리가 배정돼도 픽셀 단위로 살짝씩 흩어줘서 '겹쳐서 바글거리는' 모습을 만듦
-  // (AI 동결 상태라 충돌/이동 로직과 무관 — 순수 시각 효과)
-  const types = ['BASIC','BASIC','BASIC','SENSOR','STALKER','RUSHER','GUARD','BASIC','BASIC','SENSOR'];
-  const count = 10; // 겹침을 허용하니 칸 수 제약 없이 늘려서 밀도를 높임
+  // 일반 좀비(BASIC)로만 채움 — 색이 섞이니 오히려 정신없다는 피드백으로 단일 타입으로 통일
+  const count = 20; // 겹침을 허용하니 칸 수 제약 없이 늘려서 밀도를 높임
   for (let i = 0; i < count; i++) {
     const c = candidates[Math.floor(Math.random() * candidates.length)];
-    const type = types[i % types.length];
-    const z = makeZombieObj(c.tx, c.ty, ts, type, 'CREATURE');
+    const z = makeZombieObj(c.tx, c.ty, ts, 'BASIC', 'CREATURE');
     z.px += (Math.random() - 0.5) * ts * 0.45;
     z.py += (Math.random() - 0.5) * ts * 0.45;
     z.state = 'WANDER';
