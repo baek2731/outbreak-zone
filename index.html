@@ -216,8 +216,9 @@ body.mobile-ui #dev-toggle { display:none; }
 
 /* ── 오버레이 공통 ── */
 .overlay { display:none; position:absolute; inset:0; background:rgba(0,0,0,0.88); flex-direction:column; align-items:center; justify-content:center; gap:20px; z-index:20; }
-/* 스테이지 대기 화면만 완전 블랙 — 캔버스가 비쳐 보이지 않게(다른 오버레이는 기존 반투명 유지) */
-#stage-intro { background:#000; }
+/* 스테이지 대기 화면만 완전 블랙 — 캔버스가 비쳐 보이지 않게(다른 오버레이는 기존 반투명 유지)
+   z-index도 origin-flash(22) 등 다른 모든 인게임 오버레이보다 높게 — 화이트플래시 잔여물이 위에 그려지는 문제 방지 */
+#stage-intro { background:#000; z-index:40; }
 .overlay.show { display:flex; }
 .ov-title { font-size:2.0rem; font-weight:bold; letter-spacing:0.25em; }
 .ov-title.red   { color:#ff3333; text-shadow:0 0 20px #ff3333; }

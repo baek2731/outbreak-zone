@@ -1631,13 +1631,7 @@ window.addEventListener('keydown', e => {
   // Y — 치료제 투여
   if (e.code === 'KeyY') {
     if (TUT_ACTIVE && TUT_STEP === 'serum_prompt') { onTutorialSerumChoice(true); return; }
-    if (PLAYER_SERUM_CONFIRM_ACTIVE) {
-      PLAYER_SERUM_CONFIRM_ACTIVE = false;
-      hideTutChoiceCenter();
-      if (window._updateTouchUI) window._updateTouchUI();
-      useSerumSelf();
-      return;
-    }
+    confirmLastSerumUse();
     if (minigame.active && minigame.type === 'combat' && minigame.serumChoice && !minigame.result) {
       useSerumInCombat();
     }
@@ -1646,18 +1640,8 @@ window.addEventListener('keydown', e => {
   // N — 계속 싸우기 (선택지 닫기) / 튜토리얼 평시에는 치료제 보류
   if (e.code === 'KeyN') {
     if (TUT_ACTIVE && TUT_STEP === 'serum_prompt') { onTutorialSerumChoice(false); return; }
-    if (PLAYER_SERUM_CONFIRM_ACTIVE) {
-      PLAYER_SERUM_CONFIRM_ACTIVE = false;
-      hideTutChoiceCenter();
-      if (window._updateTouchUI) window._updateTouchUI();
-      return;
-    }
-    if (minigame.active && minigame.type === 'combat' && minigame.serumChoice) {
-      minigame.serumChoice  = false;
-      minigame.serumChosen  = true;
-      hideTutChoiceCenter();
-      if (window._updateTouchUI) window._updateTouchUI();
-    }
+    cancelLastSerumUse();
+    declineSerumInCombat();
     return;
   }
   // D — 자가 치료제 사용 (전투 외) — 마지막 1개일 땐 화면 중앙에서 한 번 더 확인
@@ -1943,6 +1927,42 @@ function useSerumSelf() {
   addPopup(`치료제 잔여 ${player.serum}개`, '#888888', 0.2);
   updateSerumHUD();
   devLog(`치료제 자가 사용 — 감염 -${heal}% (잔여 ${player.serum}개)`, 'good');
+}
+
+// 전투 중 N(계속 싸우기) — 키보드/터치 버튼 공용
+function declineSerumInCombat() {
+  if (!(minigame.active && minigame.type === 'combat' && minigame.serumChoice)) return;
+  minigame.serumChoice = false;
+  minigame.serumChosen = true;
+  hideTutChoiceCenter();
+  if (window._updateTouchUI) window._updateTouchUI();
+}
+
+// 본게임 — 마지막 1개 치료제 사용 확인 Y/N — 키보드/터치 버튼 공용
+function confirmLastSerumUse() {
+  if (!PLAYER_SERUM_CONFIRM_ACTIVE) return;
+  PLAYER_SERUM_CONFIRM_ACTIVE = false;
+  hideTutChoiceCenter();
+  if (window._updateTouchUI) window._updateTouchUI();
+  useSerumSelf();
+}
+function cancelLastSerumUse() {
+  if (!PLAYER_SERUM_CONFIRM_ACTIVE) return;
+  PLAYER_SERUM_CONFIRM_ACTIVE = false;
+  hideTutChoiceCenter();
+  if (window._updateTouchUI) window._updateTouchUI();
+}
+
+// 평시/전투/마지막치료제 Y/N 선택을 한 번에 처리 — 중앙 패널 버튼이 직접 호출(키보드 dispatch 우회)
+function handleChoiceY() {
+  if (TUT_ACTIVE && TUT_STEP === 'serum_prompt') { onTutorialSerumChoice(true); return; }
+  confirmLastSerumUse();
+  if (minigame.active && minigame.type === 'combat' && minigame.serumChoice && !minigame.result) useSerumInCombat();
+}
+function handleChoiceN() {
+  if (TUT_ACTIVE && TUT_STEP === 'serum_prompt') { onTutorialSerumChoice(false); return; }
+  cancelLastSerumUse();
+  declineSerumInCombat();
 }
 
 function useSerumInCombat() {
@@ -3674,6 +3694,11 @@ function startGame() {
 // ── 스테이지 인트로 ──────────────────────────────────────────────
 function showStageIntro() {
   GAME_STATE = 'INTRO';
+  // 화이트플래시/감염플래시가 z-index상 위에 그려질 수 있어 잔여 투명도를 강제로 0으로 — 인트로 카드를 가리지 않게
+  const originFlash = document.getElementById('origin-flash');
+  if (originFlash) { originFlash.style.transition = 'none'; originFlash.style.opacity = '0'; }
+  const infectFlash = document.getElementById('infect-flash');
+  if (infectFlash) { infectFlash.style.transition = 'none'; infectFlash.style.opacity = '0'; }
   const s = Math.min(player.stage, CONFIG.stages.length - 1);
   const st = CONFIG.stages[s];
   document.getElementById('intro-stage').textContent    = `STAGE ${s + 1}`;
@@ -5243,28 +5268,6 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
     }, { passive: false });
   }
 
-  // ── Y/N 버튼 (전투 치료제 선택지) ────────────────────────────
-  const yBtn = document.getElementById('touch-y');
-  const nBtn = document.getElementById('touch-n');
-  if (yBtn) {
-    yBtn.addEventListener('touchstart', (e) => {
-      e.preventDefault(); yBtn.classList.add('pressed'); fireKey('KeyY', 'keydown');
-    }, { passive: false });
-    yBtn.addEventListener('touchend', (e) => {
-      e.preventDefault(); yBtn.classList.remove('pressed');
-      if (window._updateTouchUI) window._updateTouchUI();
-    }, { passive: false });
-  }
-  if (nBtn) {
-    nBtn.addEventListener('touchstart', (e) => {
-      e.preventDefault(); nBtn.classList.add('pressed'); fireKey('KeyN', 'keydown');
-    }, { passive: false });
-    nBtn.addEventListener('touchend', (e) => {
-      e.preventDefault(); nBtn.classList.remove('pressed');
-      if (window._updateTouchUI) window._updateTouchUI();
-    }, { passive: false });
-  }
-
   // ── 액션 버튼 (F/E/G) ─────────────────────────────────────────
   Object.entries(ACTION_MAP).forEach(([id, code]) => {
     const btn = document.getElementById(id);
@@ -5288,21 +5291,21 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
   }
 }
 
-// ── 튜토리얼 중앙 Y/N 오버레이 버튼 — 클릭/탭 시 실제 Y/N 키 입력과 동일하게 처리 ──
-// 기존 키보드 Y/N 핸들러(평시 선택/전투 선택 모두)를 그대로 재사용 — 가상 keydown 이벤트만 디스패치
+// ── 튜토리얼 중앙 Y/N 오버레이 버튼 — 클릭/탭 시 해당 로직을 직접 호출 ──
+// (가상 keydown 디스패치 방식 대신 handleChoiceY/N을 직접 불러서, 키보드 이벤트 경로의
+// 어떤 게이트/타이밍 이슈와도 무관하게 동작하도록 함 — 모바일 Y/N 무반응 문제 대응)
 {
-  const fireYN = (code) => window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true, cancelable: true }));
   const yBtn = document.getElementById('tcc-y-btn');
   const nBtn = document.getElementById('tcc-n-btn');
   if (yBtn) {
-    yBtn.addEventListener('touchstart', (e) => { e.preventDefault(); yBtn.classList.add('pressed'); fireYN('KeyY'); }, { passive: false });
+    yBtn.addEventListener('touchstart', (e) => { e.preventDefault(); yBtn.classList.add('pressed'); handleChoiceY(); }, { passive: false });
     yBtn.addEventListener('touchend',   (e) => { e.preventDefault(); yBtn.classList.remove('pressed'); }, { passive: false });
-    yBtn.addEventListener('click', () => fireYN('KeyY'));
+    yBtn.addEventListener('click', handleChoiceY);
   }
   if (nBtn) {
-    nBtn.addEventListener('touchstart', (e) => { e.preventDefault(); nBtn.classList.add('pressed'); fireYN('KeyN'); }, { passive: false });
+    nBtn.addEventListener('touchstart', (e) => { e.preventDefault(); nBtn.classList.add('pressed'); handleChoiceN(); }, { passive: false });
     nBtn.addEventListener('touchend',   (e) => { e.preventDefault(); nBtn.classList.remove('pressed'); }, { passive: false });
-    nBtn.addEventListener('click', () => fireYN('KeyN'));
+    nBtn.addEventListener('click', handleChoiceN);
   }
 }
 
