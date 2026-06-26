@@ -216,6 +216,8 @@ body.mobile-ui #dev-toggle { display:none; }
 
 /* ── 오버레이 공통 ── */
 .overlay { display:none; position:absolute; inset:0; background:rgba(0,0,0,0.88); flex-direction:column; align-items:center; justify-content:center; gap:20px; z-index:20; }
+/* 스테이지 대기 화면만 완전 블랙 — 캔버스가 비쳐 보이지 않게(다른 오버레이는 기존 반투명 유지) */
+#stage-intro { background:#000; }
 .overlay.show { display:flex; }
 .ov-title { font-size:2.0rem; font-weight:bold; letter-spacing:0.25em; }
 .ov-title.red   { color:#ff3333; text-shadow:0 0 20px #ff3333; }
@@ -231,7 +233,9 @@ body.mobile-ui #dev-toggle { display:none; }
 .ov-btn.green:hover { background:rgba(0,255,136,0.1); }
 .ov-stage { font-size:1.2rem; color:#00ff88; letter-spacing:0.15em; margin-top:-8px; }
 .intro-location { font-size:1.05rem; color:#555; letter-spacing:0.2em; margin-top:-4px; margin-bottom:6px; }
-.intro-icon { font-size:1.3rem; width:26px; text-align:center; }
+.intro-stats { display:flex; flex-direction:column; gap:8px; }
+.intro-row { display:flex; align-items:center; gap:10px; }
+.intro-icon { font-size:1.3rem; width:26px; text-align:center; line-height:1; flex-shrink:0; }
 
 /* ── 튜토리얼 인트로 (풀스크린 암전 — 세계관 설명 전용) ── */
 #tutorial-intro-screen {

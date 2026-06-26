@@ -2919,14 +2919,30 @@ function renderMemorial(el) {
 }
 
 // ── 타이틀 화면 ──────────────────────────────────────────────────
-function showTitle() {
-  GAME_STATE = 'TITLE';
+// ── 튜토리얼/이전 런이 남긴 시각 상태를 한 번에 정리 ──────────────────
+// 종료·진입 경로마다 각자 따로 TUT_VIGNETTE/zombies/미니맵 등을 정리하다 보니
+// 경로 하나만 빠뜨려도 다음 화면에 잔여 상태가 새는 문제가 있었음 — 한 곳으로 통일
+function resetTutorialVisualState() {
   TUT_ACTIVE = false;
   TUT_LOCKED = false;
-  TUT_STEP   = null;
   TUT_FREEZE_ZOMBIES = false;
   TUT_VIGNETTE.active = false;
+  TUT_VIGNETTE.mode   = null;
+  TUT_VIGNETTE.radius = 1;
+  TUT_VIGNETTE.pulseT = 0;
   hideTutorialBox();
+  hideTutChoiceCenter();
+  zombies = []; // 튜토리얼 좀비(특히 정밀소나용 다수 스폰분)가 다음 화면까지 남는 문제 방지
+  const originFlash = document.getElementById('origin-flash');
+  if (originFlash) { originFlash.style.transition = 'none'; originFlash.style.opacity = '0'; }
+  const minimapWrap = document.getElementById('minimap-wrap');
+  if (minimapWrap) minimapWrap.style.display = '';
+}
+
+function showTitle() {
+  GAME_STATE = 'TITLE';
+  resetTutorialVisualState();
+  TUT_STEP = null;
   hideTutorialIntroScreen();
   document.getElementById('title-screen').classList.add('show');
   updateTitleStats();
@@ -3092,23 +3108,17 @@ const TUT_DESPAIR_LINES = [
 function startTutorial() {
   ['title-screen','lobby-screen'].forEach(id =>
     document.getElementById(id)?.classList.remove('show'));
+  // 콘솔 강제 초기화 후 재실행 등 비정상 재시작 경로에서 이전 잔여값이 남지 않도록 먼저 정리한 뒤 시작 상태로 진입
+  resetTutorialVisualState();
   TUT_ACTIVE = true;
   TUT_LOCKED = true;
   TUT_STEP   = 'world_intro';
   resetOriginFlash(); // 깨끗한 상태로 시작 — 습격 직후 화이트플래시 보장
 
-  // 콘솔 강제 초기화 후 재실행 등 비정상 재시작 경로에서 이전 잔여값이 남지 않도록 명시적 리셋
-  TUT_FREEZE_ZOMBIES     = false;
   TUT_FORCE_MASH_SHOWN   = false;
   TUT_SERUM_PROMPT_TIMER = 0;
   TUT_SERUM_PROMPT_ACTIVE = false;
   TUT_PRECISE_READY = false;
-  hideTutChoiceCenter();
-  TUT_VIGNETTE.active = false;
-  TUT_VIGNETTE.mode   = null;
-  TUT_VIGNETTE.radius = 1;
-  TUT_VIGNETTE.pulseT = 0;
-  { const mw = document.getElementById('minimap-wrap'); if (mw) mw.style.display = ''; }
 
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
@@ -3625,10 +3635,7 @@ function onTutorialMineCollected() {
   TUT_STEP = 'done';
   TUT_LOCKED = true;
   setTimeout(() => {
-    TUT_ACTIVE = false;
-    TUT_VIGNETTE.active = false; // 정상 종료 경로(onTutorialFinalBlackout)와 동일하게 정리 — 다음 본게임 진입 시 잔여 비네팅 방지
-    TUT_FREEZE_ZOMBIES = false;
-    hideTutorialBox();
+    resetTutorialVisualState(); // goToLobbyFromTutorial()→showTitle()에서도 한 번 더 정리되지만 즉시 깔끔한 상태로 전환
     goToLobbyFromTutorial();
   }, 1400);
 }
@@ -3653,23 +3660,10 @@ function startGame() {
   player.recordSaved    = false;
   player.serum          = CONFIG.serum.initialCount; // 치료제 초기화
   PLAYER_SERUM_CONFIRM_ACTIVE = false; // 이전 런의 잔여 상태 방지
-  hideTutChoiceCenter();
-  const minimapWrap = document.getElementById('minimap-wrap');
-  if (minimapWrap) minimapWrap.style.display = ''; // 튜토리얼에서 꺼졌을 경우 복원
 
-  // 튜토리얼 종료 경로 중 일부(조기 완료 등)가 비네팅/동결 등을 정리하지 않고 끝나는 경우가 있어,
-  // 본게임 진입 시점에 한 번 더 강제로 초기화 — UNIT-1 출격 시 튜토리얼의 강한 비네팅이
-  // 그대로 남아 "죽음 직전 장면"처럼 보이던 문제 방지
-  TUT_ACTIVE = false;
-  TUT_LOCKED = false;
-  TUT_FREEZE_ZOMBIES = false;
-  TUT_VIGNETTE.active = false;
-  TUT_VIGNETTE.mode   = null;
-  TUT_VIGNETTE.radius = 1;
-  TUT_VIGNETTE.pulseT = 0;
-  hideTutorialBox();
-  const originFlash = document.getElementById('origin-flash');
-  if (originFlash) { originFlash.style.transition = 'none'; originFlash.style.opacity = '0'; }
+  // 튜토리얼 종료 경로 중 일부가 정리를 빠뜨리는 경우에 대비해 본게임 진입 시점에도 한 번 더 강제 초기화
+  // (showTitle()에서 이미 정리되지만, 로비에서 시간을 보내는 동안 다른 경로로 다시 새는 걸 방지하는 2차 방어선)
+  resetTutorialVisualState();
 
   applyUpgradeEffects();
   player.oxygen = CONFIG.oxygen.max;
@@ -5500,6 +5494,10 @@ function loop(ts) {
   // TUTORIAL_INTRO — 풀스크린 암전 세계관 설명 중. 인게임 화면(캔버스/HUD) 렌더링 안 함
   if (GAME_STATE === 'PLAYING' || GAME_STATE === 'ESCAPED' || GAME_STATE === 'GAMEOVER') {
     handleInput(dt); updateSonar(dt); update(dt);
+  }
+  // INTRO(스테이지 대기 화면)도 render()/updateHUD()는 불러줘야 함 — 안 그러면 init()이 새로 리셋한
+  // 값(좀비/HUD수치/비네팅 등)이 화면에 반영될 기회가 없어서 이전 상태가 그대로 보이는 문제가 있었음
+  if (GAME_STATE === 'PLAYING' || GAME_STATE === 'INTRO' || GAME_STATE === 'ESCAPED' || GAME_STATE === 'GAMEOVER') {
     render(); renderMinimap(); updateHUD(); updateDevInfo();
   }
   requestAnimationFrame(loop);
