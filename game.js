@@ -2095,7 +2095,7 @@ function startMinigame(type, mineTileIdx, zombieRef, interrupted) {
 
   if (type === 'mine') {
     onTutorialMineCollectStart(mineTileIdx);
-    if (TUT_ACTIVE) collapseVignetteTo('mild', 280, 0.55, null);
+    collapseVignetteTo('mild', 280, 0.55, null); // 튜토리얼 전용이었던 채집 비네팅을 본게임에도 적용
   }
   if (type === 'combat') onTutorialCombatStart();
 }
@@ -2310,7 +2310,7 @@ function updateMinigame(dt) {
     minigame.resultTimer -= dt;
     if (minigame.resultTimer <= 0) {
       // 미니게임 종료 — 시야 복구
-      if (TUT_ACTIVE && minigame.type === 'mine' && TUT_VIGNETTE.mode === 'mild') {
+      if (minigame.type === 'mine' && TUT_VIGNETTE.mode === 'mild') {
         collapseVignetteTo('mild', 300, 1, () => { TUT_VIGNETTE.active = false; });
       }
       minigame.active = false;
@@ -5294,18 +5294,39 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
 // ── 튜토리얼 중앙 Y/N 오버레이 버튼 — 클릭/탭 시 해당 로직을 직접 호출 ──
 // (가상 keydown 디스패치 방식 대신 handleChoiceY/N을 직접 불러서, 키보드 이벤트 경로의
 // 어떤 게이트/타이밍 이슈와도 무관하게 동작하도록 함 — 모바일 Y/N 무반응 문제 대응)
+// 추가로 개별 버튼의 터치 히트테스트가 기기별로 어긋나는 경우에 대비해, 패널 전체(#tcc-panel)에
+// 이벤트 위임(closest)과 Pointer Events까지 같이 걸어 어떤 경로로든 탭이 잡히게 함 — 다중 안전망
 {
-  const yBtn = document.getElementById('tcc-y-btn');
-  const nBtn = document.getElementById('tcc-n-btn');
+  const yBtn  = document.getElementById('tcc-y-btn');
+  const nBtn  = document.getElementById('tcc-n-btn');
+  const panel = document.getElementById('tcc-panel');
+
+  const pressVisual = (btn, on) => { if (btn) btn.classList.toggle('pressed', on); };
+
   if (yBtn) {
-    yBtn.addEventListener('touchstart', (e) => { e.preventDefault(); yBtn.classList.add('pressed'); handleChoiceY(); }, { passive: false });
-    yBtn.addEventListener('touchend',   (e) => { e.preventDefault(); yBtn.classList.remove('pressed'); }, { passive: false });
+    yBtn.addEventListener('touchstart', (e) => { e.preventDefault(); pressVisual(yBtn, true); handleChoiceY(); }, { passive: false });
+    yBtn.addEventListener('touchend',   (e) => { e.preventDefault(); pressVisual(yBtn, false); }, { passive: false });
     yBtn.addEventListener('click', handleChoiceY);
   }
   if (nBtn) {
-    nBtn.addEventListener('touchstart', (e) => { e.preventDefault(); nBtn.classList.add('pressed'); handleChoiceN(); }, { passive: false });
-    nBtn.addEventListener('touchend',   (e) => { e.preventDefault(); nBtn.classList.remove('pressed'); }, { passive: false });
+    nBtn.addEventListener('touchstart', (e) => { e.preventDefault(); pressVisual(nBtn, true); handleChoiceN(); }, { passive: false });
+    nBtn.addEventListener('touchend',   (e) => { e.preventDefault(); pressVisual(nBtn, false); }, { passive: false });
     nBtn.addEventListener('click', handleChoiceN);
+  }
+
+  // 안전망 1 — 패널 전체에 이벤트 위임(개별 버튼의 히트박스가 기기별로 어긋나는 경우 대응)
+  if (panel) {
+    const delegate = (e) => {
+      const target = e.target.closest ? e.target.closest('.tcc-btn') : null;
+      if (!target) return;
+      e.preventDefault();
+      if (target === yBtn || target.classList.contains('tcc-y')) handleChoiceY();
+      else if (target === nBtn || target.classList.contains('tcc-n')) handleChoiceN();
+    };
+    panel.addEventListener('touchstart', delegate, { passive: false });
+    panel.addEventListener('click', delegate);
+    // 안전망 2 — Pointer Events(터치/마우스 통합) — 일부 모바일 브라우저에서 touch 이벤트만 누락되는 경우 대응
+    panel.addEventListener('pointerdown', delegate);
   }
 }
 
