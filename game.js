@@ -2339,8 +2339,11 @@ function recalcNumbers(tx, ty) {
   }
 }
 
+let _exitChoiceMode = 'full'; // showExitChoice()가 기록 — 'full'(전부회수) | 'partial'(미회수), 복귀 버튼에서 retire/early 구분용
+
 function showExitChoice(mode, remaining) {
   GAME_STATE = 'ESCAPED';
+  _exitChoiceMode = mode; // 'full'(전부회수) | 'partial'(미회수) — 복귀 버튼에서 retire/early 구분용
   SoundManager.play('exit_reach');
   SoundManager.stopLoop('oxygen_warn');
   const stageIdx = Math.min(player.stage, CONFIG.stages.length - 1);
@@ -2676,11 +2679,13 @@ function setLastExitType(type) {
   try { localStorage.setItem(LAST_EXIT_KEY, type); } catch(e) {}
 }
 
-// 런 시작 시 호출 — 조기탈출 다음 런이면 유닛 유지, 그 외엔 새 유닛
+// 런 시작 시 호출 — 죽거나 감염됐을 때만 새 유닛, 생존 귀환(완전회수/조기탈출)이나 첫 시작은 같은 유닛 유지
+// (예전엔 'early'일 때만 유지하는 방식이라, 한 번도 기록이 없는 "첫 시작"이 null로 걸려 새 유닛으로
+//  잘못 넘어가는 버그가 있었음 — 조건을 반전해서 그 문제도 같이 해결)
 function advanceUnitIfNeeded() {
   const last = getLastExitType();
-  if (last === 'early') return; // 조기탈출 직후 — 같은 유닛으로 이어서 출격
-  incrementUnit();               // 완주/사망/좀비화/첫 시작 — 새 유닛
+  if (last === 'death' || last === 'infected') incrementUnit(); // 사망/감염 — 새 유닛
+  // 그 외(완전회수, 조기탈출, 첫 시작=null)는 같은 유닛으로 이어서 출격
 }
 
 // ── 유닛 행동 로그 (안식/소멸) — 임무일지에 시간순으로 통합 표시 ──
@@ -5051,7 +5056,7 @@ document.getElementById('tbc-btn').addEventListener('click', () => {
 // 출구 팝업 — 복귀 (조기 or 완전)
 document.getElementById('exit-retire-btn').addEventListener('click', () => {
   document.getElementById('early-exit').classList.remove('show');
-  showEscaped('early');
+  showEscaped(_exitChoiceMode === 'full' ? 'retire' : 'early');
 });
 // 출구 팝업 — 다음 스테이지 (전부 회수 시)
 document.getElementById('exit-next-btn').addEventListener('click', () => {
