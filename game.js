@@ -3381,11 +3381,15 @@ function showTutChoiceCenter(yLabel, nLabel, subLabel) {
   if (subEl) subEl.textContent = subLabel || '';
   if (fillEl) fillEl.style.width = '100%'; // 표시 시점에 가득 채운 상태로 초기화
   el.classList.add('show');
-  dbg(`패널 표시: Y="${yLabel}" N="${nLabel}"`);
+  // 캔버스가 GPU 합성 레이어로 분리되면서 z-index와 무관하게 터치를 가로채는 기기가 있어 —
+  // 선택지가 떠 있는 동안은 캔버스 자체를 터치 불가로 막아서 버튼으로 확실히 가게 함
+  if (canvas) canvas.style.pointerEvents = 'none';
+  dbg(`패널 표시: Y="${yLabel}" N="${nLabel}" / 캔버스 터치 차단=${canvas ? canvas.style.pointerEvents : 'canvas없음'}`);
 }
 function hideTutChoiceCenter() {
   const el = document.getElementById('tut-choice-center');
   if (el) el.classList.remove('show');
+  if (canvas) canvas.style.pointerEvents = '';
 }
 // 남은 시간 비율(0~1)에 맞춰 중앙 오버레이의 시간 게이지 바 갱신
 function updateTutChoiceTimerBar(ratio) {
