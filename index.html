@@ -311,6 +311,17 @@ body.mobile-ui #tutorial-box {
 #tcc-timer-track { width:100%; height:5px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden; }
 #tcc-timer-fill { height:100%; width:100%; background:#bb44ff; transition:width 0.08s linear; }
 
+/* TEST ONLY — 출시 빌드에서 반드시 제거. 모바일 Y/N 디버깅용 화면 표시 로그 */
+/* position:fixed로 뷰포트 자체에 고정 — #game-area 컨테이너 크기/오버플로/스택킹과 완전히 무관하게 동작 */
+#debug-log {
+  position:fixed; top:0; left:0; right:0; max-height:42vh;
+  overflow-y:auto; z-index:999999; pointer-events:none;
+  font-family:'Courier New',monospace; font-size:11px; line-height:1.45;
+  color:#00ff88; background:rgba(0,0,0,0.85); border-bottom:2px solid #00ff88;
+  padding:4px 6px; white-space:pre-wrap; word-break:break-all;
+}
+#debug-log .dl-err { color:#ff5555; }
+
 /* ── 엔딩 ── */
 #ending-screen { display:none; position:absolute; inset:0; background:#000; flex-direction:column; align-items:center; justify-content:center; z-index:25; overflow:hidden; }
 #ending-screen.show { display:flex; }
@@ -949,6 +960,11 @@ body.mobile-ui #mobile-pause {
     </div>
 
 </div>
+
+<!-- TEST ONLY — 출시 빌드에서 반드시 제거. 모바일 Y/N 디버깅용 화면 표시 로그.
+     #game-area 내부 중첩을 피해 body 최상위에 두고 position:fixed로 뷰포트에 직접 고정 —
+     어떤 컨테이너 크기/오버플로 이슈와도 무관하게 항상 보이게 함 -->
+<div id="debug-log">디버그 로그 대기 중...</div>
 
 <script src="config.js"></script>
 <script src="sound.js"></script>
