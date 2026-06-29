@@ -600,7 +600,7 @@ function drawSonarPreciseMarks() {
       if (isInfected && m.fallenUnit !== null) {
         ctx.font = `${ts * 0.13}px monospace`;
         ctx.fillStyle = 'rgba(187,68,255,0.8)';
-        ctx.fillText(`U-${String(m.fallenUnit).padStart(2,'0')}`, cx, cy + ts * 0.55);
+        ctx.fillText(fallenLabel(m.fallenUnit) || `U-${String(m.fallenUnit).padStart(2,'0')}`, cx, cy + ts * 0.55);
       }
     }
 
@@ -1484,6 +1484,10 @@ const GAME_KEYS = new Set([
 let GAME_STATE = 'TITLE';
 
 window.addEventListener('keydown', e => {
+  // ── 입력창(이름 입력 등)에 포커스가 있으면 게임 키 입력 전부 무시 — 정상적인 타이핑 보장 ──
+  // (preventDefault보다 먼저 체크해야 함 — 안 그러면 입력창에서 Space 등이 막혀서 타이핑이 안 됨)
+  if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
+
   if (GAME_KEYS.has(e.code)) e.preventDefault();
 
   // ── ESC: 일시정지 토글 (PLAYING ↔ PAUSED) ────────────────────
@@ -1998,12 +2002,12 @@ function useSerumInCombat() {
     SoundManager.play('combat_win');
     // ── 전사자 풀 청소 ──────────────────────────────────────────
     if (z.fallenUnit != null) {
+      const unitLabel = fallenLabel(z.fallenUnit); // 제거 전에 먼저 확보 — 이름이 있으면 이름, 없으면 UNIT-NN
       const cleaned = removeFromFallenPool(z.fallenUnit);
       if (cleaned) {
-        const unitLabel = `UNIT-${String(z.fallenUnit).padStart(2, '0')}`;
         devLog(`${unitLabel} 안식 완료 — 전사자 풀에서 제거`, 'good');
       }
-      logUnitAction(z.fallenUnit, 'rested', player.stage + 1);
+      logUnitAction(z.fallenUnit, 'rested', player.stage + 1, unitLabel);
     }
     devLog(`치료제 투여 성공 — 감염자 안식 + DNA +${dnaBonus}`, 'good');
   } else {
@@ -2202,11 +2206,7 @@ function endMinigame(success) {
             if (!zombies.includes(cz)) return;
             dissolveInfected(cz);
           }, 180);
-          showRegretNotice(
-            cz.fallenUnit != null
-              ? `UNIT-${String(cz.fallenUnit).padStart(2, '0')}`
-              : null
-          );
+          showRegretNotice(fallenLabel(cz.fallenUnit));
           const voiceDown = pickVoice('infectedDown');
           if (voiceDown) addVoicePopup(voiceDown);
         } else {
@@ -2243,10 +2243,7 @@ function endMinigame(success) {
       // ── "그는 사람이었어" 연출 — 감염자(전사자)와 전투 패배 시 ──
       const cz = minigame.combatZombie;
       if (cz && cz.faction === 'INFECTED') {
-        const unitLabel = cz.fallenUnit != null
-          ? `UNIT-${String(cz.fallenUnit).padStart(2, '0')}`
-          : null;
-        showRegretNotice(unitLabel);
+        showRegretNotice(fallenLabel(cz.fallenUnit));
       }
       devLog(`전투 실패 — 산소 대량 소모, 감염 증가${interrupted ? ' (급습 패널티)' : ''}`, 'danger');
     }
@@ -2592,8 +2589,9 @@ function saveRunRecord(exitType) {
 
   // 감염사 + 일반 사망 → 전사자 풀 등록
   if (exitType === 'infected' || exitType === 'death') {
-    addToFallenPool(getCurrentUnit(), stageIdx + 1);
-    devLog(`UNIT-${String(getCurrentUnit()).padStart(2,'0')} 전사자 풀 등록 [${exitType}]`, 'warn');
+    const myName = getPlayerName();
+    addToFallenPool(getCurrentUnit(), stageIdx + 1, null, myName);
+    devLog(`${myName || 'UNIT-'+String(getCurrentUnit()).padStart(2,'0')} 전사자 풀 등록 [${exitType}]`, 'warn');
   }
 
   const label = { retire:'복귀', early:'조기탈출', death:'사망', infected:'좀비화' }[exitType] || exitType;
@@ -2619,7 +2617,7 @@ function loadFallenPool() {
 function saveFallenPool(pool) {
   try { localStorage.setItem(FALLEN_KEY, JSON.stringify(pool)); } catch(e) {}
 }
-function addToFallenPool(unitNum, stage, cause = null) {
+function addToFallenPool(unitNum, stage, cause = null, name = null) {
   const pool = loadFallenPool();
   // 층당 최대 N명 제한
   const stagePool = pool.filter(f => f.stage === stage);
@@ -2629,8 +2627,18 @@ function addToFallenPool(unitNum, stage, cause = null) {
   const entry = { unit: unitNum, stage };
   // cause가 있을 때만 임무일지에 표시 — 본게임 사망/감염(런 기록에서 이미 자세히 표시됨)은 cause 없이 호출되어 중복 표시 방지
   if (cause) { entry.cause = cause; entry.ts = Date.now(); }
+  if (name) entry.name = name; // 코드네임(전임자) 또는 플레이어가 직접 지은 이름
   pool.push(entry);
   saveFallenPool(pool);
+}
+
+// 전사자 풀에서 표시용 라벨을 가져옴 — 이름(코드네임/플레이어가 지은 이름)이 있으면 그걸, 없으면 UNIT-NN 형식으로 대체
+// (풀에서 제거하기 전에 먼저 호출해서 라벨을 확보해둘 것 — 제거 후엔 조회 불가)
+function fallenLabel(unitNum) {
+  if (unitNum == null) return null;
+  const entry = loadFallenPool().find(f => f.unit === unitNum);
+  if (entry && entry.name) return entry.name;
+  return `UNIT-${String(unitNum).padStart(2, '0')}`;
 }
 
 // cause 갈아끼우기용 — 추후 스테이지에서 UNIT-00을 조우한 뒤 정확한 사유로 교체할 때 사용
@@ -2651,6 +2659,33 @@ function removeFromFallenPool(unitNum) {
   return true;
 }
 
+// ── 전사자 풀 사전등록용 코드네임 풀 — 전임자(조직이 이전에 보낸 다른 요원들)용.
+//    플레이어 본인이 직접 짓는 이름과는 별도 데이터(섞이지 않음) ──
+const FALLEN_CODENAME_POOL = [
+  'ECHO','CIPHER','NOMAD','DRIFT','WISP','FROST','EMBER','ASHEN','HAZE','MIST',
+  'DUSK','DAWN','VESPER','LUMEN','HALCYON','GLEAM','HALO','SWIFT','WREN','LARK',
+  'FINCH','SPARROW','DOVE','HEATH','BRACKEN','THISTLE','CLOVER','REED','FERN','ASH',
+  'ELM','BIRCH','MAPLE','CEDAR','HAZEL','JUNIPER','MOSS','LICHEN','SPORE','ALOE',
+  'BRIAR','HOLLOW',
+];
+
+// 스테이지별 전임자 사전등록 — unit 번호는 실제 플레이어 유닛(0,1,2...)과 절대 안 겹치게 음수로 부여.
+// 층당 1명씩만 깔아둬서(maxPerStage=3 중 1자리), 플레이어 본인의 사망 기록이 들어올 자리를 넉넉히 남겨둠
+const PREDECESSOR_SEED = [
+  { unit: -1, stage: 1, name: 'ECHO',   cause: 'lost' },
+  { unit: -2, stage: 2, name: 'CIPHER', cause: 'silence' },
+  { unit: -3, stage: 3, name: 'DRIFT',  cause: 'unknown' },
+  { unit: -4, stage: 4, name: 'FROST',  cause: 'silence' },
+  { unit: -5, stage: 5, name: 'EMBER',  cause: 'lost' },
+];
+
+// 전임자 사전등록 — addToFallenPool의 중복방지 가드 덕에 여러 번 호출해도 안전(이미 있으면 그냥 무시됨)
+function seedPredecessors() {
+  for (const p of PREDECESSOR_SEED) {
+    addToFallenPool(p.unit, p.stage, p.cause, p.name);
+  }
+}
+
 function loadUpgrades() {
   try { return JSON.parse(localStorage.getItem(UPGRADE_KEY) || '{}'); }
   catch(e) { return {}; }
@@ -2668,6 +2703,58 @@ function incrementUnit() {
   const n = getCurrentUnit() + 1;
   try { localStorage.setItem(UNIT_KEY, String(n)); } catch(e) {}
   return n;
+}
+
+// ── 플레이어 본인 코드네임 — 유닛 번호와 묶어서 저장. 유닛이 바뀌면(사망/감염) 이름도 다시 받아야 함 ──
+const PLAYER_NAME_KEY      = 'outbreak_player_name';
+const PLAYER_NAME_UNIT_KEY = 'outbreak_player_name_unit';
+function getPlayerName() {
+  try {
+    const savedUnit = localStorage.getItem(PLAYER_NAME_UNIT_KEY);
+    if (savedUnit !== String(getCurrentUnit())) return null; // 현재 유닛의 이름이 아직 없음(새 유닛)
+    return localStorage.getItem(PLAYER_NAME_KEY) || null;
+  } catch(e) { return null; }
+}
+function setPlayerName(name) {
+  try {
+    localStorage.setItem(PLAYER_NAME_KEY, name);
+    localStorage.setItem(PLAYER_NAME_UNIT_KEY, String(getCurrentUnit()));
+  } catch(e) {}
+}
+
+// ── 이름 입력 모달 ───────────────────────────────────────────────
+function showNameInputModal() {
+  const modal = document.getElementById('name-input-modal');
+  const field = document.getElementById('name-input-field');
+  const err   = document.getElementById('name-input-error');
+  if (!modal || !field) return;
+  field.value = '';
+  if (err) err.classList.remove('show');
+  modal.classList.add('show');
+  setTimeout(() => field.focus(), 80);
+}
+function hideNameInputModal() {
+  document.getElementById('name-input-modal')?.classList.remove('show');
+}
+// 한글/영문/숫자/공백만 허용 — 특수문자·이모지 등은 가볍게 걸러냄. 최대 10자
+function validatePlayerName(raw) {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return null;
+  const cleaned = trimmed.replace(/[^\w가-힣ㄱ-ㅎㅏ-ㅣ ]/g, '').trim().slice(0, 10);
+  return cleaned.length > 0 ? cleaned : null;
+}
+function confirmPlayerName() {
+  const field = document.getElementById('name-input-field');
+  const err   = document.getElementById('name-input-error');
+  const name  = validatePlayerName(field ? field.value : '');
+  if (!name) {
+    if (err) err.classList.add('show');
+    if (field) field.focus();
+    return;
+  }
+  setPlayerName(name);
+  hideNameInputModal();
+  renderLobbyMeta(); // 이름 반영해서 헤더 다시 그림
 }
 
 const LAST_EXIT_KEY = 'outbreak_last_exit_type';
@@ -2695,11 +2782,11 @@ function loadUnitActions() {
   try { return JSON.parse(localStorage.getItem(UNIT_ACTIONS_KEY) || '[]'); }
   catch(e) { return []; }
 }
-function logUnitAction(unitNum, action, stage) {
+function logUnitAction(unitNum, action, stage, name = null) {
   if (unitNum == null) return; // 인식표 없는 좀비는 기록 안 함
   try {
     const list = loadUnitActions();
-    list.push({ unit: unitNum, action, stage, date: new Date().toLocaleString('ko-KR'), ts: Date.now() });
+    list.push({ unit: unitNum, action, stage, name, date: new Date().toLocaleString('ko-KR'), ts: Date.now() });
     localStorage.setItem(UNIT_ACTIONS_KEY, JSON.stringify(list));
   } catch(e) {}
 }
@@ -2745,6 +2832,9 @@ function showLobby() {
   renderLobby('status');
   // 버튼 포커스로 Space가 먹히는 문제 방지 — canvas로 포커스 이동
   setTimeout(() => document.getElementById('canvas')?.focus(), 50);
+
+  // 새 유닛(첫 입장 / 사망·감염 후 재출격)이면 이름을 먼저 받음 — 건너뛰기 없음
+  if (!getPlayerName()) showNameInputModal();
 }
 
 function closeLobby() {
@@ -2757,8 +2847,11 @@ function renderLobbyMeta() {
   const dna     = parseInt(localStorage.getItem(DNA_KEY) || '0');
   const records = loadRecords();
   const unit    = getCurrentUnit();
+  const myName  = getPlayerName();
+  const unitTag = `UNIT-${String(unit).padStart(2,'0')}`;
   document.getElementById('lb-dna-val').textContent    = dna;
-  document.getElementById('lb-agent-name').textContent = `UNIT-${String(unit).padStart(2,'0')}`;
+  document.getElementById('lb-agent-name').textContent = myName || unitTag;
+  document.getElementById('lb-agent-unit').textContent = myName ? `(${unitTag})` : '';
   document.getElementById('lb-agent-runs').textContent = `총 출격 ${records.length}회`;
 }
 
@@ -2874,8 +2967,8 @@ const MEMORIAL_LABELS = {
 const ACTION_ICONS = { rested: '✦', dissolved: '☠' };
 const ACTION_LABELS = { rested: '안식시킴', dissolved: '소멸시킴' };
 // 전사자 풀 cause 표시 라벨 — 'lost'는 임시 사유, 1스테이지 조우 후 updateFallenCause()로 정확한 사유로 교체 예정
-const CAUSE_ICONS  = { lost: '📡' };
-const CAUSE_LABELS = { lost: '로스트' };
+const CAUSE_ICONS  = { lost: '📡', silence: '🔇', unknown: '❓' };
+const CAUSE_LABELS = { lost: '로스트', silence: '응답 없음', unknown: '행방불명' };
 
 function renderMemorial(el) {
   const records = loadRecords();
@@ -2916,7 +3009,7 @@ function renderMemorial(el) {
       const f     = entry.data;
       const icon  = CAUSE_ICONS[f.cause] || '❔';
       const label = CAUSE_LABELS[f.cause] || f.cause;
-      const unit  = `UNIT-${String(f.unit).padStart(2,'0')}`;
+      const unit  = f.name || `UNIT-${String(f.unit).padStart(2,'0')}`;
       html += `
         <div class="mem-item" style="opacity:0.75;">
           <div class="mem-icon">${icon}</div>
@@ -2929,7 +3022,7 @@ function renderMemorial(el) {
       const a     = entry.data;
       const icon  = ACTION_ICONS[a.action] || '•';
       const label = ACTION_LABELS[a.action] || a.action;
-      const unit  = `UNIT-${String(a.unit).padStart(2,'0')}`;
+      const unit  = a.name || `UNIT-${String(a.unit).padStart(2,'0')}`;
       html += `
         <div class="mem-item" style="opacity:0.75;">
           <div class="mem-icon">${icon}</div>
@@ -3836,9 +3929,7 @@ function warpZombie(z) {
 // 치료제 없이 전투 승리 시 — "싸워서 보낸 것"
 function dissolveInfected(z) {
   const ts = CONFIG.map.tileSize;
-  const unitLabel = z.fallenUnit != null
-    ? `UNIT-${String(z.fallenUnit).padStart(2, '0')}`
-    : null;
+  const unitLabel = fallenLabel(z.fallenUnit); // 풀에서 제거하기 전에 먼저 확보
 
   // 소멸 중 접촉 판정 차단
   z.dissolving = true;
@@ -3850,7 +3941,7 @@ function dissolveInfected(z) {
   if (z.fallenUnit != null) {
     const cleaned = removeFromFallenPool(z.fallenUnit);
     if (cleaned) devLog(`${unitLabel} — 전투로 보냄, 전사자 풀 제거`, 'good');
-    logUnitAction(z.fallenUnit, 'dissolved', player.stage + 1);
+    logUnitAction(z.fallenUnit, 'dissolved', player.stage + 1, unitLabel);
   }
 
   // 좀비 배열에서 제거
@@ -3901,7 +3992,7 @@ function spawnExtraZombie(forceCreature = false) {
   if (fallenUnit !== null) ez.fallenUnit = fallenUnit;
   zombies.push(ez);
   SoundManager.play('zombie_spawn');
-  devLog(`증원 좀비 스폰 [${faction}${fallenUnit !== null ? ' UNIT-'+String(fallenUnit).padStart(2,'0') : ''}] @ (${pick[0]},${pick[1]})`, 'warn');
+  devLog(`증원 좀비 스폰 [${faction}${fallenUnit !== null ? ' ' + fallenLabel(fallenUnit) : ''}] @ (${pick[0]},${pick[1]})`, 'warn');
 }
 
 // ── 소나 ─────────────────────────────────────────────────────────
@@ -5353,6 +5444,11 @@ document.querySelectorAll('.lb-tab-btn').forEach(btn => {
 document.getElementById('lb-start-btn').addEventListener('click', startGame);
 // 기지 뒤로가기
 document.getElementById('lb-back-btn').addEventListener('click', closeLobby);
+// 요원 식별명 입력 — 확인 버튼 + 입력창 Enter 둘 다 지원
+document.getElementById('name-input-confirm').addEventListener('click', confirmPlayerName);
+document.getElementById('name-input-field').addEventListener('keydown', (e) => {
+  if (e.code === 'Enter') confirmPlayerName();
+});
 // 강화 초기화 — 확인 후 실행
 document.getElementById('lb-reset-btn').addEventListener('click', () => {
   if (!confirm('모든 강화를 초기화하고 DNA를 환불합니까?')) return;
@@ -5546,6 +5642,7 @@ resize();
 // CSS 완전 로드 후 resize 재호출 (GitHub Pages 타이밍 이슈 방지)
 window.addEventListener('load', () => { resize(); });
 // 최초 진입 — 유닛 0(첫 플레이)이면 튜토리얼, 아니면 타이틀
+seedPredecessors(); // 전임자 사전등록 — 이미 등록돼 있으면 addToFallenPool의 중복방지 가드가 무시함
 if (getCurrentUnit() === 0) startTutorial();
 else showTitle();
 

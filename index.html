@@ -233,6 +233,18 @@ body.mobile-ui #dev-toggle { display:none; }
 .ov-btn.green { border:1px solid #00ff88; color:#00ff88; }
 .ov-btn.green:hover { background:rgba(0,255,136,0.1); }
 .ov-stage { font-size:1.2rem; color:#00ff88; letter-spacing:0.15em; margin-top:-8px; }
+
+/* 요원 식별명 입력 모달 — lobby-screen(z:45)보다 위에 떠야 함 */
+#name-input-modal { z-index:80; }
+.ni-desc { font-family:'Courier New',monospace; font-size:0.9rem; color:#999; line-height:1.7; text-align:center; }
+#name-input-field {
+  font-family:'Courier New',monospace; font-size:1.3rem; letter-spacing:0.1em; text-align:center;
+  background:rgba(0,20,10,0.6); border:1px solid #00ff88; color:#00ff88;
+  padding:10px 16px; width:240px; border-radius:4px; outline:none;
+}
+#name-input-field::placeholder { color:#2a5a3a; }
+#name-input-error { color:#ff5555; font-size:0.8rem; font-family:'Courier New',monospace; display:none; margin-top:-10px; }
+#name-input-error.show { display:block; }
 .intro-location { font-size:1.05rem; color:#555; letter-spacing:0.2em; margin-top:-4px; margin-bottom:6px; }
 .intro-stats { display:flex; flex-direction:column; gap:8px; }
 .intro-row { display:flex; align-items:center; gap:10px; }
@@ -424,6 +436,7 @@ body.mobile-ui #mobile-pause {
 .lb-agent { text-align:center; padding-bottom:10px; border-bottom:1px solid #111; margin-bottom:6px; }
 .lb-avatar { width:56px; height:56px; border:2px solid #222; margin:0 auto 6px; display:flex; align-items:center; justify-content:center; font-size:18px; color:#444; }
 .lb-agent-name { color:#00ff88; font-size:calc(var(--lb-base) + 1px); letter-spacing:0.1em; margin-bottom:3px; }
+.lb-agent-unit { color:#3a5a4a; font-size:calc(var(--lb-base) - 2px); letter-spacing:0.08em; margin-bottom:4px; }
 .lb-agent-runs { color:#444; font-size:calc(var(--lb-base) - 1px); }
 .lb-sb-btn { font-size:calc(var(--lb-base) + 1px); padding:6px 8px; background:none; border:1px solid #1a1a1a; color:#333; cursor:pointer; font-family:'Press Start 2P',monospace; text-align:left; letter-spacing:0.05em; }
 .lb-sb-btn:hover { border-color:#555; color:#555; }
@@ -582,6 +595,15 @@ body.mobile-ui #mobile-pause {
       <!-- 플래시 오버레이 -->
       <div id="origin-flash"></div>
 
+    <!-- 요원 식별명(코드네임) 입력 모달 — 첫 기지 입장 시 / 사망·감염 후 재출격 시마다 표시 -->
+    <div id="name-input-modal" class="overlay">
+      <div class="ov-title green">요원 식별명 등록</div>
+      <div class="ni-desc">새로운 요원이 배치되었습니다.<br>식별명을 입력하세요.</div>
+      <input type="text" id="name-input-field" maxlength="10" placeholder="식별명 입력" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div id="name-input-error">식별명을 입력해주세요</div>
+      <button class="ov-btn green" id="name-input-confirm">등록 ▶</button>
+    </div>
+
     <!-- 기지 화면 -->
     <div id="lobby-screen">
       <div class="lb">
@@ -594,6 +616,7 @@ body.mobile-ui #mobile-pause {
             <div class="lb-agent">
               <div class="lb-avatar">☣</div>
               <div class="lb-agent-name" id="lb-agent-name">UNIT-01</div>
+              <div class="lb-agent-unit" id="lb-agent-unit"></div>
               <div class="lb-agent-runs" id="lb-agent-runs">총 출격 0회</div>
             </div>
             <button class="lb-sb-btn primary" id="lb-start-btn">▶ 작전 개시 <span style="opacity:0.5;font-size:0.8em">[Space]</span></button>
