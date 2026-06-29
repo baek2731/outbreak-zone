@@ -2568,6 +2568,7 @@ function saveRunRecord(exitType) {
     date:         new Date().toLocaleString('ko-KR'),
     exitType,
     unit:         getCurrentUnit(),
+    name:         getPlayerName(), // 이름이 있으면 같이 저장 — 임무일지 표시용
     stage:        stageIdx + 1,
     stageName:    CONFIG.stages[stageIdx].name,
     rawCollected: player.totalCollected,
@@ -3009,7 +3010,7 @@ function renderMemorial(el) {
       const r      = entry.data;
       const icon   = MEMORIAL_ICONS[r.exitType] || '☣';
       const label  = MEMORIAL_LABELS[r.exitType] || r.exitType;
-      const unit   = r.unit ? `UNIT-${String(r.unit).padStart(2,'0')}` : `UNIT-??`;
+      const unit   = r.name || (r.unit != null ? `UNIT-${String(r.unit).padStart(2,'0')}` : 'UNIT-??');
       const raw    = r.rawCollected ?? r.collected ?? 0;
       html += `
         <div class="mem-item">
