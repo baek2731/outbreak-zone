@@ -2670,17 +2670,33 @@ const FALLEN_CODENAME_POOL = [
 ];
 
 // 스테이지별 전임자 사전등록 — unit 번호는 실제 플레이어 유닛(0,1,2...)과 절대 안 겹치게 음수로 부여.
-// 층당 1명씩만 깔아둬서(maxPerStage=3 중 1자리), 플레이어 본인의 사망 기록이 들어올 자리를 넉넉히 남겨둠
+// 1층은 UNIT-00(ECHO, 튜토리얼에서 별도 등록)이 그 역할을 하므로 중복 없이 비워둠.
+// 2~5층은 층당 2명씩 깔아둬서(maxPerStage=3 중 2자리), 플레이어 본인의 사망 기록이 들어올 자리를 1개씩 남겨둠
 const PREDECESSOR_SEED = [
-  { unit: -1, stage: 1, name: 'ECHO',   cause: 'lost' },
-  { unit: -2, stage: 2, name: 'CIPHER', cause: 'silence' },
-  { unit: -3, stage: 3, name: 'DRIFT',  cause: 'unknown' },
-  { unit: -4, stage: 4, name: 'FROST',  cause: 'silence' },
-  { unit: -5, stage: 5, name: 'EMBER',  cause: 'lost' },
+  { unit: -1, stage: 2, name: 'CIPHER',   cause: 'silence' },
+  { unit: -2, stage: 2, name: 'NOMAD',    cause: 'lost' },
+  { unit: -3, stage: 3, name: 'DRIFT',    cause: 'unknown' },
+  { unit: -4, stage: 3, name: 'WISP',     cause: 'lost' },
+  { unit: -5, stage: 4, name: 'FROST',    cause: 'silence' },
+  { unit: -6, stage: 4, name: 'HALCYON',  cause: 'unknown' },
+  { unit: -7, stage: 5, name: 'EMBER',    cause: 'lost' },
+  { unit: -8, stage: 5, name: 'VESPER',   cause: 'silence' },
 ];
 
 // 전임자 사전등록 — addToFallenPool의 중복방지 가드 덕에 여러 번 호출해도 안전(이미 있으면 그냥 무시됨)
+// 구버전 시드 데이터(예: 예전의 ECHO@1층, unit -1)가 남아있으면 unit 번호 재사용 시 충돌이 나므로,
+// 현재 시드 목록에 없는 음수 unit 항목은 먼저 정리하고 다시 깐다 (양수 unit=실제 플레이어 기록은 손대지 않음)
 function seedPredecessors() {
+  const pool = loadFallenPool();
+  const validUnits = new Set(PREDECESSOR_SEED.map(p => p.unit));
+  let dirty = false;
+  // 구버전 시드(현재 목록에 없는 음수 unit) 정리 — 양수 unit(실제 플레이어 기록)은 손대지 않음
+  const cleaned = pool.filter(f => !(f.unit < 0 && !validUnits.has(f.unit)));
+  if (cleaned.length !== pool.length) dirty = true;
+  // 이름 없이 등록된 기존 UNIT-00(구버전)이 있으면 ECHO로 보강
+  const echo = cleaned.find(f => f.unit === 0 && !f.name);
+  if (echo) { echo.name = 'ECHO'; dirty = true; }
+  if (dirty) saveFallenPool(cleaned);
   for (const p of PREDECESSOR_SEED) {
     addToFallenPool(p.unit, p.stage, p.cause, p.name);
   }
@@ -2848,10 +2864,8 @@ function renderLobbyMeta() {
   const records = loadRecords();
   const unit    = getCurrentUnit();
   const myName  = getPlayerName();
-  const unitTag = `UNIT-${String(unit).padStart(2,'0')}`;
   document.getElementById('lb-dna-val').textContent    = dna;
-  document.getElementById('lb-agent-name').textContent = myName || unitTag;
-  document.getElementById('lb-agent-unit').textContent = myName ? `(${unitTag})` : '';
+  document.getElementById('lb-agent-name').textContent = myName || `UNIT-${String(unit).padStart(2,'0')}`;
   document.getElementById('lb-agent-runs').textContent = `총 출격 ${records.length}회`;
 }
 
@@ -3765,8 +3779,8 @@ function onTutorialMineCollected() {
 function goToLobbyFromTutorial() {
   // UNIT-00 튜토리얼 완주(= 감염사 처리) — 전사자 풀에 정식 등록 후 유닛을 1로 올리고 타이틀로 복귀
   // cause:'lost' — 1스테이지에서 실제로 조우하기 전까지의 임시 사유. 조우 이후 updateFallenCause(0, '실제사유')로 교체할 것
-  addToFallenPool(0, 1, 'lost');
-  devLog('UNIT-00 전사자 풀 등록 [튜토리얼 완주 — 사유: lost]', 'warn');
+  addToFallenPool(0, 1, 'lost', 'ECHO');
+  devLog('UNIT-00(ECHO) 전사자 풀 등록 [튜토리얼 완주 — 사유: lost]', 'warn');
   incrementUnit();
   showTitle();
 }
