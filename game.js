@@ -2,6 +2,27 @@
 //  game.js — OUTBREAK ZONE 게임 로직 전체
 // ================================================================
 
+// ── TEST ONLY — 출시 빌드에서 반드시 제거. 모바일 Y/N 디버깅용 화면 표시 로그 ──
+// 콘솔 연결이 어려운 상황에서, 탭 이벤트가 실제로 잡히는지/에러가 나는지를 화면에 바로 보여줌
+let _dbgLines = [];
+function dbg(msg, isError) {
+  const ts = new Date().toISOString().slice(11, 23);
+  _dbgLines.push(`[${ts}] ${isError ? '⚠ ' : ''}${msg}`);
+  if (_dbgLines.length > 40) _dbgLines.shift(); // 너무 길어지지 않게 최근 40줄만 유지
+  const el = document.getElementById('debug-log');
+  if (el) {
+    el.innerHTML = _dbgLines.map(l => `<div class="${l.includes('⚠') ? 'dl-err' : ''}">${l}</div>`).join('');
+    el.scrollTop = el.scrollHeight;
+  }
+}
+window.addEventListener('error', (e) => {
+  dbg(`JS 에러: ${e.message} (${e.filename ? e.filename.split('/').pop() : '?'}:${e.lineno})`, true);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  dbg(`Promise 에러: ${e.reason}`, true);
+});
+dbg('스크립트 로드 시작');
+
 // ================================================================
 //  OUTBREAK ZONE — Step 3
 //  좀비 스폰 + CHASE + 접촉 피해
@@ -1955,11 +1976,13 @@ function cancelLastSerumUse() {
 
 // 평시/전투/마지막치료제 Y/N 선택을 한 번에 처리 — 중앙 패널 버튼이 직접 호출(키보드 dispatch 우회)
 function handleChoiceY() {
+  dbg(`handleChoiceY 호출 — TUT_ACTIVE=${TUT_ACTIVE} TUT_STEP=${TUT_STEP} PLAYER_SERUM_CONFIRM_ACTIVE=${PLAYER_SERUM_CONFIRM_ACTIVE} serumChoice=${minigame.serumChoice}`);
   if (TUT_ACTIVE && TUT_STEP === 'serum_prompt') { onTutorialSerumChoice(true); return; }
   confirmLastSerumUse();
   if (minigame.active && minigame.type === 'combat' && minigame.serumChoice && !minigame.result) useSerumInCombat();
 }
 function handleChoiceN() {
+  dbg(`handleChoiceN 호출 — TUT_ACTIVE=${TUT_ACTIVE} TUT_STEP=${TUT_STEP} PLAYER_SERUM_CONFIRM_ACTIVE=${PLAYER_SERUM_CONFIRM_ACTIVE} serumChoice=${minigame.serumChoice}`);
   if (TUT_ACTIVE && TUT_STEP === 'serum_prompt') { onTutorialSerumChoice(false); return; }
   cancelLastSerumUse();
   declineSerumInCombat();
@@ -3348,7 +3371,7 @@ function hideTutorialBox() {
 // ── 튜토리얼 전용 화면 정중앙 Y/N 선택 오버레이 ───────────────────
 function showTutChoiceCenter(yLabel, nLabel, subLabel) {
   const el = document.getElementById('tut-choice-center');
-  if (!el) return;
+  if (!el) { dbg('showTutChoiceCenter: #tut-choice-center 못찾음', true); return; }
   const yEl = document.getElementById('tcc-y-label');
   const nEl = document.getElementById('tcc-n-label');
   const subEl = document.getElementById('tut-choice-sub');
@@ -3358,6 +3381,7 @@ function showTutChoiceCenter(yLabel, nLabel, subLabel) {
   if (subEl) subEl.textContent = subLabel || '';
   if (fillEl) fillEl.style.width = '100%'; // 표시 시점에 가득 채운 상태로 초기화
   el.classList.add('show');
+  dbg(`패널 표시: Y="${yLabel}" N="${nLabel}"`);
 }
 function hideTutChoiceCenter() {
   const el = document.getElementById('tut-choice-center');
@@ -5305,24 +5329,26 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
   const yBtn  = document.getElementById('tcc-y-btn');
   const nBtn  = document.getElementById('tcc-n-btn');
   const panel = document.getElementById('tcc-panel');
+  dbg(`Y/N 버튼 초기화 — yBtn=${!!yBtn} nBtn=${!!nBtn} panel=${!!panel}`);
 
   const pressVisual = (btn, on) => { if (btn) btn.classList.toggle('pressed', on); };
 
   if (yBtn) {
-    yBtn.addEventListener('touchstart', (e) => { e.preventDefault(); pressVisual(yBtn, true); handleChoiceY(); }, { passive: false });
+    yBtn.addEventListener('touchstart', (e) => { dbg('Y버튼 touchstart 수신'); e.preventDefault(); pressVisual(yBtn, true); handleChoiceY(); }, { passive: false });
     yBtn.addEventListener('touchend',   (e) => { e.preventDefault(); pressVisual(yBtn, false); }, { passive: false });
-    yBtn.addEventListener('click', handleChoiceY);
+    yBtn.addEventListener('click', () => { dbg('Y버튼 click 수신'); handleChoiceY(); });
   }
   if (nBtn) {
-    nBtn.addEventListener('touchstart', (e) => { e.preventDefault(); pressVisual(nBtn, true); handleChoiceN(); }, { passive: false });
+    nBtn.addEventListener('touchstart', (e) => { dbg('N버튼 touchstart 수신'); e.preventDefault(); pressVisual(nBtn, true); handleChoiceN(); }, { passive: false });
     nBtn.addEventListener('touchend',   (e) => { e.preventDefault(); pressVisual(nBtn, false); }, { passive: false });
-    nBtn.addEventListener('click', handleChoiceN);
+    nBtn.addEventListener('click', () => { dbg('N버튼 click 수신'); handleChoiceN(); });
   }
 
   // 안전망 1 — 패널 전체에 이벤트 위임(개별 버튼의 히트박스가 기기별로 어긋나는 경우 대응)
   if (panel) {
     const delegate = (e) => {
       const target = e.target.closest ? e.target.closest('.tcc-btn') : null;
+      dbg(`패널 ${e.type} — target=${e.target.id || e.target.tagName} matched=${!!target}`);
       if (!target) return;
       e.preventDefault();
       if (target === yBtn || target.classList.contains('tcc-y')) handleChoiceY();
@@ -5333,6 +5359,15 @@ document.getElementById('d-log-toggle').addEventListener('click', () => {
     // 안전망 2 — Pointer Events(터치/마우스 통합) — 일부 모바일 브라우저에서 touch 이벤트만 누락되는 경우 대응
     panel.addEventListener('pointerdown', delegate);
   }
+
+  // TEST ONLY — 선택지 패널이 떠 있는 동안, 화면 어디를 탭해도 "탭 자체가 잡히는지/좌표가 어디인지"를 기록
+  // (버튼/패널까지 도달하기 전에 다른 요소가 가로채고 있는지 확인용)
+  document.addEventListener('touchstart', (e) => {
+    const choiceEl = document.getElementById('tut-choice-center');
+    if (!choiceEl || !choiceEl.classList.contains('show')) return;
+    const t = e.touches[0];
+    dbg(`[전역] touchstart 좌표(${Math.round(t.clientX)},${Math.round(t.clientY)}) target=${e.target.id || e.target.className || e.target.tagName}`);
+  }, { passive: true, capture: true });
 }
 
 function closeIntro() {
