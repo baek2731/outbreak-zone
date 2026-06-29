@@ -2647,6 +2647,7 @@ function updateFallenCause(unitNum, cause) {
   const entry = pool.find(f => f.unit === unitNum);
   if (!entry) return false;
   entry.cause = cause;
+  entry.ts = Date.now(); // 새로 알게 된 사실이니 임무일지에서 최근 항목으로 보이게 갱신
   saveFallenPool(pool);
   return true;
 }
@@ -2981,8 +2982,8 @@ const MEMORIAL_LABELS = {
 const ACTION_ICONS = { rested: '✦', dissolved: '☠' };
 const ACTION_LABELS = { rested: '안식시킴', dissolved: '소멸시킴' };
 // 전사자 풀 cause 표시 라벨 — 'lost'는 임시 사유, 1스테이지 조우 후 updateFallenCause()로 정확한 사유로 교체 예정
-const CAUSE_ICONS  = { lost: '📡', silence: '🔇', unknown: '❓' };
-const CAUSE_LABELS = { lost: '로스트', silence: '응답 없음', unknown: '행방불명' };
+const CAUSE_ICONS  = { lost: '📡', silence: '🔇', unknown: '❓', swarmed: '☣' };
+const CAUSE_LABELS = { lost: '로스트', silence: '응답 없음', unknown: '행방불명', swarmed: '에워싸임' };
 
 function renderMemorial(el) {
   const records = loadRecords();
@@ -4100,6 +4101,10 @@ function fireSonar(isPrecise) {
       const dist = Math.hypot(zdx, zdy) * ts;
       const existing = newMarks.find(m => m.tx === z.tx && m.ty === z.ty);
       z.identified = true; // 정밀 소나로만 식별
+      // UNIT-00(ECHO) — 튜토리얼에서 목격한 그 죽음의 진짜 경위를, 본게임에서 직접 식별하는 순간 공개
+      // (증원 좀비로 다시 마주칠 때까지는 임시 사유('lost')로 남아있고, 식별 즉시 갈아끼워짐.
+      //  다른 전임자들의 cause는 의도적으로 영구히 미해결 상태로 남겨둠 — UNIT-00만 플레이어가 직접 목격했기 때문)
+      if (z.fallenUnit === 0) updateFallenCause(0, 'swarmed');
       if (!existing)
         newMarks.push({
           tx: z.tx, ty: z.ty, dist,
