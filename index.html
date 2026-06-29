@@ -285,8 +285,11 @@ body.mobile-ui #tutorial-box {
 }
 
 /* ── 튜토리얼 전용 — 화면 정중앙 Y/N 선택 오버레이 ── */
+/* transform:translate로 중앙정렬하면 일부 모바일 브라우저가 transform 적용 전 위치로 터치를
+   판정해서(화면엔 중앙에 보이지만 실제 터치 인식은 다른 곳에 있는 문제) — flex 정렬로 교체 */
 #tut-choice-center {
-  display:none; position:absolute; left:50%; top:46%; transform:translate(-50%,-50%);
+  display:none; position:absolute; inset:0; pointer-events:none;
+  align-items:center; justify-content:center;
   z-index:35;
 }
 #tut-choice-center.show { display:flex; }
@@ -294,6 +297,8 @@ body.mobile-ui #tutorial-box {
   display:flex; flex-direction:column; align-items:center; gap:16px;
   background:rgba(8,4,16,0.94); border:1px solid #5a2a7a; border-radius:12px;
   padding:22px 32px 18px; box-shadow:0 10px 36px rgba(0,0,0,0.65);
+  margin-bottom:8vh; /* 정중앙보다 살짝 위쪽에 — 기존 top:46% 느낌 재현 */
+  pointer-events:auto; /* 패널 바깥(투명 영역)은 터치 통과, 패널 안쪽만 터치 받음 */
 }
 #tut-choice-sub { font-family:'Courier New',monospace; font-size:0.9rem; color:#cccccc; letter-spacing:0.05em; }
 .tcc-row { display:flex; gap:24px; }
