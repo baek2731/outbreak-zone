@@ -1884,7 +1884,7 @@ function showGameOver(reason) {
       const reasonEl = document.getElementById('go-reason');
       if (reasonEl) {
         reasonEl.className = 'ov-title purple';
-        reasonEl.textContent = '☣ 좀비 전환';
+        reasonEl.textContent = '☣ 감염 전환';
       }
       document.getElementById('go-mines').textContent = stats.minesHit;
       document.getElementById('go-time').textContent  = elapsed + '초';
@@ -2307,7 +2307,11 @@ function updateMinigame(dt) {
     minigame.resultTimer -= dt;
     if (minigame.resultTimer <= 0) {
       // 미니게임 종료 — 시야 복구
-      if (minigame.type === 'mine' && TUT_VIGNETTE.mode === 'mild') {
+      // 채집(mine) 도중 좀비 접촉으로 전투(combat)에 강제 진입한 경우
+      // minigame.type이 'mine' -> 'combat'으로 덮어써지므로, 타입 체크만으로는
+      // 채집 중 켜졌던 비네팅(TUT_VIGNETTE.mode === 'mild')을 놓쳐서 영구히 남는 버그가 있었음.
+      // → 비네팅이 'mild' 상태이면 종료된 미니게임의 type과 무관하게 항상 해제한다.
+      if (TUT_VIGNETTE.mode === 'mild') {
         collapseVignetteTo('mild', 300, 1, () => { TUT_VIGNETTE.active = false; });
       }
       minigame.active = false;
@@ -2566,6 +2570,7 @@ function saveRunRecord(exitType) {
 
   const record = {
     date:         new Date().toLocaleString('ko-KR'),
+    ts:           Date.now(), // 정렬 전용 — date(ko-KR 로캘 문자열)는 new Date()로 재파싱 시 NaN이 나와 정렬이 깨졌었음
     exitType,
     unit:         getCurrentUnit(),
     name:         getPlayerName(), // 이름이 있으면 같이 저장 — 임무일지 표시용
@@ -2595,7 +2600,7 @@ function saveRunRecord(exitType) {
     devLog(`${myName || 'UNIT-'+String(getCurrentUnit()).padStart(2,'0')} 전사자 풀 등록 [${exitType}]`, 'warn');
   }
 
-  const label = { retire:'복귀', early:'조기탈출', death:'사망', infected:'좀비화' }[exitType] || exitType;
+  const label = exitTypeLabel(exitType, stageIdx + 1);
   devLog(`기록 저장 [${label}] ${stageIdx+1}층 / 획득 ${finalCollected}개 (회수 ${player.totalCollected})`, 'good');
   return finalCollected;
 }
@@ -2781,15 +2786,23 @@ function getLastExitType() {
   catch(e) { return null; }
 }
 function setLastExitType(type) {
-  try { localStorage.setItem(LAST_EXIT_KEY, type); } catch(e) {}
+  try {
+    if (type == null) localStorage.removeItem(LAST_EXIT_KEY);
+    else localStorage.setItem(LAST_EXIT_KEY, type);
+  } catch(e) {}
 }
 
 // 런 시작 시 호출 — 죽거나 감염됐을 때만 새 유닛, 생존 귀환(완전회수/조기탈출)이나 첫 시작은 같은 유닛 유지
 // (예전엔 'early'일 때만 유지하는 방식이라, 한 번도 기록이 없는 "첫 시작"이 null로 걸려 새 유닛으로
 //  잘못 넘어가는 버그가 있었음 — 조건을 반전해서 그 문제도 같이 해결)
+// go-base-btn 클릭 시(기지복귀 직후 이름 모달 즉시 표시용)와 startGame() 양쪽에서 호출되므로,
+// 한 번 증가시키면 LAST_EXIT_KEY를 비워서(소비) 같은 사망 기록으로 두 번 증가하지 않게 막는다.
 function advanceUnitIfNeeded() {
   const last = getLastExitType();
-  if (last === 'death' || last === 'infected') incrementUnit(); // 사망/감염 — 새 유닛
+  if (last === 'death' || last === 'infected') {
+    incrementUnit(); // 사망/감염 — 새 유닛
+    setLastExitType(null); // 소비 처리 — 중복 호출 시 재증가 방지
+  }
   // 그 외(완전회수, 조기탈출, 첫 시작=null)는 같은 유닛으로 이어서 출격
 }
 
@@ -2973,13 +2986,15 @@ function renderLobby(tab) {
 // 런 기록(완주/조기탈출/사망/좀비화) + 유닛 행동(안식/소멸)을 시간순으로 통합 표시
 const MEMORIAL_ICONS = {
   retire:   '🧬',  // 탈출 성공
-  early:    '☣',   // 조기 탈출
+  early:    '☣',   // N층 탈출 (병원체 미회수)
   death:    '💀',  // 사망
   infected: '🪖',  // 좀비화
 };
-const MEMORIAL_LABELS = {
-  retire:'탈출', early:'조기탈출', death:'사망', infected:'좀비화',
-};
+// 'early'(미회수 탈출)는 "조기탈출" 대신 "N층 탈출"로 표기 — stage 정보를 받아 동적으로 라벨 생성
+function exitTypeLabel(exitType, stage) {
+  if (exitType === 'early' && stage != null) return `${stage}층 탈출`;
+  return { retire:'탈출', early:'탈출', death:'사망', infected:'감염 전환' }[exitType] || exitType;
+}
 const ACTION_ICONS = { rested: '✦', dissolved: '☠' };
 const ACTION_LABELS = { rested: '안식시킴', dissolved: '소멸시킴' };
 // 전사자 풀 cause 표시 라벨 — 'lost'는 임시 사유, 1스테이지 조우 후 updateFallenCause()로 정확한 사유로 교체 예정
@@ -2998,8 +3013,10 @@ function renderMemorial(el) {
   }
 
   // 세 종류를 하나의 타임라인으로 합치고 시간순 정렬
+  // records.ts는 saveRunRecord()에서 Date.now()로 저장(정확). 구버전 기록(ts 없음)은
+  // date(ko-KR 로캘 문자열)를 new Date()로 재파싱하는데 이 경우 NaN이 나와 0으로 처리됨 → 맨 뒤로 밀림(허용 가능한 열화)
   const timeline = [
-    ...records.map(r => ({ kind: 'run', ts: new Date(r.date).getTime() || 0, data: r })),
+    ...records.map(r => ({ kind: 'run', ts: r.ts || (new Date(r.date).getTime() || 0), data: r })),
     ...actions.map(a => ({ kind: 'action', ts: a.ts || 0, data: a })),
     ...fallenCaused.map(f => ({ kind: 'fallen', ts: f.ts || 0, data: f })),
   ].sort((a, b) => b.ts - a.ts); // 최신순
@@ -3009,7 +3026,7 @@ function renderMemorial(el) {
     if (entry.kind === 'run') {
       const r      = entry.data;
       const icon   = MEMORIAL_ICONS[r.exitType] || '☣';
-      const label  = MEMORIAL_LABELS[r.exitType] || r.exitType;
+      const label  = exitTypeLabel(r.exitType, r.stage);
       const unit   = r.name || (r.unit != null ? `UNIT-${String(r.unit).padStart(2,'0')}` : 'UNIT-??');
       const raw    = r.rawCollected ?? r.collected ?? 0;
       html += `
@@ -3822,7 +3839,7 @@ function showStageIntro() {
   document.getElementById('intro-stage').textContent    = `STAGE ${s + 1}`;
   document.getElementById('intro-location').textContent = st.name || '';
   document.getElementById('intro-mines').textContent    = `병원체 ${st.mineCount}개`;
-  document.getElementById('intro-zombies').textContent  = `좀비 ${st.zombieCount}마리`;
+  document.getElementById('intro-zombies').textContent  = `위협체 ${st.zombieCount}체`;
   document.getElementById('intro-capsules').textContent = `산소 캡슐 ${st.capsuleCount}개`;
   document.getElementById('stage-intro').classList.add('show');
 }
@@ -3836,25 +3853,25 @@ function checkPatrolPhase() {
   for (let i = 0; i < MAP.tiles.length; i++) if (MAP.tiles[i] === T.MINE) remaining++;
   const removed  = st.mineCount - remaining;
 
-  // 1단계 — 좀비 extraSpawn체 추가 스폰
+  // 1단계 — 그들이 몰려온다 (증원)
   if (removed >= thr[0] && patrol.phase < 1) {
     patrol.phase = 1;
     for (let i = 0; i < (st.extraSpawn || 1); i++) spawnExtraZombie();
-    devLog(`⚠ 패트롤 1단계 [${removed}개 제거] — 좀비 ${st.extraSpawn || 1}체 증원`, 'warn');
+    devLog(`⚠ 패트롤 1단계 [${removed}개 제거] — 증원 ${st.extraSpawn || 1}체`, 'warn');
     triggerFlash('red');
     setTimeout(() => SoundManager.play('patrol_phase1'), 200);
-    setTimeout(() => addNotice('⚠ PATROL LV.1 — 좀비 증원', '#ff8800', 3.0), 200);
+    setTimeout(() => addNotice('⚠ 그들이 몰려온다', '#ff8800', 3.0), 200);
   }
-  // 2단계 — 이동속도 +20%
+  // 2단계 — 그들이 굶주렸다 (이동속도 +20%)
   if (removed >= thr[1] && patrol.phase < 2) {
     patrol.phase     = 2;
     patrol.speedMult = 1.2;
     devLog(`⚠ 패트롤 2단계 [${removed}개 제거] — 이동속도 ×1.2`, 'warn');
     triggerFlash('red');
     setTimeout(() => SoundManager.play('patrol_phase2'), 200);
-    setTimeout(() => addNotice('⚠ PATROL LV.2 — 이동속도 상승', '#ff6600', 3.0), 200);
+    setTimeout(() => addNotice('⚠ 그들이 굶주렸다', '#ff6600', 3.0), 200);
   }
-  // 3단계 — 이동속도 +40%, 시야각 120도
+  // 3단계 — 그들이 날뛴다 (이동속도 +40%, 시야각 120도)
   if (removed >= thr[2] && patrol.phase < 3) {
     patrol.phase     = 3;
     patrol.speedMult = 1.4;
@@ -3862,7 +3879,7 @@ function checkPatrolPhase() {
     devLog(`🔴 패트롤 3단계 [${removed}개 제거] — 속도 ×1.4, 시야 확대`, 'danger');
     triggerFlash('red');
     setTimeout(() => SoundManager.play('patrol_phase3'), 200);
-    setTimeout(() => addNotice('🔴 PATROL LV.3 — 시야 확대', '#ff3333', 3.0), 200);
+    setTimeout(() => addNotice('🔴 그들이 날뛴다', '#ff3333', 3.0), 200);
   }
 }
 
@@ -5107,6 +5124,11 @@ document.getElementById('d-zombiefov').addEventListener('click', () => {
 });
 // go-btn 제거됨 (게임오버에서 기지로만 이동)
 document.getElementById('go-base-btn').addEventListener('click', () => {
+  // 사망/감염으로 게임오버된 경우 유닛 번호를 여기서 올려야
+  // showLobby()의 getPlayerName() 체크가 새 유닛으로 인식해서 이름 입력 모달이 즉시 뜸.
+  // (이전엔 startGame() 시점에만 advanceUnitIfNeeded()를 호출해서,
+  //  복귀 직후 로비에서는 죽은 요원의 이름이 한 박자 남아있다가 다음 출격 때야 갱신되는 버그가 있었음)
+  advanceUnitIfNeeded();
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
   player.infection      = 0;
@@ -5505,7 +5527,7 @@ document.getElementById('d-records').addEventListener('click', () => {
     const totalDna = parseInt(localStorage.getItem(DNA_KEY) || '0');
     devLog(`═══ 누적 DNA: ${totalDna}개 / 총 ${records.length}런 ═══`, 'good');
     records.slice(-8).reverse().forEach(r => {
-      const label = { retire:'복귀', early:'조기', death:'사망', infected:'좀비화' }[r.exitType] || r.exitType;
+      const label = exitTypeLabel(r.exitType, r.stage);
       devLog(`${r.stage}층 [${label}] 획득${r.collected} (회수${r.rawCollected}) 감염${r.infection}% ${r.elapsed}s`, '');
     });
   } catch(e) { devLog('기록 읽기 실패', 'danger'); }
