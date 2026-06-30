@@ -5088,6 +5088,29 @@ document.getElementById('d-add-dna').addEventListener('click', () => {
     localStorage.setItem(DNA_KEY, String(prev + 20));
   } catch(e) {}
   devLog('DEV: DNA +20', 'good');
+  if (GAME_STATE === 'LOBBY') renderLobbyMeta(); // 로비 보고 있는 중이면 즉시 갱신
+});
+// 5층 풀업 밸런스 테스트용 — 한 번에 충분한 DNA 지급 (강화 비용 합산보다 넉넉하게)
+document.getElementById('d-add-dna-big').addEventListener('click', () => {
+  try {
+    const prev = parseInt(localStorage.getItem(DNA_KEY) || '0');
+    localStorage.setItem(DNA_KEY, String(prev + 500));
+  } catch(e) {}
+  devLog('DEV: DNA +500', 'good');
+  if (GAME_STATE === 'LOBBY') renderLobbyMeta();
+});
+// 5층 풀업 밸런스 테스트용 — 모든 스테이터스/특성을 즉시 최대 레벨로 설정 (DNA 소모 없음)
+document.getElementById('d-full-upgrade').addEventListener('click', () => {
+  const ups = loadUpgrades();
+  [...LOBBY.status, ...LOBBY.trait].forEach(item => {
+    ups[item.id] = item.maxLv;
+  });
+  saveUpgrades(ups);
+  devLog('DEV: 스테이터스/특성 전체 풀업 적용', 'good');
+  if (GAME_STATE === 'LOBBY') {
+    const activeTab = document.querySelector('.lb-tab-btn.on')?.dataset.tab || 'status';
+    renderLobby(activeTab); // 현재 보고 있는 탭 그대로 다시 그려서 변경사항 즉시 반영
+  }
 });
 document.getElementById('d-collect-all').addEventListener('click', () => {
   if (!MAP || GAME_STATE !== 'PLAYING') return;
