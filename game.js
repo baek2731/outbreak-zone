@@ -1034,6 +1034,7 @@ const player = {
   lastFinalCollected: 0,
   oxygen:    100,
   infection:   0,
+  exposed:     false, // 산소 0 도달 시 true — 한번 노출되면 산소를 회복해도 감염은 계속 진행됨(치료제 완치로만 해제 가능)
   stage:       0,
   serum:       1,   // 치료제 보유량 (초기 1개)
 };
@@ -1201,9 +1202,8 @@ const minigame = {
 const MG = {
   dirs: ['up','down','left','right'],
   keyToDir: { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right' },
-  // 병원체 회수
-  mineSuccessInfect:  3,
-  mineFailInfect:    15,
+  // 병원체 회수 — 성공은 페널티 없음. 실패 시에만 감염도 소폭 직접 증가(통합형 — 별도 오염축 없음).
+  mineFailInfect:     1,
   // 좀비 전투
   combatSuccessOxy: -10,
   combatFailOxy:    -25,
@@ -1551,6 +1551,16 @@ window.addEventListener('keydown', e => {
         return;
       }
     }
+    // escaped 결과 패널(기지복귀 / 다음 스테이지 / ALL CLEAR) — early-exit과 별개의 화면.
+    // 기존엔 이 분기가 없어서 마우스로만 버튼을 눌러야 했음.
+    const escapedEl = document.getElementById('escaped');
+    if (escapedEl.classList.contains('show') && (e.code === 'Space' || e.code === 'Enter')) {
+      const nextBtn = document.getElementById('esc-btn');
+      const baseBtn = document.getElementById('esc-base-btn');
+      if (nextBtn && nextBtn.style.display !== 'none') nextBtn.click();
+      else if (baseBtn) baseBtn.click();
+      return;
+    }
     return;
   }
 
@@ -1745,12 +1755,14 @@ function onStep(tx, ty) {
   if (tile === T.ITEM) {
     MAP.tiles[tileIdx] = T.FLOOR;
     player.itemsFound++;
-    // 산소 캡슐: 산소 보충만, 탈출 조건 아님
+    // 산소 캡슐: 산소 보충만, 탈출 조건 아님. 캡슐만 max를 넘어 overcap까지 채울 수 있음
+    // (길을 막고 있는 캡슐을 "이미 가득 찼으니 손해"라는 느낌 없이 먹을 수 있게 하기 위함)
+    const overcap = CONFIG.oxygen.max * (CONFIG.oxygen.overcapRatio || 1.0);
     const prevOxy = player.oxygen;
-    player.oxygen = Math.min(CONFIG.oxygen.max, player.oxygen + CONFIG.oxygen.capsuleHeal);
-    devLog(`캡슐 수집 — 산소 +${(player.oxygen - prevOxy).toFixed(1)}% (${prevOxy.toFixed(1)}% → ${player.oxygen.toFixed(1)}%)`, 'good');
+    player.oxygen = Math.min(overcap, player.oxygen + CONFIG.oxygen.capsuleHeal);
+    devLog(`캡슐 수집 — 산소 +${(player.oxygen - prevOxy).toFixed(1)} (${prevOxy.toFixed(1)} → ${player.oxygen.toFixed(1)} / 최대${CONFIG.oxygen.max}, 오버캡${overcap.toFixed(0)})`, 'good');
     SoundManager.play('capsule_pickup');
-    addPopup(`산소 +${(player.oxygen - prevOxy).toFixed(0)}%`, '#44ddff', 0);
+    addPopup(`산소 +${(player.oxygen - prevOxy).toFixed(0)}`, '#44ddff', 0);
     triggerFlash('item');
     triggerFlash('oxygen');
     return;
@@ -1926,11 +1938,26 @@ function useSerumSelf() {
   if (player.serum <= 0) return;
   player.serum--;
   const heal = CONFIG.serum.selfHealAmount;
-  player.infection = Math.max(0, player.infection - heal);
-  addPopup(`💉 감염 -${heal}%`, '#bb44ff', 0);
+
+  // case 1: 산소 있음 + 감염도가 치료량 이하 → 완전 치료(감염 0) + 노출 해제
+  // case 2: 산소 있음 + 감염도가 치료량 초과 → 감염만 치료량만큼 감소, 노출은 유지
+  // case 3: 산소 없음 → 감염만 치료량만큼 감소, 노출은 당연히 유지(차단막 자체가 없으므로)
+  const hasOxygen = player.oxygen > 0;
+  const fullyCured = hasOxygen && player.infection <= heal;
+
+  if (fullyCured) {
+    player.infection = 0;
+    player.exposed = false; // 완치 — 감염원 제거 + 차단막 정상작동 상태이므로 노출 해제
+    addPopup('💉 완치 ✦', '#44ff88', 0);
+    devLog(`치료제 자가 사용 — 완치(감염 0%, 노출 해제) (잔여 ${player.serum}개)`, 'good');
+  } else {
+    player.infection = Math.max(0, player.infection - heal);
+    addPopup(`💉 감염 -${heal}%`, '#bb44ff', 0);
+    if (!hasOxygen) addPopup('⚠ 산소 없음 — 노출 유지', '#ff8800', 0.25);
+    devLog(`치료제 자가 사용 — 감염 -${heal}% (노출 ${player.exposed ? '유지' : '없음'}, 잔여 ${player.serum}개)`, 'good');
+  }
   addPopup(`치료제 잔여 ${player.serum}개`, '#888888', 0.2);
   updateSerumHUD();
-  devLog(`치료제 자가 사용 — 감염 -${heal}% (잔여 ${player.serum}개)`, 'good');
 }
 
 // 전투 중 N(계속 싸우기) — 키보드/터치 버튼 공용
@@ -2152,17 +2179,9 @@ function endMinigame(success) {
           updateGuardHomePoints();
         }
       }
-      const fx = getUpgradeEffects();
-      const resistRate = Math.min(1, fx.infectResistRate || 0);
-      const infectAmt  = Math.floor(MG.mineSuccessInfect * (1 - resistRate));
-      if (infectAmt > 0) {
-        player.infection = Math.min(100, player.infection + infectAmt);
-        addPopup('병원체 +1', '#00ff88', 0);
-        addPopup(`오염 +${infectAmt}%`, '#ff8800', 0.18);
-      } else {
-        addPopup('병원체 +1', '#00ff88', 0);
-        addPopup('오염 저항', '#bb88ff', 0.18);
-      }
+      // 회수 성공은 더 이상 오염/감염을 일으키지 않음 — 실패시에만 오염이 쌓이고
+      // 그 오염이 시간이 지나며 서서히 감염으로 전환되는 구조로 변경 (updateOxygenInfection 참고)
+      addPopup('병원체 +1', '#00ff88', 0);
       if (!TUT_ACTIVE) {
         // 마지막 병원체 회수 완료 알림
         let remain2 = 0;
@@ -2170,13 +2189,13 @@ function endMinigame(success) {
         if (remain2 === 0) addNotice('전 병원체 회수 완료 — 출구로', '#00ffcc', 3.5);
       }
       revealAround(player.tx, player.ty, CONFIG.player.visionRad);
-      devLog(`병원체 회수 성공 — 감염 +${infectAmt}% (저항 ${Math.round(resistRate*100)}%)`, 'good');
+      devLog(`병원체 회수 성공 — 오염 없음`, 'good');
       onTutorialMineCollected();
     } else {
       SoundManager.play('collect_fail');
-      // 실패 — 감염 대폭 증가 + 소음
+      // 실패 — 감염도 소폭 직접 증가 + 소음 (오염/감염 통합 — 실패해야만 리스크 발생)
       player.infection = Math.min(100, player.infection + MG.mineFailInfect);
-      addPopup(`오염 +${MG.mineFailInfect}%`, '#ff3333', 0);
+      addPopup(`감염 +${MG.mineFailInfect}%`, '#ff3333', 0);
       const fxNoise = getUpgradeEffects();
       const noiseR = Math.max(1, CONFIG.zombie.noiseRadius - fxNoise.noiseRadiusMinus);
       triggerNoise(player.px + CONFIG.map.tileSize / 2,
@@ -2380,12 +2399,16 @@ function showExitChoice(mode, remaining) {
 }
 
 function applyStageTransition() {
-  // 층 이동 시: 산소 보충 (최대치 초과 불가), 감염 누적 유지
+  // 층 이동 시: 산소 보충 (최대치 초과 불가) + 감염도 소폭 회복 (완전 누적 X)
+  // 기존엔 감염도가 전혀 회복되지 않고 누적만 되어 3~4층 즈음 이미 과포화 상태로 5층에 도달하는 문제가 있었음.
+  // infectStageRecover만큼 회복하되 0% 미만으로는 내려가지 않음 — 완전 청소가 아니라 "약간의 숨통".
   const healAmt = CONFIG.oxygen.stageHeal;
-  player.oxygen   = Math.min(CONFIG.oxygen.max, player.oxygen + healAmt);
-  // 감염은 그대로 — 누적 유지
-  devLog(`층 이동 — 산소 +${healAmt}% 보충 (현재 ${player.oxygen.toFixed(1)}%), 감염 ${player.infection.toFixed(1)}% 누적`, 'good');
-  addPopup(`산소 +${healAmt}%`, '#44ddff', 0);
+  const infRecover = CONFIG.oxygen.infectStageRecover || 0;
+  player.oxygen    = Math.min(CONFIG.oxygen.max, player.oxygen + healAmt);
+  player.infection = Math.max(0, player.infection - infRecover);
+  devLog(`층 이동 — 산소 +${healAmt}% 보충 (현재 ${player.oxygen.toFixed(1)}%), 감염 -${infRecover}%p 회복 (현재 ${player.infection.toFixed(1)}%)`, 'good');
+  addPopup(`산소 +${healAmt}`, '#44ddff', 0);
+  if (infRecover > 0) addPopup(`감염 -${infRecover}%`, '#bb88ff', 0.18);
   // BGM 크로스페이드 — 스테이지별
   const nextStage = player.stage; // 이미 증가된 후 호출됨
   const bgmId = nextStage >= 4 ? 'bgm_stage5'
@@ -3274,6 +3297,7 @@ function startTutorial() {
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
   player.infection      = 0;
+  player.exposed        = false; // 새 런 시작 — 노출 상태 초기화
   player.totalCollected = 0;
   player.recordSaved    = false;
   player.serum          = CONFIG.serum.initialCount;
@@ -3811,6 +3835,7 @@ function startGame() {
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
   player.infection      = 0;
+  player.exposed        = false; // 새 런 시작 — 노출 상태 초기화
   player.totalCollected = 0;
   player.recordSaved    = false;
   player.serum          = CONFIG.serum.initialCount; // 치료제 초기화
@@ -4722,11 +4747,13 @@ function updateOxygenInfection(dt) {
     player.oxygen = Math.max(0, player.oxygen - drainRate * dt);
   }
 
-  // 산소 구간 진입 로그 + 사운드
+  // 산소 구간 진입 로그 + 사운드 — infectThreshold(60%)는 시각적 경고선(60% 임계 표시)은 제거되었고,
+  // 이제 청각 경고(oxygen_warn 루프)용 내부 기준으로만 쓰임. 실제 감염 시작 여부는
+  // player.exposed 플래그(산소 0 도달 여부)로만 결정됨 — 시각적으로는 노출 시 박스 네온 발광으로 표시.
   const oxyZone = player.oxygen <= 0 ? 'empty' : player.oxygen < cfg.infectThreshold ? 'warn' : 'safe';
   if (oxyZone !== _prevOxyZone) {
-    if (oxyZone === 'warn')  { devLog(`⚠ 산소 위험구간 진입 (${player.oxygen.toFixed(1)}%) — 감염 시작`, 'warn'); SoundManager.startLoop('oxygen_warn'); addPopup('⚠ 산소 부족', '#ffaa00'); }
-    if (oxyZone === 'empty') { devLog(`🔴 산소 고갈 — 감염 가속 시작`, 'danger'); SoundManager.play('oxygen_critical'); addPopup('🔴 산소 고갈', '#ff3333'); }
+    if (oxyZone === 'warn')  { devLog(`⚠ 산소 위험구간 진입 (${player.oxygen.toFixed(1)}%)`, 'warn'); SoundManager.startLoop('oxygen_warn'); addPopup('⚠ 산소 부족', '#ffaa00'); }
+    if (oxyZone === 'empty') { devLog(`🔴 산소 고갈 — 노출 위험`, 'danger'); SoundManager.play('oxygen_critical'); addPopup('🔴 산소 고갈', '#ff3333'); }
     if (oxyZone === 'safe')  { devLog(`산소 안전구간 복귀 (${player.oxygen.toFixed(1)}%)`, 'good'); SoundManager.stopLoop('oxygen_warn'); }
     _prevOxyZone = oxyZone;
   }
@@ -4737,11 +4764,20 @@ function updateOxygenInfection(dt) {
     SoundManager.setLoopVolume('oxygen_warn', ratio * 0.3);
   }
 
-  // 감염 증가 — 산소 60% 이하부터 시작
+  // ── 노출(exposed) 시스템 ──────────────────────────────────────
+  // 산소가 1이라도 남아있는 동안은 방호복이 완전히 차단해 감염이 전혀 진행되지 않는다.
+  // 산소가 정확히 0에 도달하는 순간 "노출"이 발생하고, 이후로는 산소를 캡슐 등으로
+  // 회복해도(=다시 0 초과가 되어도) exposed 플래그는 풀리지 않아 감염이 계속 진행된다.
+  // exposed 해제는 오직 치료제 자가사용(useSerumSelf)에서, 산소가 있고 + 감염도가
+  // 치료량 이하로 완전히 0이 되는 "완치" 케이스에서만 일어난다.
+  // UI 메시지는 의도적으로 메커니즘 설명을 하지 않음 — 짧고 긴장감 있는 경고만 노출.
   if (!devInvincible) {
-    if (player.oxygen <= 0) {
-      player.infection = Math.min(100, player.infection + cfg.infectRateEmpty * dt);
-    } else if (player.oxygen < cfg.infectThreshold) {
+    if (player.oxygen <= 0 && !player.exposed) {
+      player.exposed = true;
+      devLog('🔴 노출 발생 — 산소 0 도달, 감염 진행 시작', 'danger');
+      addNotice('🔴 산소가 떨어졌어...!', '#ff3333', 3.0);
+    }
+    if (player.exposed) {
       player.infection = Math.min(100, player.infection + cfg.infectRate * dt);
     }
   }
@@ -4936,17 +4972,21 @@ function updateHUD() {
   const serumEl = document.getElementById('hud-serum');
   if (serumEl) serumEl.textContent = '💉 ' + player.serum;
 
-  // 산소 게이지
+  // 산소 게이지 — 절대 수치로 표시(%아님). 게이지바 비율은 오버캡(overcapRatio 적용된 총량) 대비로 계산
+  // 하여, 캡슐로 max를 넘어 채워도(예: 100 → 130) 바가 박스 밖으로 튀어나가지 않게 함.
   const oxyFill = document.getElementById('hud-oxygen-fill');
   const oxyVal  = document.getElementById('hud-oxygen');
+  const overcap = cfg.max * (cfg.overcapRatio || 1.0);
   if (oxyFill) {
-    oxyFill.style.width = oxy + '%';
-    // 색상: 안전(파랑) → 위험구간(주황) → 위급(빨강)
-    if (oxy > cfg.infectThreshold)      oxyFill.style.background = '#44aaff';
-    else if (oxy > cfg.infectThreshold * 0.4) oxyFill.style.background = '#ff8800';
-    else                                 oxyFill.style.background = '#ff3333';
+    const ratio = overcap > 0 ? Math.min(1, oxy / overcap) : 0;
+    oxyFill.style.width = (ratio * 100) + '%';
+    oxyFill.style.background = '#44aaff'; // 색상 고정 — 위험 여부는 노출(exposed) 발생 시 박스 테두리 발광으로 표시
   }
-  if (oxyVal) oxyVal.textContent = Math.ceil(oxy) + '%';
+  if (oxyVal) oxyVal.textContent = Math.ceil(oxy); // 절대 수치 표시 ('%' 제거)
+
+  // 산소 박스 네온 경고 — 노출(exposed) 상태일 때 테두리가 점멸 발광. 60% 경고선은 제거됨(노출 발생 여부로 단순화).
+  const oxyBox = document.getElementById('hud-oxygen-box');
+  if (oxyBox) oxyBox.classList.toggle('exposed-glow', !!player.exposed);
 
   // 감염 게이지
   const infFill = document.getElementById('hud-infection-fill');
@@ -5155,6 +5195,7 @@ document.getElementById('go-base-btn').addEventListener('click', () => {
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
   player.infection      = 0;
+  player.exposed        = false; // 새 런 시작 — 노출 상태 초기화
   player.totalCollected = 0;
   player.recordSaved    = false;
   // 감염 연출 초기화
@@ -5179,6 +5220,7 @@ document.getElementById('esc-base-btn').addEventListener('click', () => {
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
   player.infection      = 0;
+  player.exposed        = false; // 새 런 시작 — 노출 상태 초기화
   player.totalCollected = 0;
   player.recordSaved    = false;
   document.getElementById('escaped').classList.remove('show');
@@ -5188,6 +5230,7 @@ document.getElementById('esc-clear').addEventListener('click', () => {
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
   player.infection      = 0;
+  player.exposed        = false; // 새 런 시작 — 노출 상태 초기화
   player.totalCollected = 0;
   player.recordSaved    = false;
   document.getElementById('escaped').classList.remove('show');
@@ -5199,6 +5242,7 @@ document.getElementById('tbc-btn').addEventListener('click', () => {
   player.stage          = 0;
   player.oxygen         = CONFIG.oxygen.max;
   player.infection      = 0;
+  player.exposed        = false; // 새 런 시작 — 노출 상태 초기화
   player.totalCollected = 0;
   player.recordSaved    = false;
   document.getElementById('tbc-screen').classList.remove('show');
@@ -5700,6 +5744,7 @@ function loop(ts) {
 // 최초 실행 — 산소/감염 초기화
 player.oxygen         = CONFIG.oxygen.max;
 player.infection      = 0;
+player.exposed        = false; // 새 런 시작 — 노출 상태 초기화
 player.stage          = 0;
 player.totalCollected = 0;
 player.recordSaved    = false;
