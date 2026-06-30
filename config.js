@@ -17,12 +17,22 @@ const CONFIG = {
 
   oxygen: {
     max:             100,
-    drainPerStage:   [2, 3.5, 5.5, 7, 9],
+    // 실측 플레이테스트(풀강+5층, 전투2회+채집실패1회=55초만에 산소고갈+감염사) 기준 추가 완화.
+    // 1~4층은 파밍/성장 구간으로 가볍게, 5층만 진검승부로 가는 컨셉 유지.
+    drainPerStage:   [0.8, 1.1, 1.4, 1.8, 2.4],
+    // 노출(exposed) 시스템 도입 이후 infectThreshold는 순수 UI 경고 기준선(산소바 색상/경고음)으로만 쓰임.
+    // 실제 감염 시작 여부는 player.exposed 플래그(산소 정확히 0 도달)로만 결정됨 — game.js updateOxygenInfection() 참고.
     infectThreshold:  60,
     infectRate:        1.25,
+    // infectRateEmpty는 더 이상 사용되지 않음(노출 시스템으로 대체).
+    // 과거: 산소0 상태에서만 가속 감염. 현재: 산소>0이면 감염 전혀 없음 / 산소=0 도달 시 노출되어
+    // 이후 산소 회복 여부와 무관하게 infectRate로 계속 진행, 치료제 완치(case1)로만 해제.
     infectRateEmpty:   3.0,
     capsuleHeal:      33,
-    stageHeal:        30,
+    // 층 이동 시 산소 보충량.
+    stageHeal:        45,
+    // 층 이동 시 감염도 회복량 — 완전 청소가 아니라 약간의 숨통.
+    infectStageRecover: 22,
   },
 
   sonar: {
